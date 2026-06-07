@@ -1,26 +1,186 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f5f6fa;
+  --foreground: #1a1d26;
+  --primary: #6c63ff;
+  --secondary: #ff6584;
+  --surface: #ffffff;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --auth-top: #2d1b4e;
+  --auth-mid: #6c63ff;
+  --auth-bottom: #ff6584;
+  --discovery-mid: #ede8ff;
+  --discovery-bottom: #fff5f8;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --shadow-card: 0 6px 14px rgba(42, 31, 85, 0.07);
+  /* Bottom tab: indicator + icon row + safe area (matches mobile tab bar) */
+  --linkup-bottom-nav-offset: calc(3.35rem + env(safe-area-inset-bottom, 0px));
+  /* Extra inset so last grid card clears the tab bar when scrolled */
+  --linkup-tab-clearance: calc(var(--linkup-bottom-nav-offset) + 0.875rem);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-poppins);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-poppins), var(--font-inter), system-ui, sans-serif;
+}
+
+/* Content column (300px+). Avoid overflow-x here — it blocks chip scrollers inside. */
+.linkup-page-shell {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Horizontal filter / action rows (plan management, etc.) */
+.linkup-chip-scroller {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.linkup-chip-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+/* Premium card surface — mobile parity */
+.linkup-card {
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(108, 99, 255, 0.12);
+  box-shadow: var(--shadow-card);
+}
+
+.linkup-glass {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 12px 40px rgba(42, 31, 85, 0.12);
+}
+
+.linkup-gradient-auth {
+  background: linear-gradient(
+    165deg,
+    var(--auth-top) 0%,
+    var(--auth-mid) 45%,
+    var(--auth-bottom) 100%
+  );
+}
+
+.linkup-gradient-discovery {
+  background: linear-gradient(
+    180deg,
+    var(--background) 0%,
+    var(--discovery-mid) 50%,
+    var(--discovery-bottom) 100%
+  );
+}
+
+@keyframes splash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes splash-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes splash-dot-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.splash-rise {
+  animation: splash-rise 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.splash-fade-in {
+  animation: splash-fade-in 500ms ease-out both;
+}
+
+.splash-dot {
+  animation: splash-dot-pulse 700ms ease-in-out infinite;
+}
+
+.linkup-gradient-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, #8b84ff 50%, var(--secondary) 100%);
+}
+
+@keyframes mood-border-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes mood-gear-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mood-live-border-animated {
+  background: linear-gradient(
+    90deg,
+    rgba(108, 99, 255, 0.92),
+    rgba(186, 104, 255, 0.88),
+    rgba(255, 101, 132, 0.94),
+    rgba(108, 99, 255, 0.92)
+  );
+  background-size: 300% 100%;
+  animation: mood-border-shift 3.6s ease-in-out infinite;
+}
+
+.mood-gear-spin {
+  animation: mood-gear-spin 2.8s linear infinite;
 }

@@ -1,0 +1,5 @@
+export const MIN_ESCROW_NGN = 7_000;
+export const MAX_ESCROW_TIER1_NGN = 5_000_000;
+
+export const MIN_ESCROW_CENTS = MIN_ESCROW_NGN * 100;
+export const MAX_ESCROW_TIER1_CENTS = MAX_ESCROW_TIER1_NGN * 100;

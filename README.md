@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LinkUp Web
 
-## Getting Started
+Desktop evolution of **LinkUp Mobile** — separate Next.js app, same Supabase backend.
 
-First, run the development server:
+- **Mobile repo:** `../linkup` (Expo — do not modify from this project)
+- **Stack:** Next.js App Router · TypeScript · Tailwind · Supabase · TanStack Query · Zustand · Framer Motion
+
+## Setup
 
 ```bash
+cd linkup-web
+cp .env.example .env.local
+# Paste NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY from the mobile .env
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Add to **Supabase → Authentication → URL Configuration**:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Site URL: `http://localhost:3000` (or production domain)
+- Redirect URLs: `http://localhost:3000/auth/callback`, `http://localhost:3000/reset-password`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Enable **Google** under Authentication → Providers (same as mobile).
 
-## Learn More
+**Google Web Client ID:** You do **not** put `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` in linkup-web for sign-in. That value belongs in **Supabase** (and in Google Cloud as the OAuth Web client). Flow: user → Google → Supabase → `/auth/callback` on your site. Use the same Web client ID you already created for mobile/Supabase.
 
-To learn more about Next.js, take a look at the following resources:
+In **Google Cloud Console** (OAuth client, type Web application), authorized redirect URI must include:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `https://<your-project-ref>.supabase.co/auth/v1/callback`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+In **Supabase → Authentication → URL Configuration**, allow:
 
-## Deploy on Vercel
+- `http://localhost:3000/auth/callback` (dev)
+- your production web URL + `/auth/callback`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+For maps / location search, copy from mobile `.env`:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `NEXT_PUBLIC_GOOGLE_MAPS_WEB_API_KEY` (= `EXPO_PUBLIC_GOOGLE_MAPS_WEB_API_KEY`)
+
+## Layout
+
+| Breakpoint | Shell |
+|------------|--------|
+| Desktop (lg+) | Sidebar · center feed · right context panel |
+| Tablet (md) | Two-column responsive |
+| Mobile browser | Bottom navigation |
+
+## Docs
+
+See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for phases, folder structure, and admin split (`linkup-admin/`).
+
+## Deploy
+
+Vercel recommended. Set env vars to match mobile Supabase project. No changes to mobile EAS config required.

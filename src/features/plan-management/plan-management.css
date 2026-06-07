@@ -1,0 +1,453 @@
+/**
+ * Plan Management — mobile-first responsive system (320px–425px+).
+ * 425px = visual baseline. Gutters and type use explicit breakpoint tokens.
+ */
+
+.plan-mgmt {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: clip;
+
+  /* Gutters (total horizontal inset for page content) */
+  --pm-pad-x: 0.75rem; /* 12px — 320–359 */
+  --pm-title: 1.125rem; /* 18px */
+  --pm-body: 0.875rem; /* 14px minimum */
+  --pm-label: 0.75rem; /* 12px uppercase rails only */
+  --pm-hero-stat: 1.75rem;
+  --pm-gap-block: 0.75rem;
+  --pm-gap-inline: 0.5rem;
+  --pm-chip-gap: 0.5rem; /* 8px between compact pills */
+}
+
+/* Mobile shell only — desktop uses AppShell padding */
+@media (max-width: 1023px) {
+  .plan-mgmt {
+    padding-inline: var(--pm-pad-x);
+  }
+}
+
+@media (min-width: 360px) {
+  .plan-mgmt {
+    --pm-pad-x: 1rem; /* 16px — 360–374 */
+  }
+}
+
+@media (min-width: 375px) {
+  .plan-mgmt {
+    --pm-pad-x: 1rem; /* 16px — 375–389 */
+    --pm-title: 1.25rem; /* 20px */
+    --pm-hero-stat: 1.875rem;
+    --pm-gap-block: 0.875rem;
+  }
+}
+
+@media (min-width: 390px) {
+  .plan-mgmt {
+    --pm-pad-x: 1.25rem; /* 20px — 390–424 */
+    --pm-title: 1.375rem; /* 22px */
+    --pm-gap-block: 1rem;
+    --pm-chip-gap: 0.625rem; /* 10px */
+  }
+}
+
+@media (min-width: 425px) {
+  .plan-mgmt {
+    --pm-pad-x: 1.5rem; /* 24px */
+    --pm-title: 1.5rem; /* 24px */
+    --pm-hero-stat: 2.125rem;
+    --pm-gap-block: 1.25rem;
+    --pm-gap-inline: 0.75rem;
+    --pm-chip-gap: 0.75rem; /* 12px */
+  }
+}
+
+/* Typography */
+.plan-mgmt .pm-page-title {
+  font-size: var(--pm-title);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.plan-mgmt .pm-kicker {
+  font-size: var(--pm-label);
+  line-height: 1.3;
+}
+
+.plan-mgmt .pm-body-text,
+.plan-mgmt .pm-card-meta,
+.plan-mgmt .pm-search-shell input,
+.plan-mgmt .pm-search-shell input::placeholder {
+  font-size: var(--pm-body);
+  line-height: 1.45;
+}
+
+.plan-mgmt .pm-mobile-sub {
+  font-size: var(--pm-body);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.plan-mgmt .pm-hero-stat {
+  font-size: var(--pm-hero-stat);
+  line-height: 1.1;
+}
+
+.plan-mgmt .pm-rail-label {
+  font-size: var(--pm-label);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.plan-mgmt .pm-rail-hint {
+  font-size: var(--pm-label);
+  flex-shrink: 0;
+}
+
+.plan-mgmt .pm-card-title {
+  font-size: var(--pm-body);
+  line-height: 1.35;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 425px) {
+  .plan-mgmt .pm-card-title {
+    font-size: 0.9375rem; /* 15px — card titles slightly above body on baseline */
+  }
+}
+
+.plan-mgmt .pm-stat-label {
+  font-size: var(--pm-label);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+}
+
+.plan-mgmt .pm-stat-hint {
+  font-size: var(--pm-body);
+  line-height: 1.45;
+  font-weight: 600;
+}
+
+.plan-mgmt .pm-stat-value {
+  font-size: var(--pm-hero-stat);
+  line-height: 1.1;
+  font-weight: 800;
+}
+
+.plan-mgmt .pm-status-badge {
+  width: fit-content;
+  flex: 0 0 auto;
+  font-size: var(--pm-body);
+  line-height: 1.2;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.plan-mgmt .pm-card-metric {
+  font-size: var(--pm-body);
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+/* Vertical rhythm */
+@media (max-width: 1023px) {
+  .plan-mgmt {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pm-gap-block);
+  }
+}
+
+/* Header */
+.plan-mgmt .pm-mobile-header {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  gap: var(--pm-gap-inline);
+}
+
+.plan-mgmt .pm-header-icon {
+  flex-shrink: 0;
+}
+
+.plan-mgmt .pm-header-create {
+  flex-shrink: 0;
+}
+
+@media (max-width: 424px) {
+  .plan-mgmt .pm-tap-target,
+  .plan-mgmt .pm-header-create {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .plan-mgmt .pm-search-shell {
+    min-height: 44px;
+  }
+}
+
+/* Stats banner */
+.plan-mgmt .pm-stats-banner {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: 1rem;
+  padding: 2px;
+}
+
+@media (min-width: 425px) {
+  .plan-mgmt .pm-stats-banner {
+    border-radius: 1.75rem;
+  }
+}
+
+.plan-mgmt .pm-stats-inner {
+  width: 100%;
+  min-width: 0;
+  border-radius: 0.875rem;
+  padding: 0.875rem;
+  box-sizing: border-box;
+}
+
+@media (min-width: 425px) {
+  .plan-mgmt .pm-stats-inner {
+    border-radius: 1.375rem;
+    padding: 1.25rem;
+  }
+}
+
+.plan-mgmt .pm-stats-top {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pm-gap-inline);
+  margin-bottom: 0.75rem;
+}
+
+.plan-mgmt .pm-stats-sync {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.25rem 0.625rem;
+  font-size: var(--pm-body);
+  font-weight: 800;
+  color: #fff;
+}
+
+@media (max-width: 374px) {
+  .plan-mgmt .pm-stats-sync {
+    padding: 0.25rem 0.5rem;
+  }
+}
+
+/* Stats grid: 1 col <425, 2 col at 425+ */
+.plan-mgmt .pm-stats-grid {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 425px) {
+  .plan-mgmt .pm-stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+}
+
+.plan-mgmt .pm-stat-cell {
+  min-width: 0;
+}
+
+.plan-mgmt .pm-stat-cell .pm-stat-label {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.plan-mgmt .pm-stat-cell .pm-stat-value {
+  margin-top: 0.25rem;
+  color: #fff;
+}
+
+/* Search */
+.plan-mgmt .pm-search-shell {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: var(--pm-gap-inline);
+  border-radius: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  box-sizing: border-box;
+}
+
+@media (min-width: 425px) {
+  .plan-mgmt .pm-search-shell {
+    border-radius: 1rem;
+    padding: 0.75rem;
+  }
+}
+
+/* Filter / sort / action rows — 425px pattern: flex + wrap, content-sized pills */
+.pm-filter-block {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* All chip rows (filters, sort, card actions, desktop rail) */
+.pm-chip-row,
+.plan-mgmt .pm-filter-section,
+.plan-mgmt .pm-sort-section,
+.plan-mgmt .pm-card-actions {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  align-content: flex-start;
+  justify-content: flex-start;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  gap: var(--pm-chip-gap, 0.5rem);
+  row-gap: var(--pm-chip-gap, 0.5rem);
+  overflow: visible;
+}
+
+/* Pills must never grow, stretch, or fill the row */
+.pm-chip-row > .pm-chip-tap,
+.pm-chip-row > .pm-action-tap,
+.pm-chip-row > a.pm-action-tap,
+.pm-chip-row > button,
+.pm-chip-row > a {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-grow: 0;
+  flex-shrink: 0;
+  width: auto;
+  max-width: none;
+  align-self: center;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.pm-chip-tap,
+.pm-action-tap {
+  align-items: center;
+  justify-content: center;
+}
+
+.plan-mgmt .pm-chip-tap,
+.plan-mgmt .pm-action-tap,
+.plan-mgmt a.pm-action-tap {
+  min-height: 2.75rem;
+  padding-inline: 0.875rem;
+  padding-block: 0.5rem;
+  font-size: var(--pm-body);
+}
+
+@media (min-width: 425px) {
+  .plan-mgmt .pm-chip-tap,
+  .plan-mgmt .pm-action-tap,
+  .plan-mgmt a.pm-action-tap {
+    min-height: 0;
+    padding-inline: 0.875rem;
+    padding-block: 0.5rem;
+  }
+}
+
+.plan-mgmt .pm-chip-count {
+  border-radius: 9999px;
+  padding: 0.125rem 0.375rem;
+  font-size: var(--pm-label);
+  font-weight: 800;
+  text-align: center;
+}
+
+/* Card */
+.plan-mgmt .pm-card {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.plan-mgmt .pm-card-head {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--pm-chip-gap);
+  min-width: 0;
+}
+
+.plan-mgmt .pm-card-metrics {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  align-content: flex-start;
+  width: 100%;
+  min-width: 0;
+  gap: var(--pm-chip-gap);
+  row-gap: var(--pm-chip-gap);
+}
+
+.plan-mgmt .pm-card-metric {
+  display: inline-flex;
+  width: fit-content;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  white-space: nowrap;
+}
+
+.plan-mgmt .pm-card-actions {
+  margin-top: 0.75rem;
+}
+
+/* Never apply horizontal chip scroller inside plan management */
+.plan-mgmt .linkup-chip-scroller {
+  overflow: visible;
+  flex-wrap: wrap;
+}
+
+.plan-mgmt .pm-plan-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  gap: var(--pm-gap-block);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.plan-mgmt .pm-feedback {
+  font-size: var(--pm-body);
+}
+
+.plan-mgmt .pm-empty-state {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.plan-mgmt .pm-empty-state h2 {
+  font-size: var(--pm-title);
+}
+
+.plan-mgmt .pm-empty-state p {
+  font-size: var(--pm-body);
+}

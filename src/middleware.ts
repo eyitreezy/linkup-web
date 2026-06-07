@@ -1,0 +1,123 @@
+import { createServerClient } from '@supabase/ssr';
+import { type NextRequest, NextResponse } from 'next/server';
+import { env, isSupabaseConfigured } from '@/lib/env';
+
+const AUTH_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password'];
+
+function isAuthPath(pathname: string) {
+  return AUTH_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+function isProtectedAppPath(pathname: string) {
+  const prefixes = [
+    '/discover',
+    '/plans',
+    '/plan-management',
+    '/offers',
+    '/messages',
+    '/profile',
+    '/premium',
+    '/settings',
+    '/wallet',
+    '/trust',
+    '/kyc',
+    '/support',
+    '/plan',
+    '/chat',
+    '/escrow',
+    '/dispute',
+    '/disputes',
+    '/notifications',
+    '/admin',
+    '/onboarding',
+    '/user',
+  ];
+  return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL('/discover', request.url));
+  }
+
+  if (pathname === '/settings' || pathname.startsWith('/settings/')) {
+    const url = request.nextUrl.clone();
+    const rest = pathname.slice('/settings'.length) || '';
+    url.pathname = `/profile${rest}`;
+    return NextResponse.redirect(url);
+  }
+
+  if (pathname.startsWith('/auth/callback')) {
+    return NextResponse.next();
+  }
+
+  if (!isSupabaseConfigured) {
+    return NextResponse.next();
+  }
+
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(env.supabaseUrl, env.supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          response.cookies.set(name, value, options)
+        );
+      },
+    },
+  });
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (isProtectedAppPath(pathname) && !user) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    url.searchParams.set('next', pathname);
+    return NextResponse.redirect(url);
+  }
+
+  if (user && (pathname === '/admin' || pathname.startsWith('/admin/'))) {
+    const { data: adminRow } = await supabase
+      .from('admins')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (!adminRow) {
+      return NextResponse.redirect(new URL('/discover', request.url));
+    }
+  }
+
+  if (isAuthPath(pathname) && user) {
+    return NextResponse.redirect(new URL('/discover', request.url));
+  }
+
+  if (user && isProtectedAppPath(pathname) && pathname !== '/onboarding' && !pathname.startsWith('/onboarding/')) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('onboarding_status')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (profile?.onboarding_status === 'pending') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/onboarding';
+      return NextResponse.redirect(url);
+    }
+  }
+
+  return response;
+}
+
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|auth-hero|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+};
