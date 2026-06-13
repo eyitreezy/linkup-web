@@ -1,6 +1,7 @@
 'use client';
 
 import { ChatToolbar } from '@/features/messages/ChatToolbar';
+import { ReplyPreviewBar } from '@/features/messages/ReplyPreviewBar';
 import { MessageComposer, type MessageComposerLook } from '@/features/messages/MessageComposer';
 import { useIsMobileShellLayout } from '@/hooks/use-media-query';
 import type { ChatAppearancePreset } from '@/lib/messaging/chatAppearance';
@@ -20,6 +21,8 @@ type Props = {
   sending: boolean;
   disabled?: boolean;
   threadLook?: MessageComposerLook | null;
+  replyTo?: { senderLabel: string; preview: string } | null;
+  onCancelReply?: () => void;
 };
 
 export function ChatComposer({
@@ -34,6 +37,8 @@ export function ChatComposer({
   sending,
   disabled,
   threadLook,
+  replyTo,
+  onCancelReply,
 }: Props) {
   const isMobile = useIsMobileShellLayout();
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -64,6 +69,14 @@ export function ChatComposer({
           e.target.value = '';
         }}
       />
+      {replyTo && onCancelReply ? (
+        <ReplyPreviewBar
+          senderLabel={replyTo.senderLabel}
+          preview={replyTo.preview}
+          onCancel={onCancelReply}
+        />
+      ) : null}
+
       {toolsOpen ? (
         <ChatToolbar
           preset={preset}

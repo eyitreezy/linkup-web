@@ -93,6 +93,8 @@ export interface ProfilePreferences {
     read_receipts?: boolean;
     share_typing_indicator?: boolean;
   };
+  incognito_browse?: boolean;
+  hide_profile_views?: boolean;
   [key: string]: unknown;
 }
 
@@ -107,17 +109,29 @@ export interface DbUserPresence {
 }
 
 export type SubscriptionStatus = 'none' | 'active' | 'expired';
+export type SubscriptionTierDb = 'FREE' | 'SILVER' | 'GOLD' | 'PLATINUM';
+export type BillingCycleDb = 'monthly' | 'annual';
 
 export interface DbUser {
   id: string;
   email: string | null;
   account_status: AccountStatus;
   verification_status: UserVerification;
-  /** 1 = standard KYC; 2 = enhanced (e.g. BVN) for Pattern C / high limits */
-  kyc_tier?: 1 | 2;
+  /** 0–3 KYC tier (Phase 1 subscription schema). */
+  kyc_tier?: 0 | 1 | 2 | 3;
   premium_until: string | null;
   /** Present after migration `20240415000000_premium_engagement_blocks`; treat missing as `none`. */
   subscription_status?: SubscriptionStatus;
+  subscription_tier?: SubscriptionTierDb;
+  billing_cycle?: BillingCycleDb | null;
+  subscription_expires_at?: string | null;
+  flutterwave_customer_id?: string | null;
+  flutterwave_subscription_code?: string | null;
+  silver_trial_activated_at?: string | null;
+  silver_trial_expires_at?: string | null;
+  gold_trial_activated_at?: string | null;
+  gold_trial_expires_at?: string | null;
+  has_been_silver_subscriber?: boolean;
   boost_credits: number;
   created_at: string;
   updated_at: string;
@@ -146,6 +160,10 @@ export interface DbProfile {
   /** City / area label from onboarding location search or GPS. */
   location_label: string | null;
   is_profile_public: boolean;
+  incognito_browse_enabled?: boolean;
+  profile_view_privacy_enabled?: boolean;
+  masked_activity_enabled?: boolean;
+  spotlight_until?: string | null;
   ai_trust_score: number | null;
   /** Public “verified host” flag; kept in sync with `users.verification_status` via DB trigger — prefer updating the request/user row, not this field directly. */
   verified_badge: boolean;
@@ -184,7 +202,7 @@ export interface DbPlan {
   starting_price_cents: number | null;
   currency: string;
   status: PlanStatus;
-  visibility: 'public' | 'radius' | 'friends';
+  visibility: 'public' | 'radius' | 'friends' | 'premium';
   /** Hidden from discovery feeds when moderation escalates */
   is_suppressed?: boolean;
   boosted_until: string | null;
@@ -220,6 +238,20 @@ export interface DbPlan {
   urgency_level?: string | null;
   negotiation_expires_at?: string | null;
   spotlight_enabled?: boolean;
+  /** Standard plan listing window end — stamped at publish from creator tier. */
+  active_expires_at?: string | null;
+  /** Group plan — host tier at publish (discover sort). */
+  host_tier?: string | null;
+  host_tier_rank?: number | null;
+  is_group_plan?: boolean;
+  max_guests?: number | null;
+  max_free_guests?: number | null;
+  max_premium_guests?: number | null;
+  multi_city?: boolean | null;
+  city_ids?: string[] | null;
+  mood_reach?: 'city' | 'city_adjacent' | 'city_widest' | 'all_cities' | null;
+  extension_count?: number | null;
+  is_weekend_plan?: boolean | null;
   duration_minutes: number | null;
   created_at: string;
   updated_at: string;
@@ -329,6 +361,8 @@ export interface DbReport {
 export interface DbEscrowTransaction {
   id: string;
   plan_id: string;
+  offer_id: string | null;
+  group_plan_index: number | null;
   payer_id: string;
   payee_id: string;
   host_id: string | null;
@@ -338,6 +372,7 @@ export interface DbEscrowTransaction {
   guest_share_cents: number | null;
   funding_deadline: string | null;
   platform_fee_cents: number | null;
+  goodwill_applied_cents: number | null;
   host_funded_at: string | null;
   guest_funded_at: string | null;
   amount_cents: number;
@@ -371,6 +406,7 @@ export interface DbDispute {
   resolution: PlanDisputeResolution | null;
   reporter_note: string | null;
   internal_notes: string | null;
+  admin_note: string | null;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
@@ -406,8 +442,11 @@ export interface DbEscrowDispute {
   reason: string;
   status: DisputeStatus;
   admin_resolution: string | null;
+  admin_note: string | null;
   support_ticket_id: string | null;
   detail: string | null;
+  queue_priority: number | null;
+  sla_deadline: string | null;
   created_at: string;
   resolved_at: string | null;
 }
@@ -419,8 +458,22 @@ export interface DbSupportTicket {
   body: string;
   status: TicketStatus;
   priority: string;
+  queue_priority?: number | null;
+  sla_hours?: number | null;
+  sla_deadline?: string | null;
+  is_concierge?: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface DbTicketReply {
+  id: string;
+  ticket_id: string;
+  sender_id: string | null;
+  sender_role: 'admin' | 'member' | 'system';
+  body: string;
+  is_internal: boolean;
+  created_at: string;
 }
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
@@ -457,6 +510,10 @@ export type NotificationEventType =
   | 'plan_cancelled'
   | 'wallet_updated'
   | 'credit_issued'
+  | 'credit_expiring'
+  | 'trial_started'
+  | 'trial_expiring'
+  | 'trial_expired'
   | string;
 
 /** JSON `data` for deep links — keep push payloads generic (no amounts). */
@@ -529,8 +586,23 @@ export interface DbGoodwillCredit {
   user_id: string;
   amount: number;
   source: GoodwillSource;
+  tier_at_award: SubscriptionTierDb | null;
   expires_at: string;
   used_amount: number;
+  created_at: string;
+  reference_id?: string | null;
+}
+
+export interface DbSubscriptionEvent {
+  id: string;
+  user_id: string;
+  event_type: string;
+  from_tier: SubscriptionTierDb | null;
+  to_tier: SubscriptionTierDb | null;
+  billing_cycle: 'monthly' | 'annual' | null;
+  amount_ngn: number | null;
+  flutterwave_reference: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -544,6 +616,7 @@ export interface DbWalletLedgerRow {
   source: WalletLedgerSource;
   amount: number;
   reference_id: string | null;
+  is_display_only: boolean;
   created_at: string;
 }
 

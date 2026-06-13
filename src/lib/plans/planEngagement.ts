@@ -1,3 +1,7 @@
+import {
+  fetchViewerPrivacyPrefs,
+  shouldSkipPlanViewRecording,
+} from '@/lib/plans/incognitoEngagement';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function recordPlanView(
@@ -5,6 +9,9 @@ export async function recordPlanView(
   planId: string,
   userId: string
 ): Promise<void> {
+  const prefs = await fetchViewerPrivacyPrefs(client, userId);
+  if (shouldSkipPlanViewRecording(prefs)) return;
+
   await client.from('plan_engagements').upsert(
     {
       plan_id: planId,

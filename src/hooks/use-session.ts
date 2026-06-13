@@ -14,21 +14,24 @@ export function useSession() {
     const supabase = createClient();
 
     let settled = false;
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    void supabase.auth.getSession().then(({ data: { session } }) => {
       settled = true;
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    // Safety: never leave protected routes stuck on loader if getSession hangs.
     const timeout = window.setTimeout(() => {
       if (!settled) setLoading(false);
     }, 8000);
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+      } else if (session?.user) {
+        setUser(session.user);
+      }
       setLoading(false);
     });
 

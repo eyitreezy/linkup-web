@@ -15,8 +15,8 @@ export function navigateFromNotification(
   data: NotificationPayload | null | undefined
 ) {
   const tEarly = data && typeof data === 'object' && 'type' in data ? String((data as { type?: string }).type) : '';
-  if (tEarly === 'premium_activated') {
-    push('/premium/success');
+  if (tEarly === 'premium_activated' || tEarly === 'subscription_activated') {
+    push('/subscription');
     return;
   }
 
@@ -33,6 +33,14 @@ export function navigateFromNotification(
   }
   if (t === 'dispute_opened') {
     push('/support');
+    return;
+  }
+  if (t === 'credit_issued' || t === 'credit_expiring') {
+    push('/wallet');
+    return;
+  }
+  if (t === 'trial_started' || t === 'trial_expiring' || t === 'trial_expired') {
+    push('/subscription');
     return;
   }
   if (t.trim()) {

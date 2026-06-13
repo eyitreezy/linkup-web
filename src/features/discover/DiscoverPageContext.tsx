@@ -5,6 +5,12 @@ import {
   type FeedFilterState,
 } from '@/lib/discovery/feedFilters';
 import { resolveDiscoverViewerCoords } from '@/lib/discovery/viewerLocation';
+import { usePermission } from '@/hooks/usePermission';
+import { fetchHiddenPlanIds, persistHiddenPlan, removeHiddenPlan } from '@/lib/plans/hiddenPlans';
+import { effectiveDiscoveryRadiusKm } from '@/lib/plans/discoveryRadius';
+import { tierRank } from '@/lib/subscription/constants';
+import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
+import type { SubscriptionTier } from '@/lib/subscription/types';
 import { useViewerGeolocation } from '@/hooks/use-viewer-geolocation';
 import type { DiscoveryMood } from '@/lib/discovery/moodFilter';
 import type { DbProfile } from '@/types/database';
@@ -26,11 +32,22 @@ type DiscoverPageContextValue = {
   mood: DiscoveryMood;
   filter: FeedFilterState;
   baseRadiusKm: number;
+  browseRadiusKm: number;
+  hasWiderRadius: boolean;
+  effectiveTier: SubscriptionTier;
   viewerLat: number | null;
   viewerLng: number | null;
-  isPremium: boolean;
+  advancedFiltersAllowed: boolean;
+  travelModeAllowed: boolean;
   profileLoading: boolean;
   viewerProfile: DbProfile | null;
+  isIncognitoActive: boolean;
+  hiddenPlanIds: Set<string>;
+  canUndoSwipe: boolean;
+  hidePlan: (planId: string) => void;
+  undoHiddenPlans: () => void;
+  requestDeviceLocation: () => void;
+  hasDeviceLocation: boolean;
   applyFilters: (next: FeedFilterState, nextMood: DiscoveryMood) => void;
 };
 
@@ -40,6 +57,8 @@ export function DiscoverPageProvider({ children }: { children: ReactNode }) {
   const user = useAuthStore((s) => s.user);
   const [mood, setMood] = useState<DiscoveryMood>('all');
   const [filter, setFilter] = useState<FeedFilterState | null>(null);
+  const [hiddenPlanIds, setHiddenPlanIds] = useState<Set<string>>(() => new Set());
+  const [geoTick, setGeoTick] = useState(0);
 
   const profileQuery = useQuery({
     queryKey: ['discover-profile', user?.id],
@@ -54,15 +73,25 @@ export function DiscoverPageProvider({ children }: { children: ReactNode }) {
   const baseRadiusKm = profileQuery.data?.profile?.radius_km
     ? Number(profileQuery.data.profile.radius_km)
     : 50;
-  const isPremium = !!(
-    profileQuery.data?.dbUser?.premium_until &&
-    new Date(profileQuery.data.dbUser.premium_until).getTime() > Date.now()
+  const { subscriptionState } = useSubscriptionContext();
+  const { allowed: permissionAdvancedFilters } = usePermission('discover.advanced_filters');
+  const advancedFiltersAllowed =
+    tierRank(subscriptionState.effectiveTier) >= tierRank('SILVER') || permissionAdvancedFilters;
+  const { allowed: travelModeAllowed } = usePermission('discover.travel_mode');
+  const { allowed: canUndoSwipe } = usePermission('discover.undo_swipe');
+  const { allowed: hasWiderRadius, effectiveTier: widerRadiusTier } = usePermission(
+    'discover.wider_radius'
+  );
+  const effectiveTier = (widerRadiusTier ?? subscriptionState.effectiveTier) as SubscriptionTier;
+  const browseRadiusKm = useMemo(
+    () => effectiveDiscoveryRadiusKm(baseRadiusKm, effectiveTier, hasWiderRadius),
+    [baseRadiusKm, effectiveTier, hasWiderRadius]
   );
 
-  const deviceCoords = useViewerGeolocation(!!user?.id);
+  const deviceCoords = useViewerGeolocation(!!user?.id || geoTick > 0, geoTick);
   const viewerCoords = resolveDiscoverViewerCoords(
     profileQuery.data?.profile ?? null,
-    isPremium,
+    travelModeAllowed,
     deviceCoords
   );
   const viewerLat = viewerCoords.lat;
@@ -74,9 +103,54 @@ export function DiscoverPageProvider({ children }: { children: ReactNode }) {
     }
   }, [filter, profileQuery.data?.profile, baseRadiusKm]);
 
+  useEffect(() => {
+    if (!user?.id || !canUndoSwipe) return;
+    const client = createClient();
+    void fetchHiddenPlanIds(client, user.id).then((ids) => {
+      if (ids.length > 0) setHiddenPlanIds(new Set(ids));
+    });
+  }, [user?.id, canUndoSwipe]);
+
+  const isIncognitoActive =
+    subscriptionState.effectiveTier === 'PLATINUM' &&
+    !!(profileQuery.data?.profile?.incognito_browse_enabled ??
+      profileQuery.data?.profile?.preferences?.incognito_browse);
+
+  const hidePlan = useCallback(
+    (planId: string) => {
+      setHiddenPlanIds((prev) => {
+        const next = new Set(prev);
+        next.add(planId);
+        return next;
+      });
+      if (user?.id && canUndoSwipe) {
+        persistHiddenPlan(createClient(), user.id, planId);
+      }
+    },
+    [user?.id, canUndoSwipe]
+  );
+
+  const undoHiddenPlans = useCallback(() => {
+    const ids = [...hiddenPlanIds];
+    setHiddenPlanIds(new Set());
+    if (user?.id && canUndoSwipe) {
+      const client = createClient();
+      for (const id of ids) removeHiddenPlan(client, user.id, id);
+    }
+  }, [hiddenPlanIds, user?.id, canUndoSwipe]);
+
+  const requestDeviceLocation = useCallback(() => {
+    if (typeof window === 'undefined' || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      () => setGeoTick((t) => t + 1),
+      () => {},
+      { enableHighAccuracy: false, maximumAge: 60_000, timeout: 12_000 }
+    );
+  }, []);
+
   const activeFilter = useMemo(
-    () => filter ?? loadFeedFilterFromProfile(profileQuery.data?.profile ?? null, baseRadiusKm),
-    [filter, profileQuery.data?.profile, baseRadiusKm]
+    () => filter ?? loadFeedFilterFromProfile(profileQuery.data?.profile ?? null, browseRadiusKm),
+    [filter, profileQuery.data?.profile, browseRadiusKm]
   );
 
   const applyFilters = useCallback(
@@ -112,24 +186,44 @@ export function DiscoverPageProvider({ children }: { children: ReactNode }) {
       mood,
       filter: activeFilter,
       baseRadiusKm,
+      browseRadiusKm,
+      hasWiderRadius,
+      effectiveTier,
       viewerLat,
       viewerLng,
-      isPremium,
+      advancedFiltersAllowed,
+      travelModeAllowed,
       profileLoading: profileQuery.isLoading,
       viewerProfile: profileQuery.data?.profile ?? null,
+      isIncognitoActive,
+      hiddenPlanIds,
+      canUndoSwipe,
+      hidePlan,
+      undoHiddenPlans,
+      requestDeviceLocation,
+      hasDeviceLocation: deviceCoords != null,
       applyFilters,
     }),
     [
       mood,
       activeFilter,
       baseRadiusKm,
+      browseRadiusKm,
+      hasWiderRadius,
+      effectiveTier,
       viewerLat,
       viewerLng,
-      isPremium,
+      advancedFiltersAllowed,
+      travelModeAllowed,
       profileQuery.isLoading,
       profileQuery.data?.profile,
-      deviceCoords?.lat,
-      deviceCoords?.lng,
+      deviceCoords,
+      isIncognitoActive,
+      hiddenPlanIds,
+      canUndoSwipe,
+      hidePlan,
+      undoHiddenPlans,
+      requestDeviceLocation,
       applyFilters,
     ]
   );

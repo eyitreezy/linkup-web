@@ -27,6 +27,12 @@ import {
   ticketPriorityTone,
   ticketStatusTone,
 } from '@/lib/admin/adminLabels';
+import { EscrowDisputeResolutionPanel } from '@/components/admin/EscrowDisputeResolutionPanel';
+import { AdminSupportTicketModal } from '@/components/admin/AdminSupportTicketModal';
+import { SlaDeadlineBadge } from '@/components/admin/SlaDeadlineBadge';
+import { ToggleRow } from '@/components/settings/ToggleRow';
+import { AppStatusDialog } from '@/components/ui/AppStatusDialog';
+import { createClient } from '@/lib/supabase/client';
 import {
   approveVerification,
   getDisputeEvidenceSignedUrl,
@@ -34,12 +40,10 @@ import {
   loadPlanDisputeEvidence,
   loadReportSnippet,
   rejectVerification,
-  resolveEscrowDispute,
   resolvePlanDispute,
   resolveReport,
   savePlanDisputeNotes,
   suspendReportedUser,
-  updateSupportTicket,
   warnReportedUser,
   type AdminDashboardData,
   type EscrowDisputeRow,
@@ -424,7 +428,17 @@ export function AdminDisputesPanel({
   const [planDetail, setPlanDetail] = useState<DbDispute | null>(null);
   const [planEvidence, setPlanEvidence] = useState<DbDisputeEvidence[]>([]);
   const [planNotes, setPlanNotes] = useState('');
+  const [partialPercent, setPartialPercent] = useState('50');
+  const [showPartialInput, setShowPartialInput] = useState(false);
   const [planBusy, setPlanBusy] = useState(false);
+  const [resolveFeedback, setResolveFeedback] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+  }>({ open: false, title: '', message: '' });
+  const [issueGoodwillOnResolve, setIssueGoodwillOnResolve] = useState(false);
+  const [goodwillAmount, setGoodwillAmount] = useState('');
+  const [goodwillError, setGoodwillError] = useState<string | null>(null);
 
   const filteredPlans =
     planFilter === 'all'
@@ -434,20 +448,91 @@ export function AdminDisputesPanel({
   async function openPlan(row: DbDispute) {
     setPlanDetail(row);
     setPlanNotes(row.internal_notes ?? '');
+    setShowPartialInput(false);
+    setPartialPercent('50');
+    setIssueGoodwillOnResolve(false);
+    setGoodwillAmount('');
+    setGoodwillError(null);
     setPlanEvidence(await loadPlanDisputeEvidence(row.id));
   }
 
   async function resolvePlan(status: 'resolved' | 'rejected', resolution: 'refund' | 'partial' | 'none' | null) {
     if (!planDetail) return;
+    if (resolution === 'partial' && !showPartialInput) {
+      setShowPartialInput(true);
+      return;
+    }
     setPlanBusy(true);
-    await resolvePlanDispute(planDetail.id, status, status === 'resolved' ? resolution : null, planNotes);
+    const partialBps =
+      resolution === 'partial' ? Math.round((parseFloat(partialPercent) || 0) * 100) : null;
+    const { error } = await resolvePlanDispute(
+      planDetail.id,
+      status,
+      status === 'resolved' ? resolution : null,
+      planNotes,
+      partialBps
+    );
     setPlanBusy(false);
+    if (error) {
+      setResolveFeedback({
+        open: true,
+        title: 'Could not resolve',
+        message: error.message,
+      });
+      return;
+    }
+
+    let walletMsg =
+      status === 'rejected'
+        ? 'Dispute rejected — no wallet action taken.'
+        : resolution === 'refund'
+          ? 'Full refund issued to guest where applicable.'
+          : resolution === 'partial'
+            ? 'Partial refund applied.'
+            : 'Dispute resolved — funds released to host where applicable.';
+
+    if (
+      status === 'resolved' &&
+      issueGoodwillOnResolve &&
+      goodwillAmount.trim() &&
+      resolution !== 'none' &&
+      planDetail
+    ) {
+      const amountCents = Math.round(parseFloat(goodwillAmount) * 100);
+      if (amountCents > 0) {
+        const client = createClient();
+        const { error: gwErr } = await client.rpc('admin_issue_goodwill_credit', {
+          p_user_id: planDetail.reporter_id,
+          p_amount_cents: amountCents,
+          p_source: 'dispute_resolution',
+          p_admin_note: `Dispute resolution: ${planDetail.id}`,
+        });
+        if (gwErr) {
+          setGoodwillError(
+            `Resolution succeeded but goodwill issuance failed: ${gwErr.message}. Retry from the member admin panel.`
+          );
+          walletMsg += ` Goodwill issuance failed — retry from admin user panel.`;
+        }
+      }
+    }
+
     setPlanDetail(null);
+    setShowPartialInput(false);
+    setIssueGoodwillOnResolve(false);
+    setGoodwillAmount('');
     onReload();
+    setResolveFeedback({ open: true, title: 'Dispute resolved', message: walletMsg });
   }
 
   return (
     <>
+      <AppStatusDialog
+        open={resolveFeedback.open}
+        title={resolveFeedback.title}
+        message={resolveFeedback.message}
+        variant={resolveFeedback.title === 'Could not resolve' ? 'error' : 'success'}
+        onClose={() => setResolveFeedback((f) => ({ ...f, open: false }))}
+      />
       <AdminSectionHeader
         title="Member plan disputes"
         subtitle="Evidence in private storage — open signed links in the browser; audit is chronological."
@@ -518,7 +603,7 @@ export function AdminDisputesPanel({
                 Resolve · full refund
               </AdminPrimaryButton>
               <AdminPrimaryButton variant="secondary" disabled={planBusy} onClick={() => void resolvePlan('resolved', 'partial')}>
-                Resolve · partial refund
+                {showPartialInput ? 'Confirm partial refund' : 'Resolve · partial refund'}
               </AdminPrimaryButton>
               <AdminPrimaryButton variant="secondary" disabled={planBusy} onClick={() => void resolvePlan('resolved', 'none')}>
                 Resolve · no payout
@@ -548,6 +633,41 @@ export function AdminDisputesPanel({
               className="w-full resize-none rounded-xl border border-border px-3 py-2 text-[14px]"
               placeholder="Visible to admins only"
             />
+            {showPartialInput ? (
+              <div className="space-y-2 rounded-xl border border-amber-200/80 bg-amber-50 p-3">
+                <label className="text-[11px] font-extrabold text-amber-800">Guest refund percentage</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={partialPercent}
+                    onChange={(e) => setPartialPercent(e.target.value)}
+                    className="w-20 rounded-lg border border-amber-300 bg-white px-2 py-1 text-center text-[13px] font-semibold"
+                  />
+                  <span className="text-[12px] font-extrabold text-amber-800">%</span>
+                </div>
+              </div>
+            ) : null}
+            <div className="space-y-2 border-t border-border/60 pt-3">
+              <ToggleRow
+                label="Also issue goodwill credit"
+                checked={issueGoodwillOnResolve}
+                onChange={setIssueGoodwillOnResolve}
+              />
+              {issueGoodwillOnResolve ? (
+                <input
+                  type="number"
+                  placeholder="Amount (NGN)"
+                  value={goodwillAmount}
+                  onChange={(e) => setGoodwillAmount(e.target.value)}
+                  className="w-full rounded-xl border border-border px-3 py-2 text-[14px] font-semibold"
+                />
+              ) : null}
+              {goodwillError ? (
+                <p className="text-[12px] font-semibold text-amber-800">{goodwillError}</p>
+              ) : null}
+            </div>
             {planEvidence.length > 0 ? (
               <ul className="space-y-2">
                 {planEvidence.map((ev) => (
@@ -579,10 +699,11 @@ export function AdminDisputesPanel({
 }
 
 function EscrowCard({ row, onResolved }: { row: EscrowDisputeRow; onResolved: Reload }) {
-  const [busy, setBusy] = useState(false);
   const esc = row.escrow_row;
   const amt = formatEscrowAmount(esc?.amount_cents, esc?.currency);
   const canResolve = row.status.toLowerCase() !== 'resolved' && row.status.toLowerCase() !== 'dismissed';
+  const payerLabel = esc?.payer_id ? shortUuid(esc.payer_id, 8) : 'Payer';
+  const payeeLabel = esc?.payee_id ? shortUuid(esc.payee_id, 8) : 'Payee';
 
   return (
     <AdminListCard>
@@ -592,7 +713,10 @@ function EscrowCard({ row, onResolved }: { row: EscrowDisputeRow; onResolved: Re
             <p className="text-[10px] font-extrabold uppercase tracking-wide text-muted">Reason</p>
             <p className="text-[16px] font-extrabold text-foreground">{row.reason}</p>
           </div>
-          <StatusPill label={row.status} tone={escrowStatusTone(row.status)} />
+          <div className="flex flex-wrap gap-2">
+            <StatusPill label={row.status} tone={escrowStatusTone(row.status)} />
+            {row.sla_deadline ? <SlaDeadlineBadge deadline={row.sla_deadline} /> : null}
+          </div>
         </div>
         {row.detail ? <p className="mt-3 rounded-xl bg-white/90 p-3 text-[13px] font-semibold text-muted">{row.detail}</p> : null}
         <div className="mt-3 grid gap-2 text-[12px] font-semibold text-muted min-[400px]:grid-cols-2">
@@ -609,20 +733,13 @@ function EscrowCard({ row, onResolved }: { row: EscrowDisputeRow; onResolved: Re
             </>
           ) : null}
         </div>
-        {canResolve ? (
-          <AdminPrimaryButton
-            className="mt-4 w-full"
-            variant="secondary"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              await resolveEscrowDispute(row.id);
-              setBusy(false);
-              onResolved();
-            }}
-          >
-            {busy ? 'Saving…' : 'Mark resolved'}
-          </AdminPrimaryButton>
+        {canResolve && esc ? (
+          <EscrowDisputeResolutionPanel
+            dispute={row}
+            payerLabel={payerLabel}
+            payeeLabel={payeeLabel}
+            onResolved={onResolved}
+          />
         ) : null}
       </div>
     </AdminListCard>
@@ -633,19 +750,17 @@ export function AdminSupportPanel({ data, onReload }: { data: AdminDashboardData
   const [filter, setFilter] = useState<'open' | 'all'>('open');
   const [detail, setDetail] = useState<DbSupportTicket | null>(null);
 
-  const tickets = [...data.tickets]
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .filter((x) => {
-      if (filter === 'all') return true;
-      const s = x.status.toLowerCase();
-      return s === 'open' || s === 'in_progress';
-    });
+  const tickets = data.tickets.filter((x) => {
+    if (filter === 'all') return true;
+    const s = x.status.toLowerCase();
+    return s === 'open' || s === 'in_progress';
+  });
 
   return (
     <>
       <AdminSectionHeader
         title="Support inbox"
-        subtitle="Member tickets — update status and priority from detail."
+        subtitle="SLA-sorted queue — reply, change status, and leave internal notes."
         icon={<IoChatbubblesOutline size={22} className="text-primary" />}
       />
       <div className="mb-4 flex gap-2">
@@ -663,6 +778,12 @@ export function AdminSupportPanel({ data, onReload }: { data: AdminDashboardData
                 <div className="mt-2 flex flex-wrap gap-2">
                   <StatusPill label={t.status} tone={ticketStatusTone(t.status)} />
                   <StatusPill label={t.priority} tone={ticketPriorityTone(t.priority)} />
+                  {t.is_concierge ? (
+                    <span className="inline-flex rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-extrabold text-violet-700">
+                      Concierge
+                    </span>
+                  ) : null}
+                  {t.sla_deadline ? <SlaDeadlineBadge deadline={t.sla_deadline} /> : null}
                 </div>
                 <AdminMetaRow icon={<IoTimeOutline size={14} />}>{new Date(t.created_at).toLocaleString()}</AdminMetaRow>
               </AdminListCard>
@@ -671,55 +792,11 @@ export function AdminSupportPanel({ data, onReload }: { data: AdminDashboardData
         </ul>
       )}
 
-      <AdminModal
-        open={!!detail}
+      <AdminSupportTicketModal
+        ticket={detail}
         onClose={() => setDetail(null)}
-        title={detail?.subject?.trim() || 'Support ticket'}
-        kicker="Support"
-        footer={
-          detail ? (
-            <div className="flex flex-wrap gap-2">
-              {(['in_progress', 'resolved'] as const).map((s) => (
-                <AdminPrimaryButton
-                  key={s}
-                  variant={s === 'resolved' ? 'primary' : 'secondary'}
-                  onClick={async () => {
-                    await updateSupportTicket(detail.id, { status: s });
-                    setDetail(null);
-                    onReload();
-                  }}
-                >
-                  Mark {s.replace(/_/g, ' ')}
-                </AdminPrimaryButton>
-              ))}
-              <AdminPrimaryButton variant="ghost" onClick={() => setDetail(null)}>
-                Close
-              </AdminPrimaryButton>
-            </div>
-          ) : null
-        }
-      >
-        {detail ? (
-          <div className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <StatusPill label={detail.status} tone={ticketStatusTone(detail.status)} />
-              <StatusPill label={detail.priority} tone={ticketPriorityTone(detail.priority)} />
-            </div>
-            <p className="whitespace-pre-wrap rounded-xl bg-[#F5F6FA] p-4 text-[14px] font-semibold leading-relaxed">
-              {detail.body?.trim() || '(Empty message)'}
-            </p>
-            {detail.user_id ? (
-              <div className="flex items-center justify-between gap-2">
-                <AdminMonoBlock label="Member id" value={detail.user_id} />
-                <CopyIdsButton text={detail.user_id} label="Copy member id" />
-              </div>
-            ) : null}
-            <AdminMetaRow icon={<IoTimeOutline size={14} />}>
-              {new Date(detail.created_at).toLocaleString()}
-            </AdminMetaRow>
-          </div>
-        ) : null}
-      </AdminModal>
+        onUpdated={onReload}
+      />
     </>
   );
 }

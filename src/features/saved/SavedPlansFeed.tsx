@@ -1,7 +1,9 @@
 'use client';
 
 import { TabPageHeader } from '@/components/layout/TabPageHeader';
+import { SavedUpgradeEmptyState } from '@/components/subscription/SavedUpgradeEmptyState';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { usePermission } from '@/hooks/usePermission';
 import { SavedPlanCard } from '@/features/saved/SavedPlanCard';
 import { useTogglePlanSaved } from '@/features/saved/useTogglePlanSaved';
 import { useIsMobileShellLayout } from '@/hooks/use-media-query';
@@ -37,6 +39,7 @@ export function SavedPlansFeed() {
   const user = useAuthStore((s) => s.user);
   const isMobile = useIsMobileShellLayout();
   const toggleSaved = useTogglePlanSaved(user?.id);
+  const { allowed: bookmarkAllowed, loading: permissionLoading } = usePermission('plans.bookmark');
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: savedPlansQueryKey(user?.id),
@@ -49,6 +52,26 @@ export function SavedPlansFeed() {
   });
 
   const items = data ?? [];
+
+  if (!permissionLoading && !bookmarkAllowed) {
+    return (
+      <div
+        className={cn(
+          'min-w-0 space-y-4 min-[360px]:space-y-5 min-[400px]:space-y-6',
+          'pb-8 min-[400px]:pb-10',
+          isMobile && 'max-lg:pb-[var(--linkup-tab-clearance)]'
+        )}
+      >
+        <TabPageHeader
+          kicker="Bookmarks"
+          title="Saved"
+          description="Plans you saved from Discover — synced with the mobile app."
+          icon={<IoBookmarkOutline size={22} />}
+        />
+        <SavedUpgradeEmptyState requiredTier="SILVER" />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -100,7 +123,7 @@ export function SavedPlansFeed() {
           emoji="🔖"
           title="No saved plans yet"
           titleAccent="saved"
-          description="Tap Save on any Discover card (Premium) — your shortlist stays in sync with the mobile app."
+          description="Tap Save on any Discover card (Silver and above) — your shortlist stays in sync with the mobile app."
           tips={[
             { icon: IoBookmarkOutline, text: 'Saved plans keep host, price, and mood context handy' },
             {
@@ -111,7 +134,7 @@ export function SavedPlansFeed() {
             },
           ]}
           action={{ label: 'Browse Discover', href: '/discover' }}
-          secondaryAction={{ label: 'Go Premium', href: '/premium', variant: 'secondary' }}
+          secondaryAction={{ label: 'See plans', href: '/subscription', variant: 'secondary' }}
         />
       ) : (
         <ul className="flex w-full min-w-0 flex-col gap-2.5 min-[360px]:gap-3 sm:gap-4">

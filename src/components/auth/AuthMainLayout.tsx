@@ -1,6 +1,7 @@
 'use client';
 
 import { AppShellRouter } from '@/components/layout/AppShellRouter';
+import { SubscriptionProvider } from '@/lib/subscription/SubscriptionContext';
 import { useSession } from '@/hooks/use-session';
 import { useAuthStore } from '@/stores/auth-store';
 import type { User } from '@supabase/supabase-js';
@@ -70,7 +71,9 @@ export function AuthMainLayout({ children, initialUser }: Props) {
 
   return (
     <AppViewport>
-      <AppShellRouter>{children}</AppShellRouter>
+      <SubscriptionProvider>
+        <AppShellRouter>{children}</AppShellRouter>
+      </SubscriptionProvider>
     </AppViewport>
   );
 }

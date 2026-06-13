@@ -23,6 +23,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { IoSparkles } from 'react-icons/io5';
 
 const INTENTS: { id: MeetingIntent; label: string }[] = [
   { id: 'friendship', label: 'Friendship' },
@@ -348,6 +349,25 @@ export function OnboardingScreen() {
           <label className="mt-2 block text-[12px] font-extrabold">Radius (km)</label>
           <input type="range" min={5} max={100} value={draft.radiusKm} onChange={(e) => setDraft((d) => ({ ...d, radiusKm: Number(e.target.value) }))} className="w-full" />
         </FormCard>
+      ) : null}
+
+      {step === ONBOARDING_TOTAL_STEPS - 1 ? (
+        <>
+          <div className="flex items-start gap-2 rounded-2xl border border-amber-200/80 bg-amber-50 px-4 py-3">
+            <IoSparkles className="mt-0.5 shrink-0 text-amber-600" size={16} />
+            <p className="text-[14px] font-semibold text-amber-900">
+              Want a free 7-day Silver trial? Verify your identity after publishing — approved verification
+              automatically starts your trial.
+            </p>
+          </div>
+          <div className="linkup-card border border-border/80 bg-[#F5F6FA] p-4">
+            <p className="text-[14px] font-extrabold text-foreground">Contacts import</p>
+            <p className="mt-1 text-[13px] font-semibold leading-relaxed text-muted">
+              Available on the LinkUp mobile app — import your contacts there for additional safety context when
+              matching.
+            </p>
+          </div>
+        </>
       ) : null}
 
       {!canContinue && continueHint ? (

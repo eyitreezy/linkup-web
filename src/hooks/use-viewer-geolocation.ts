@@ -9,7 +9,7 @@ export type { ViewerGeoCoords };
  * Browser GPS pin for discover proximity sort — mirrors mobile `expo-location` coords
  * (device location overrides stored profile lat/lng when available).
  */
-export function useViewerGeolocation(enabled: boolean): ViewerGeoCoords | null {
+export function useViewerGeolocation(enabled: boolean, refreshToken = 0): ViewerGeoCoords | null {
   const [coords, setCoords] = useState<ViewerGeoCoords | null>(null);
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export function useViewerGeolocation(enabled: boolean): ViewerGeoCoords | null {
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+  }, [enabled, refreshToken]);
 
   return coords;
 }

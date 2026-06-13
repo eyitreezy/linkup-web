@@ -39,7 +39,7 @@ export const ADMIN_NAV_ITEM = {
 } as const;
 
 /** Intentionally omitted from MOBILE_TAB_NAV — open via Profile card, paywalls, and deep links. */
-export const PREMIUM_HREF = '/premium' as const;
+export const SUBSCRIPTION_HREF = '/subscription' as const;
 
 export type NavTabItem = (typeof MOBILE_TAB_NAV)[number] | typeof ADMIN_NAV_ITEM;
 

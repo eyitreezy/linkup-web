@@ -1,6 +1,7 @@
 'use client';
 
 import { AppShell } from '@/components/layout/AppShell';
+import { UpgradeGateProvider } from '@/contexts/UpgradeGateContext';
 import { PresenceProvider } from '@/contexts/PresenceContext';
 import { MessagesInboxProvider } from '@/contexts/MessagesInboxContext';
 import { NotificationInboxProvider } from '@/contexts/NotificationInboxContext';
@@ -23,12 +24,15 @@ export function AppShellRouter({ children }: { children: ReactNode }) {
   const isDiscover = pathname === '/discover' || pathname.startsWith('/discover/');
   const isPlanManagement =
     pathname === '/plan-management' || pathname.startsWith('/plan-management/');
+  const isSubscription =
+    pathname === '/subscription' || pathname.startsWith('/subscription/');
   const isAdmin = isAdminRoute(pathname);
 
   const shell = (
     <AppShell
       fullWidth={isMessages || isAdmin}
-      noContext={isMessages || isAdmin}
+      noContext={isMessages || isAdmin || isSubscription}
+      wideMain={isSubscription}
       fixedMain={isMessages || (isDiscover && isMobileLayout)}
       flushMobileGutter={isPlanManagement}
       contextTitle={isDiscover || isPlanManagement ? 'Sort and filter' : undefined}
@@ -53,10 +57,12 @@ export function AppShellRouter({ children }: { children: ReactNode }) {
   }
 
   return (
-    <PresenceProvider>
-      <NotificationInboxProvider>
-        <MessagesInboxProvider>{content}</MessagesInboxProvider>
-      </NotificationInboxProvider>
-    </PresenceProvider>
+    <UpgradeGateProvider>
+      <PresenceProvider>
+        <NotificationInboxProvider>
+          <MessagesInboxProvider>{content}</MessagesInboxProvider>
+        </NotificationInboxProvider>
+      </PresenceProvider>
+    </UpgradeGateProvider>
   );
 }

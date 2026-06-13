@@ -7,6 +7,7 @@ import {
 } from '@/features/discover/DiscoverMobileFilterBar';
 import type { FeedFilterState } from '@/lib/discovery/feedFilters';
 import type { DiscoveryMood } from '@/lib/discovery/moodFilter';
+import type { SubscriptionTier } from '@/lib/subscription/types';
 import { cn } from '@/utils/cn';
 import { useState } from 'react';
 import { IoAlbumsOutline, IoGridOutline, IoListOutline } from 'react-icons/io5';
@@ -20,7 +21,10 @@ type Props = {
   filter: FeedFilterState;
   mood: DiscoveryMood;
   baseRadiusKm: number;
-  isPremium: boolean;
+  browseRadiusKm?: number;
+  hasWiderRadius?: boolean;
+  effectiveTier?: SubscriptionTier;
+  advancedFiltersAllowed: boolean;
   profileLoading?: boolean;
   onApply: (filter: FeedFilterState, mood: DiscoveryMood) => void;
   view: DiscoverViewMode;
@@ -36,7 +40,10 @@ export function DiscoverFeedToolbar({
   filter,
   mood,
   baseRadiusKm,
-  isPremium,
+  browseRadiusKm,
+  hasWiderRadius,
+  effectiveTier,
+  advancedFiltersAllowed,
   profileLoading,
   onApply,
   view,
@@ -118,7 +125,10 @@ export function DiscoverFeedToolbar({
         filter={filter}
         mood={mood}
         baseRadiusKm={baseRadiusKm}
-        isPremium={isPremium}
+        browseRadiusKm={browseRadiusKm}
+        hasWiderRadius={hasWiderRadius}
+        effectiveTier={effectiveTier}
+        advancedFiltersAllowed={advancedFiltersAllowed}
         onApply={onApply}
       />
     </>

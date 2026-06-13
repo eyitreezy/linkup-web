@@ -3,8 +3,13 @@
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { FormCard } from '@/components/settings/FormCard';
 import { SettingsPageHeader } from '@/components/settings/SettingsPageHeader';
+import { ToggleRow } from '@/components/settings/ToggleRow';
+import { useGatedAction } from '@/contexts/UpgradeGateContext';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
+import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import { createClient } from '@/lib/supabase/client';
+import { fetchUserProfileBundle } from '@/services/profile.service';
+import type { ProfilePreferences } from '@/types/database';
 import { useAuthStore } from '@/stores/auth-store';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
@@ -16,6 +21,11 @@ export function PrivacyScreen() {
   const user = useAuthStore((s) => s.user);
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [incognito, setIncognito] = useState(false);
+  const [hideProfileViews, setHideProfileViews] = useState(false);
+  const [maskedActivity, setMaskedActivity] = useState(false);
+  const runGated = useGatedAction();
+  const { subscriptionState } = useSubscriptionContext();
 
   const load = useCallback(async () => {
     if (!user?.id) {
@@ -25,13 +35,54 @@ export function PrivacyScreen() {
     }
     setLoading(true);
     const client = createClient();
-    const { data } = await client
-      .from('user_blocks')
-      .select('blocked_id, created_at')
-      .eq('blocker_id', user.id);
+    const [{ data }, bundle] = await Promise.all([
+      client.from('user_blocks').select('blocked_id, created_at').eq('blocker_id', user.id),
+      fetchUserProfileBundle(client, user.id),
+    ]);
     setBlocks((data as BlockRow[]) ?? []);
+    const profile = bundle?.profile;
+    const prefs = profile?.preferences;
+    setIncognito(!!(profile?.incognito_browse_enabled ?? prefs?.incognito_browse));
+    setHideProfileViews(!!(profile?.profile_view_privacy_enabled ?? prefs?.hide_profile_views));
+    setMaskedActivity(!!profile?.masked_activity_enabled);
     setLoading(false);
   }, [user?.id]);
+
+  const savePrivacyPref = useCallback(
+    async (
+      patch: Partial<Pick<ProfilePreferences, 'incognito_browse' | 'hide_profile_views'>> & {
+        incognito_browse_enabled?: boolean;
+        profile_view_privacy_enabled?: boolean;
+        masked_activity_enabled?: boolean;
+      }
+    ) => {
+      if (!user?.id) return;
+      const client = createClient();
+      const bundle = await fetchUserProfileBundle(client, user.id);
+      const base = bundle?.profile?.preferences ?? {};
+      const columnPatch: Record<string, boolean> = {};
+      if (patch.incognito_browse !== undefined) {
+        columnPatch.incognito_browse_enabled = patch.incognito_browse;
+      }
+      if (patch.hide_profile_views !== undefined) {
+        columnPatch.profile_view_privacy_enabled = patch.hide_profile_views;
+      }
+      if (patch.masked_activity_enabled !== undefined) {
+        columnPatch.masked_activity_enabled = patch.masked_activity_enabled;
+      }
+      const prefPatch: Partial<ProfilePreferences> = {};
+      if (patch.incognito_browse !== undefined) prefPatch.incognito_browse = patch.incognito_browse;
+      if (patch.hide_profile_views !== undefined) prefPatch.hide_profile_views = patch.hide_profile_views;
+      await client
+        .from('profiles')
+        .update({
+          ...columnPatch,
+          preferences: { ...base, ...prefPatch },
+        })
+        .eq('user_id', user.id);
+    },
+    [user?.id]
+  );
 
   useEffect(() => {
     void load();
@@ -63,6 +114,53 @@ export function PrivacyScreen() {
         <IoHelpCircleOutline size={22} />
         Help & support
       </Link>
+
+      <PremiumSectionHead title="Platinum privacy" />
+      <FormCard>
+        <ToggleRow
+          label="Incognito browsing"
+          hint="Browse Discover without showing activity to others."
+          checked={incognito}
+          onChange={(v) => {
+            if (!v) {
+              setIncognito(false);
+              void savePrivacyPref({ incognito_browse: false });
+              return;
+            }
+            void runGated('privacy.incognito_browse', () => {
+              setIncognito(true);
+              void savePrivacyPref({ incognito_browse: true });
+            });
+          }}
+        />
+        <ToggleRow
+          label="Profile view privacy"
+          hint="Hide when you view other members' profiles."
+          checked={hideProfileViews}
+          onChange={(v) => {
+            if (!v) {
+              setHideProfileViews(false);
+              void savePrivacyPref({ hide_profile_views: false });
+              return;
+            }
+            void runGated('privacy.profile_view', () => {
+              setHideProfileViews(true);
+              void savePrivacyPref({ hide_profile_views: true });
+            });
+          }}
+        />
+        {subscriptionState.effectiveTier === 'PLATINUM' ? (
+          <ToggleRow
+            label="Masked activity"
+            hint="Your recent activity won't appear in feeds or suggestion lists."
+            checked={maskedActivity}
+            onChange={(v) => {
+              setMaskedActivity(v);
+              void savePrivacyPref({ masked_activity_enabled: v });
+            }}
+          />
+        ) : null}
+      </FormCard>
 
       <PremiumSectionHead title={`Blocked accounts (${blocks.length})`} />
 

@@ -1,8 +1,10 @@
 'use client';
 
+import { EngagementCarousel } from '@/components/plans/EngagementCarousel';
 import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { OfferListCard } from '@/features/offers/OfferListCard';
+import { fetchFeedEngagementCarousel } from '@/lib/plans/fetchFeedEngagementCarousel';
 import { createClient } from '@/lib/supabase/client';
 import { isOfferExpired } from '@/lib/plans/offerRules';
 import {
@@ -38,6 +40,16 @@ export function OffersDashboard() {
         fetchReceivedOffers(client, user.id),
       ]);
       return { sent, received };
+    },
+    enabled: !!user?.id,
+  });
+
+  const { data: engagementItems = [], isLoading: engagementLoading } = useQuery({
+    queryKey: ['offers-engagement-carousel', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const client = createClient();
+      return fetchFeedEngagementCarousel(client, user.id);
     },
     enabled: !!user?.id,
   });
@@ -111,6 +123,10 @@ export function OffersDashboard() {
           </div>
         ) : null}
       </div>
+
+      <EngagementCarousel items={engagementItems} loading={engagementLoading} />
+
+      <div className="h-px bg-border/80" aria-hidden />
 
       <div className="flex rounded-2xl border border-border bg-surface p-1">
         {(['sent', 'received'] as const).map((seg) => (

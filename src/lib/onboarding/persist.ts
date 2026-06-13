@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { ProfilePreferences } from '@/types/database';
 import { preferencesFromDraft, type OnboardingDraft } from '@/types/onboarding';
 import { ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
+import { markSoftKycPromptPending } from '@/lib/verification/softPromptStorage';
 
 function birthIso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -141,5 +142,8 @@ export async function finalizeOnboarding(args: {
     })
     .eq('user_id', args.userId);
 
-  return { error: error?.message ?? null };
+  if (error) return { error: error.message };
+
+  await markSoftKycPromptPending();
+  return { error: null };
 }

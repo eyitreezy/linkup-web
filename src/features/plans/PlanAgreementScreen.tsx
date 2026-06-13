@@ -1,12 +1,24 @@
 'use client';
 
+import { GroupEscrowStatusCard } from '@/components/escrow/GroupEscrowStatusCard';
+import { HighValueEscrowModal } from '@/components/escrow/HighValueEscrowModal';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
+import { CancellationSummaryCard } from '@/components/plans/CancellationSummaryCard';
 import { VerificationGateDialog } from '@/components/plans/VerificationGateDialog';
+import { ConfirmDialog } from '@/features/plan-management/ConfirmDialog';
 import { PlanFlowHeader } from '@/features/plans/PlanFlowHeader';
 import { formatOfferAmount, formatProposalSnippet } from '@/features/plans/planDetailUtils';
+import { formatNGN } from '@/lib/escrow/escrowFormatters';
 import { openDirectChatPath } from '@/lib/messaging/openDirectChat';
+import {
+  GOODWILL_TIER_MULTIPLIER,
+  goodwillCreditCents,
+  goodwillCreditCentsForTier,
+} from '@/lib/plans/cancellationPolicy';
 import { confirmFreePlan, proceedToSecurePayment } from '@/lib/plans/planAgreementActions';
 import { formatPlanWhen } from '@/lib/plans/formatPlanMeta';
+import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
+import type { SubscriptionTier } from '@/lib/subscription/types';
 import { requiresVerificationGate } from '@/lib/verification/access';
 import { createClient } from '@/lib/supabase/client';
 import { fetchPlanById } from '@/services/plans.service';
@@ -16,8 +28,16 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
-import { IoChatbubbleEllipsesOutline, IoShieldCheckmark } from 'react-icons/io5';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { IoChatbubbleEllipsesOutline, IoClose, IoShieldCheckmark } from 'react-icons/io5';
+
+interface CancellationOutcome {
+  goodwill_credit: number;
+  guest_credit: number;
+  host_credit: number;
+  cancel_type: 'early' | 'late' | 'no_show';
+  band: string | null;
+}
 
 type Props = { planId: string };
 
@@ -29,6 +49,18 @@ export function PlanAgreementScreen({ planId }: Props) {
   const [legalOpen, setLegalOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pendingAction, setPendingAction] = useState<'free' | 'pay' | 'ack' | null>(null);
+  const [highValueModal, setHighValueModal] = useState<'platinum' | 'self' | 'counterparty' | null>(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelOptionsOpen, setCancelOptionsOpen] = useState(false);
+  const [noShowConfirmOpen, setNoShowConfirmOpen] = useState(false);
+  const [mutualCancelOpen, setMutualCancelOpen] = useState(false);
+  const [outcomeOpen, setOutcomeOpen] = useState(false);
+  const [cancellationOutcome, setCancellationOutcome] = useState<CancellationOutcome | null>(null);
+  const [hasVotedMutualCancel, setHasVotedMutualCancel] = useState(false);
+  const [mutualVoteCount, setMutualVoteCount] = useState(0);
+  const [mutualToast, setMutualToast] = useState<string | null>(null);
+
+  const { subscriptionState } = useSubscriptionContext();
 
   const profileQuery = useQuery({
     queryKey: ['profile-bundle', user?.id],
@@ -71,9 +103,16 @@ export function PlanAgreementScreen({ planId }: Props) {
 
       const { data: escrow } = await client
         .from('escrow_transactions')
-        .select('id, status')
+        .select('id, status, amount_cents')
         .eq('plan_id', planId)
         .maybeSingle();
+
+      const { data: mutualVotes } = await client
+        .from('mutual_plan_cancel_votes')
+        .select('user_id')
+        .eq('plan_id', planId);
+
+      const voteIds = (mutualVotes ?? []).map((r) => r.user_id as string);
 
       return {
         plan,
@@ -81,6 +120,8 @@ export function PlanAgreementScreen({ planId }: Props) {
         profiles: profs ?? [],
         confirmationUserIds: (confirmations ?? []).map((c) => c.user_id as string),
         escrowId: escrow?.id as string | undefined,
+        escrowCents: (escrow?.amount_cents as number | undefined) ?? null,
+        mutualVoteIds: voteIds,
       };
     },
     retry: false,
@@ -92,6 +133,35 @@ export function PlanAgreementScreen({ planId }: Props) {
   const offer = data?.offer;
   const isHost = !!user?.id && plan?.creator_id === user.id;
   const isBidder = !!user?.id && offer?.bidder_id === user.id;
+  const isGuest = isBidder;
+
+  useEffect(() => {
+    if (!user?.id || !data?.mutualVoteIds) return;
+    setMutualVoteCount(data.mutualVoteIds.length);
+    setHasVotedMutualCancel(data.mutualVoteIds.includes(user.id));
+  }, [data?.mutualVoteIds, user?.id]);
+
+  useEffect(() => {
+    if (!planId || !hasVotedMutualCancel) return;
+    const client = createClient();
+    const channel = client
+      .channel(`plan-mutual-${planId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'plans', filter: `id=eq.${planId}` },
+        (payload) => {
+          const next = payload.new as { status?: string };
+          if (next.status === 'cancelled') {
+            setMutualToast('Plan mutually cancelled — refund processed.');
+            setTimeout(() => router.push('/discover'), 1500);
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [planId, hasVotedMutualCancel, router]);
   const paymentRequired = !!plan?.is_paid;
   const bothConfirmed = (data?.confirmationUserIds.length ?? 0) >= 2;
   const userConfirmed = user?.id ? data?.confirmationUserIds.includes(user.id) : false;
@@ -160,10 +230,75 @@ export function PlanAgreementScreen({ planId }: Props) {
     const res = await proceedToSecurePayment(client, plan, offer);
     setBusy(false);
     if (res.error) {
+      if (res.error === 'high_value_requires_platinum') {
+        setHighValueModal('platinum');
+        return;
+      }
+      if (res.error === 'high_value_requires_kyc_tier3') {
+        setHighValueModal('self');
+        return;
+      }
+      if (res.error === 'high_value_counterparty_requires_kyc_tier3') {
+        setHighValueModal('counterparty');
+        return;
+      }
       window.alert(res.error);
       return;
     }
     if (res.escrowId) router.push(`/escrow/${res.escrowId}`);
+  }
+
+  async function handleCancel({ noShow }: { noShow: boolean }) {
+    if (!plan || busy) return;
+    setCancelOpen(false);
+    setCancelOptionsOpen(false);
+    setNoShowConfirmOpen(false);
+    setBusy(true);
+    const client = createClient();
+    if (isHost) {
+      await client
+        .from('plan_offers')
+        .update({ status: 'superseded' })
+        .eq('plan_id', plan.id)
+        .in('status', ['pending', 'countered']);
+    }
+    const { data: outcome, error } = await client.rpc('submit_plan_cancellation', {
+      p_plan_id: planId,
+      p_no_show: noShow,
+    });
+    setBusy(false);
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    setCancellationOutcome(outcome as CancellationOutcome);
+    setOutcomeOpen(true);
+  }
+
+  async function handleVoteMutualCancel() {
+    if (busy) return;
+    setBusy(true);
+    const client = createClient();
+    const { data, error } = await client.rpc('vote_mutual_plan_cancel', { p_plan_id: planId });
+    setBusy(false);
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    const result = data as { status?: string };
+    if (result.status === 'completed') {
+      setMutualCancelOpen(false);
+      setMutualToast('Plan mutually cancelled — refund processed.');
+      setTimeout(() => router.push('/discover'), 1500);
+      return;
+    }
+    setHasVotedMutualCancel(true);
+    setMutualVoteCount((c) => Math.max(c, 1));
+  }
+
+  function dismissOutcome() {
+    setOutcomeOpen(false);
+    router.push('/discover');
   }
 
   async function onMessage() {
@@ -199,6 +334,20 @@ export function PlanAgreementScreen({ planId }: Props) {
 
   const agreedAmount = plan.agreed_price_cents ?? offer.amount_cents;
   const schedule = plan.agreed_scheduled_at ?? offer.proposed_scheduled_at ?? plan.scheduled_at;
+  const showCancelPlan = needsConfirm || awaitingPay;
+  const escrowCents = data?.escrowCents ?? agreedAmount;
+  const guestTier = (subscriptionState.effectiveTier ?? 'FREE') as SubscriptionTier;
+  const noShowGoodwillPreview = isGuest
+    ? goodwillCreditCentsForTier(goodwillCreditCents(escrowCents ?? 0), guestTier)
+    : 0;
+
+  const outcomeCardProps = cancellationOutcome
+    ? {
+        yourRefund: isGuest ? cancellationOutcome.guest_credit : cancellationOutcome.host_credit,
+        goodwillCredit: cancellationOutcome.goodwill_credit,
+        cancelType: cancellationOutcome.cancel_type,
+      }
+    : null;
 
   let primaryLabel = 'View plan';
   let onPrimary = () => router.push(`/plan/${planId}`);
@@ -250,6 +399,110 @@ export function PlanAgreementScreen({ planId }: Props) {
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-16">
       <VerificationGateDialog open={gateOpen} onClose={() => setGateOpen(false)} />
+      <HighValueEscrowModal
+        open={highValueModal !== null}
+        variant={highValueModal ?? 'self'}
+        onClose={() => setHighValueModal(null)}
+      />
+      <ConfirmDialog
+        open={cancelOpen}
+        title="Cancel this plan?"
+        message="Are you sure you want to cancel? The other person will be notified and this agreement will end."
+        confirmLabel="Cancel plan"
+        cancelLabel="Keep plan"
+        confirmVariant="danger"
+        busy={busy}
+        onClose={() => setCancelOpen(false)}
+        onConfirm={() => void handleCancel({ noShow: false })}
+      />
+      <ConfirmDialog
+        open={noShowConfirmOpen}
+        title="Report host no-show?"
+        message="This will be recorded. False reports may affect your account standing. Continue only if the host genuinely did not show up."
+        confirmLabel="Report no-show"
+        cancelLabel="Go back"
+        confirmVariant="danger"
+        busy={busy}
+        onClose={() => setNoShowConfirmOpen(false)}
+        onConfirm={() => void handleCancel({ noShow: true })}
+      />
+      {cancelOptionsOpen ? (
+        <AgreementBottomSheet title="Why are you cancelling?" onClose={() => setCancelOptionsOpen(false)}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void handleCancel({ noShow: false })}
+            className="w-full rounded-2xl border border-border p-4 text-left transition hover:bg-[#F5F6FA] disabled:opacity-50"
+          >
+            <p className="text-[15px] font-extrabold text-foreground">I want to cancel</p>
+            <p className="mt-1 text-[13px] font-semibold text-muted">
+              Standard cancellation — see refund policy below
+            </p>
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setCancelOptionsOpen(false);
+              setNoShowConfirmOpen(true);
+            }}
+            className="mt-2 w-full rounded-2xl border border-amber-200/80 bg-amber-50 p-4 text-left transition hover:bg-amber-100/80 disabled:opacity-50"
+          >
+            <p className="text-[15px] font-extrabold text-amber-800">The host didn&apos;t show up</p>
+            <p className="mt-1 text-[13px] font-semibold text-amber-700">
+              Report a no-show — full refund
+              {noShowGoodwillPreview > 0 ? (
+                <>
+                  {' '}
+                  and up to {formatNGN(noShowGoodwillPreview)}
+                  {guestTier !== 'FREE' && guestTier !== 'SILVER' ? (
+                    <span className="text-muted">
+                      {' '}
+                      ({GOODWILL_TIER_MULTIPLIER[guestTier]}× {guestTier})
+                    </span>
+                  ) : null}{' '}
+                  goodwill credit
+                </>
+              ) : null}
+            </p>
+          </button>
+        </AgreementBottomSheet>
+      ) : null}
+      {mutualCancelOpen ? (
+        <AgreementBottomSheet title="Mutual cancellation" onClose={() => setMutualCancelOpen(false)}>
+          <p className="mb-4 text-[14px] font-semibold leading-relaxed text-muted">
+            Both parties agree to cancel with a full refund to whoever funded escrow. No cancellation fees or
+            strikes apply. The other person must also confirm.
+          </p>
+          <button
+            type="button"
+            disabled={busy || hasVotedMutualCancel}
+            onClick={() => void handleVoteMutualCancel()}
+            className="w-full rounded-full linkup-gradient-primary py-3 text-[14px] font-extrabold text-white disabled:opacity-50"
+          >
+            {hasVotedMutualCancel ? 'Waiting for the other person…' : 'I agree to mutual cancellation'}
+          </button>
+          {hasVotedMutualCancel && mutualVoteCount < 2 ? (
+            <p className="mt-3 text-center text-[13px] font-semibold text-muted">
+              Waiting for the other person to agree…
+            </p>
+          ) : null}
+        </AgreementBottomSheet>
+      ) : null}
+      {outcomeOpen && outcomeCardProps ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-border bg-white p-5 shadow-xl">
+            <CancellationSummaryCard outcome={outcomeCardProps} />
+            <button
+              type="button"
+              onClick={dismissOutcome}
+              className="mt-4 w-full rounded-full linkup-gradient-primary py-3 text-[14px] font-extrabold text-white"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {legalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
@@ -327,6 +580,18 @@ export function PlanAgreementScreen({ planId }: Props) {
         </p>
       </section>
 
+      {plan.is_group_plan ? (
+        <GroupEscrowStatusCard planId={planId} isGroupPlan={!!plan.is_group_plan} isHost={!!isHost} />
+      ) : null}
+
+      <CancellationSummaryCard />
+
+      {mutualToast ? (
+        <p className="rounded-xl border border-[#10B981]/30 bg-[#10B981]/10 px-4 py-3 text-[14px] font-semibold text-[#059669]">
+          {mutualToast}
+        </p>
+      ) : null}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <button
           type="button"
@@ -344,6 +609,75 @@ export function PlanAgreementScreen({ planId }: Props) {
           <IoChatbubbleEllipsesOutline size={18} />
           Message
         </button>
+      </div>
+
+      {showCancelPlan ? (
+        <div className="flex flex-col items-center gap-2 pt-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setMutualCancelOpen(true)}
+            className="text-[14px] font-extrabold text-primary underline disabled:opacity-50"
+          >
+            Suggest mutual cancellation
+          </button>
+          {isGuest ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setCancelOptionsOpen(true)}
+              className="text-[14px] font-semibold text-muted underline hover:text-foreground disabled:opacity-50"
+            >
+              Cancel this plan
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setCancelOpen(true)}
+              className="text-[14px] font-semibold text-muted underline hover:text-foreground disabled:opacity-50"
+            >
+              Cancel this plan
+            </button>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AgreementBottomSheet({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+      <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
+      <div
+        className="relative w-full max-w-lg rounded-t-3xl border border-border bg-white p-5 shadow-xl sm:rounded-3xl"
+        role="dialog"
+        aria-labelledby="agreement-sheet-title"
+      >
+        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border sm:hidden" aria-hidden />
+        <div className="mb-4 flex items-center justify-between">
+          <h2 id="agreement-sheet-title" className="font-display text-xl font-extrabold text-foreground">
+            {title}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-muted hover:bg-[#F5F6FA]"
+            aria-label="Close"
+          >
+            <IoClose size={22} />
+          </button>
+        </div>
+        {children}
       </div>
     </div>
   );

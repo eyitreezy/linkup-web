@@ -1,7 +1,10 @@
 'use client';
 
 import { HostPresenceChip } from '@/components/presence/HostPresenceChip';
+import { CreatorSpotlightChip } from '@/components/plans/CreatorSpotlightChip';
 import { MoodPlanCountdown } from '@/components/plans/MoodPlanCountdown';
+import { TierBadge } from '@/components/subscription/TierBadge';
+import { isCreatorSpotlightActive } from '@/lib/plans/creatorSpotlight';
 import { planIntentTag } from '@/lib/discovery/planIntentTag';
 import { formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { moodDiscoverMeta } from '@/lib/plans/moodDiscoverUi';
@@ -29,6 +32,9 @@ export function DiscoverSwipeCard({ plan, distanceLabel, presence, className }: 
   const caption = plan.description?.trim() || plan.title;
   const moodMeta = useMemo(() => moodDiscoverMeta(plan), [plan]);
   const boosted = isPlanBoostActive(plan.boosted_until);
+  const isPlatinum = plan.creator?.subscription_tier === 'PLATINUM';
+  const isCreatorSpotlighted =
+    !boosted && !isPlatinum && isCreatorSpotlightActive(plan.creator?.spotlight_until);
   const meetLabel = plan.meet_types?.name?.trim() ?? null;
 
   return (
@@ -95,9 +101,13 @@ export function DiscoverSwipeCard({ plan, distanceLabel, presence, className }: 
       </div>
       <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
         <div className="flex items-center justify-between gap-2">
-          <p className="min-w-0 flex-1 truncate font-display text-2xl font-extrabold tracking-tight text-white sm:text-[28px]">
-            {name}
-          </p>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <p className="truncate font-display text-2xl font-extrabold tracking-tight text-white sm:text-[28px]">
+              {name}
+            </p>
+            {isPlatinum ? <TierBadge tier="PLATINUM" size="sm" /> : null}
+            {isCreatorSpotlighted ? <CreatorSpotlightChip variant="onDark" /> : null}
+          </div>
           <HostPresenceChip presence={presence} variant="onDark" />
         </div>
         <p className="mt-1.5 truncate text-[14px] font-semibold text-white/85">

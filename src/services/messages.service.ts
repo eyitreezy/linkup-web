@@ -7,17 +7,64 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 const MAX_VIDEO_BYTES = 14 * 1024 * 1024;
 
+const MESSAGE_COLUMNS_BASE =
+  'id, text, body, media_id, sender_id, created_at, edited_at, deleted_at, conversation_id';
+const MESSAGE_COLUMNS_WITH_REPLY = `${MESSAGE_COLUMNS_BASE}, reply_to_message_id`;
+const MESSAGE_COLUMNS_WITH_RECEIPT = `${MESSAGE_COLUMNS_WITH_REPLY}, receipt_hidden`;
+const MESSAGE_COLUMNS_WITH_GROUP = `${MESSAGE_COLUMNS_WITH_RECEIPT}, group_sender_display`;
+
+let replyColumnSupported: boolean | null = null;
+let receiptColumnSupported: boolean | null = null;
+let groupSenderColumnSupported: boolean | null = null;
+
+export function messageSelectColumns(): string {
+  if (replyColumnSupported === false) {
+    return receiptColumnSupported === false
+      ? MESSAGE_COLUMNS_BASE
+      : `${MESSAGE_COLUMNS_BASE}, receipt_hidden`;
+  }
+  if (receiptColumnSupported === false) return MESSAGE_COLUMNS_WITH_REPLY;
+  if (groupSenderColumnSupported === false) return MESSAGE_COLUMNS_WITH_RECEIPT;
+  return MESSAGE_COLUMNS_WITH_GROUP;
+}
+
+export function normalizeMessageRow(row: Record<string, unknown>): ChatMessageRow {
+  return {
+    id: row.id as string,
+    conversation_id: row.conversation_id as string | undefined,
+    text: (row.text as string | null) ?? null,
+    body: (row.body as string | null) ?? null,
+    media_id: (row.media_id as string | null) ?? null,
+    sender_id: (row.sender_id as string | null) ?? null,
+    created_at: row.created_at as string,
+    edited_at: (row.edited_at as string | null) ?? null,
+    deleted_at: (row.deleted_at as string | null) ?? null,
+    reply_to_message_id: (row.reply_to_message_id as string | null | undefined) ?? null,
+    receipt_hidden: (row.receipt_hidden as boolean | undefined) ?? false,
+    group_sender_display: (row.group_sender_display as string | null | undefined) ?? null,
+  };
+}
+
 export type ChatMessageRow = {
   id: string;
+  conversation_id?: string;
   text: string | null;
   body: string | null;
   media_id: string | null;
-  sender_id: string;
+  sender_id: string | null;
   created_at: string;
   edited_at: string | null;
   deleted_at: string | null;
+  reply_to_message_id?: string | null;
+  receipt_hidden?: boolean;
+  group_sender_display?: string | null;
   mediaUrl?: string | null;
   mediaKind?: 'image' | 'video' | null;
+};
+
+export type InboxMemberPreview = {
+  avatarUrl: string | null;
+  name: string;
 };
 
 export type InboxRow = {
@@ -29,6 +76,11 @@ export type InboxRow = {
   preview: string;
   timeIso: string;
   unread: boolean;
+  isGroupChat?: boolean;
+  groupAvatarUrl?: string | null;
+  memberCount?: number;
+  memberPreviews?: InboxMemberPreview[];
+  planId?: string | null;
 };
 
 /** Unread conversations (last message from other party, not read locally). */
@@ -40,15 +92,38 @@ export async function countUnreadConversations(
   return rows.filter((r) => r.unread).length;
 }
 
-/** Inbox — mirrors mobile `messages.tsx` loadInbox (no updated_at on conversations). */
+/** Inbox — mirrors mobile `messages.tsx` loadInbox (DM + group chats). */
 export async function fetchInbox(
   client: SupabaseClient,
   userId: string
 ): Promise<{ rows: InboxRow[]; error: string | null }> {
-  const { data: convs, error: ce } = await client
+  let groupConvIds: string[] = [];
+  const { data: groupMemberships, error: groupMembersErr } = await client
+    .from('group_chat_members')
+    .select('conversation_id')
+    .eq('user_id', userId)
+    .is('removed_at', null);
+
+  if (groupMembersErr) {
+    const msg = groupMembersErr.message ?? '';
+    if (!msg.includes('infinite recursion') && !msg.includes('group_chat_members')) {
+      return { rows: [], error: groupMembersErr.message };
+    }
+    // RLS recursion on group_chat_members — fall back to 1:1 inbox until migration is applied.
+  } else {
+    groupConvIds = [...new Set((groupMemberships ?? []).map((r) => r.conversation_id as string))];
+  }
+
+  const dmFilter = `user_a.eq.${userId},user_b.eq.${userId}`;
+  let convQuery = client
     .from('conversations')
-    .select('id, user_a, user_b, created_at')
-    .or(`user_a.eq.${userId},user_b.eq.${userId}`);
+    .select('id, user_a, user_b, created_at, is_group_chat, group_name, group_avatar_url, plan_id');
+  if (groupConvIds.length > 0) {
+    convQuery = convQuery.or(`${dmFilter},id.in.(${groupConvIds.join(',')})`);
+  } else {
+    convQuery = convQuery.or(dmFilter);
+  }
+  const { data: convs, error: ce } = await convQuery;
 
   if (ce) return { rows: [], error: ce.message };
   if (!convs?.length) return { rows: [], error: null };
@@ -74,6 +149,17 @@ export async function fetchInbox(
 
   const lastRows = [...lastByConv.values()];
   const lastMsgIds = lastRows.map((m) => m.id as string);
+
+  let deletedForMeIds = new Set<string>();
+  if (lastMsgIds.length > 0) {
+    const { data: myDeletions } = await client
+      .from('message_user_deletions')
+      .select('message_id')
+      .eq('user_id', userId)
+      .in('message_id', lastMsgIds);
+    deletedForMeIds = new Set((myDeletions ?? []).map((d) => d.message_id as string));
+  }
+
   const lastMediaFkIds = [...new Set(lastRows.map((m) => m.media_id).filter(Boolean))] as string[];
   const mediaKindByMsg = new Map<string, 'image' | 'video'>();
 
@@ -105,45 +191,91 @@ export async function fetchInbox(
     }
   }
 
-  const otherIds = convs.map((c) =>
-    (c.user_a as string) === userId ? (c.user_b as string) : (c.user_a as string)
-  );
+  const dmConvs = convs.filter((c) => !c.is_group_chat);
+  const groupConvs = convs.filter((c) => c.is_group_chat);
+
+  const groupMemberCounts = new Map<string, number>();
+  const groupMemberPreviews = new Map<string, InboxMemberPreview[]>();
+  if (groupConvs.length > 0) {
+    const gIds = groupConvs.map((c) => c.id as string);
+    const { data: gMembers } = await client
+      .from('group_chat_members')
+      .select('conversation_id, user_id')
+      .in('conversation_id', gIds)
+      .is('removed_at', null);
+    const memberUserIds = [...new Set((gMembers ?? []).map((m) => m.user_id as string))];
+    const { data: gProfiles } = memberUserIds.length
+      ? await client
+          .from('profiles')
+          .select('user_id, display_name, avatar_url')
+          .in('user_id', memberUserIds)
+      : { data: [] as { user_id: string; display_name: string | null; avatar_url: string | null }[] };
+    const gProfMap = new Map((gProfiles ?? []).map((p) => [p.user_id as string, p]));
+    for (const gid of gIds) {
+      const rows = (gMembers ?? []).filter((m) => m.conversation_id === gid);
+      groupMemberCounts.set(gid, rows.length);
+      groupMemberPreviews.set(
+        gid,
+        rows.slice(0, 4).map((m) => {
+          const p = gProfMap.get(m.user_id as string);
+          return {
+            avatarUrl: (p?.avatar_url as string | null) ?? null,
+            name: (p?.display_name as string) ?? 'Member',
+          };
+        })
+      );
+    }
+  }
+
+  const otherIds = dmConvs
+    .map((c) => ((c.user_a as string) === userId ? (c.user_b as string) : (c.user_a as string)))
+    .filter(Boolean) as string[];
   const uniqueOthers = [...new Set(otherIds)];
 
-  const { data: profs } = await client
-    .from('profiles')
-    .select('user_id, display_name, avatar_url, verified_badge')
-    .in('user_id', uniqueOthers);
+  const { data: profs } = uniqueOthers.length
+    ? await client
+        .from('profiles')
+        .select('user_id, display_name, avatar_url, verified_badge')
+        .in('user_id', uniqueOthers)
+    : { data: [] as { user_id: string; display_name: string | null; avatar_url: string | null; verified_badge: boolean | null }[] };
 
   const profByUser = new Map((profs ?? []).map((p) => [p.user_id as string, p]));
 
   const out: InboxRow[] = convs.map((c) => {
-    const otherId =
-      (c.user_a as string) === userId ? (c.user_b as string) : (c.user_a as string);
-    const prof = profByUser.get(otherId);
+    const isGroup = !!c.is_group_chat;
+    const otherId = isGroup ? (c.id as string) : ((c.user_a as string) === userId ? (c.user_b as string) : (c.user_a as string))!;
+    const prof = isGroup ? null : profByUser.get(otherId);
     const last = lastByConv.get(c.id as string);
     const mk = last ? mediaKindByMsg.get(last.id as string) ?? null : null;
-    const preview = previewForLastMessage(
-      last ? messageDisplayText(last) : null,
-      mk,
-      (last?.deleted_at as string) ?? null
-    );
+    const preview =
+      last && deletedForMeIds.has(last.id as string)
+        ? 'Message deleted'
+        : previewForLastMessage(
+            last ? messageDisplayText(last) : null,
+            mk,
+            (last?.deleted_at as string) ?? null
+          );
     const timeIso = (last?.created_at as string) ?? (c.created_at as string);
     const readAt = readMap[c.id as string];
     const unread =
       !!last &&
-      (last.sender_id as string) !== userId &&
+      (last.sender_id as string | null) !== userId &&
       (!readAt || new Date(last.created_at as string) > new Date(readAt));
 
     return {
       id: c.id as string,
       otherId,
-      name: (prof?.display_name as string) ?? 'Member',
-      avatarUrl: (prof?.avatar_url as string) ?? null,
-      verified: !!prof?.verified_badge,
-      preview,
+      name: isGroup ? ((c.group_name as string) ?? 'Group chat') : ((prof?.display_name as string) ?? 'Member'),
+      avatarUrl: isGroup ? null : ((prof?.avatar_url as string) ?? null),
+      verified: isGroup ? false : !!prof?.verified_badge,
+      preview: isGroup && !last ? `${groupMemberCounts.get(c.id as string) ?? 0} members` : preview,
       timeIso,
       unread,
+      isGroupChat: isGroup,
+      groupAvatarUrl: (c.group_avatar_url as string | null) ?? null,
+      memberCount: groupMemberCounts.get(c.id as string),
+      memberPreviews: groupMemberPreviews.get(c.id as string),
+      planId: (c.plan_id as string | null) ?? null,
     };
   });
 
@@ -155,14 +287,33 @@ export async function fetchMessages(
   client: SupabaseClient,
   conversationId: string
 ): Promise<{ data: ChatMessageRow[] | null; error: Error | null }> {
-  const { data: rows, error } = await client
+  let cols = messageSelectColumns();
+  let { data: rows, error } = await client
     .from('messages')
-    .select('id, text, body, media_id, sender_id, created_at, edited_at, deleted_at')
+    .select(cols)
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true });
 
+  if (error?.code === '42703') {
+    if (cols.includes('group_sender_display')) {
+      groupSenderColumnSupported = false;
+    } else if (cols.includes('receipt_hidden')) {
+      receiptColumnSupported = false;
+    } else if (cols.includes('reply_to_message_id')) {
+      replyColumnSupported = false;
+    }
+    cols = messageSelectColumns();
+    const retry = await client
+      .from('messages')
+      .select(cols)
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true });
+    rows = retry.data;
+    error = retry.error;
+  }
+
   if (error) return { data: null, error: new Error(error.message) };
-  const messages = (rows ?? []) as ChatMessageRow[];
+  const messages = (rows ?? []).map((r) => normalizeMessageRow(r as unknown as Record<string, unknown>));
 
   const msgIds = messages.map((m) => m.id);
   const mediaFkIds = [...new Set(messages.map((m) => m.media_id).filter(Boolean))] as string[];
@@ -223,28 +374,66 @@ export async function fetchMessages(
   return { data: messages, error: null };
 }
 
+export function buildForwardText(m: ChatMessageRow): string {
+  const text = messageDisplayText(m)?.trim();
+  if (text) return text;
+  if (m.mediaKind === 'video') return 'Video';
+  if (m.mediaKind === 'image' || m.mediaUrl || m.media_id) return 'Photo';
+  return 'Message';
+}
+
 export async function sendTextMessage(
   client: SupabaseClient,
   conversationId: string,
   senderId: string,
-  text: string
+  text: string,
+  replyToMessageId?: string | null
 ): Promise<{ data: ChatMessageRow | null; error: string | null }> {
   const body = text.trim();
   if (!body) return { data: null, error: 'Message is empty' };
 
-  const { data, error } = await client
+  const payload: Record<string, unknown> = {
+    conversation_id: conversationId,
+    sender_id: senderId,
+    text: body,
+    moderation_status: 'clean',
+  };
+  if (replyToMessageId && replyColumnSupported !== false) {
+    payload.reply_to_message_id = replyToMessageId;
+  }
+
+  let { data, error } = await client
     .from('messages')
-    .insert({
-      conversation_id: conversationId,
-      sender_id: senderId,
-      text: body,
-      moderation_status: 'clean',
-    })
-    .select('id, text, body, media_id, sender_id, created_at, edited_at, deleted_at')
+    .insert(payload)
+    .select(messageSelectColumns())
     .single();
 
+  if (error?.code === '42703' && payload.reply_to_message_id) {
+    replyColumnSupported = false;
+    delete payload.reply_to_message_id;
+    const retry = await client
+      .from('messages')
+      .insert(payload)
+      .select(messageSelectColumns())
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
+
   if (error) return { data: null, error: error.message };
-  return { data: data as ChatMessageRow, error: null };
+  return { data: normalizeMessageRow(data as unknown as Record<string, unknown>), error: null };
+}
+
+export async function forwardMessageToConversation(
+  client: SupabaseClient,
+  source: ChatMessageRow,
+  targetConversationId: string,
+  senderId: string
+): Promise<{ error: string | null }> {
+  const snippet = buildForwardText(source);
+  const forwarded = `↪ ${snippet}`;
+  const { error } = await sendTextMessage(client, targetConversationId, senderId, forwarded);
+  return { error };
 }
 
 export async function sendMediaMessage(

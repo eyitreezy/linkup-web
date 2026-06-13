@@ -2,7 +2,8 @@
 
 import { cn } from '@/utils/cn';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { type MouseEvent, type ReactNode } from 'react';
 import type { IconType } from 'react-icons';
 import { IoSparkles } from 'react-icons/io5';
 
@@ -57,17 +58,28 @@ function renderTitle(title: string, accent?: string) {
 }
 
 function EmptyStateActionButton({ action }: { action: EmptyStateAction }) {
+  const router = useRouter();
   const isPrimary = action.variant !== 'secondary';
   const className = cn(
-    'inline-flex min-h-[44px] items-center justify-center rounded-full px-6 text-[14px] font-extrabold transition',
+    'inline-flex min-h-[44px] touch-manipulation items-center justify-center rounded-full px-6 text-[14px] font-extrabold transition active:scale-[0.98]',
     isPrimary
       ? 'linkup-gradient-primary text-white shadow-md hover:opacity-95'
       : 'border border-primary/25 bg-white text-primary hover:bg-[#EDE8FF]/50'
   );
 
   if (action.href) {
+    const href = action.href;
     return (
-      <Link href={action.href} className={className}>
+      <Link
+        href={href}
+        prefetch
+        onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+          e.preventDefault();
+          router.push(href);
+        }}
+        className={className}
+      >
         {action.label}
       </Link>
     );

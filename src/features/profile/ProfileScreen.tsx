@@ -4,12 +4,14 @@ import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { useNotificationInboxOptional } from '@/contexts/NotificationInboxContext';
 import { ConfirmDialog } from '@/features/plan-management/ConfirmDialog';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
-import { ProfilePremiumCard } from '@/features/profile/ProfilePremiumCard';
+import { SubscriptionStatusCard } from '@/components/subscription/SubscriptionStatusCard';
+import { TierBadge } from '@/components/subscription/TierBadge';
 import { ProfileSettingsRow } from '@/features/profile/ProfileSettingsRow';
-import { isPremiumSubscriber } from '@/lib/premium/access';
+import { ProfileSpotlightCard } from '@/components/profile/ProfileSpotlightCard';
+import { ProfileVerificationCard } from '@/features/profile/ProfileVerificationCard';
+import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import { ProfileMediaGallery } from '@/components/profile/ProfileMediaGallery';
 import { resolvePrimaryPhotoUrl } from '@/lib/profile/media/resolve';
-import { profileCompletionPercent } from '@/lib/profile/profileCompletionPercent';
 import { createClient } from '@/lib/supabase/client';
 import { fetchProfileVideo } from '@/services/profileMedia.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
@@ -29,6 +31,7 @@ import {
   IoMailUnreadOutline,
   IoNotificationsOutline,
   IoPerson,
+  IoDiamondOutline,
   IoShieldCheckmarkOutline,
   IoTrashOutline,
   IoWalletOutline,
@@ -36,13 +39,6 @@ import {
 
 function isVerified(status: UserVerification | undefined): boolean {
   return status === 'verified';
-}
-
-function formatPremiumUntil(until: string | null | undefined): string | null {
-  if (!until) return null;
-  const d = new Date(until);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(undefined, { dateStyle: 'medium' });
 }
 
 export function ProfileScreen() {
@@ -53,6 +49,7 @@ export function ProfileScreen() {
   const [logoutBusy, setLogoutBusy] = useState(false);
   const notificationInbox = useNotificationInboxOptional();
   const unreadNotifications = notificationInbox?.unreadCount ?? 0;
+  const { subscriptionState } = useSubscriptionContext();
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['profile-bundle', user?.id],
@@ -113,36 +110,31 @@ export function ProfileScreen() {
   const profile = data?.profile ?? null;
   const dbUser = data?.dbUser ?? null;
   const verified = isVerified(dbUser?.verification_status);
-  const completion = profileCompletionPercent(profile, verified, !!data?.video);
   const name = profile?.display_name?.trim() || user.email?.split('@')[0] || 'You';
-  const subscriber = isPremiumSubscriber(dbUser);
-  const premiumLabel = formatPremiumUntil(dbUser?.premium_until ?? null);
   const plansCreated = data?.plansCreated ?? 0;
+  const trialNavHint =
+    subscriptionState.isTrialActive && !subscriptionState.isPaidActive
+      ? `${subscriptionState.trialType === 'gold' ? 'Gold' : 'Silver'} trial · ${subscriptionState.trialDaysRemaining ?? 0}d`
+      : undefined;
 
   return (
     <div className="min-w-0 space-y-6 pb-10 min-[400px]:space-y-8">
       <TabPageHeader
         kicker="Account"
         title="Your profile"
-        description="Your name, verification, and visibility in one place — same hub as the mobile app."
+        description="Your name, verification, and visibility in one place."
         icon={<IoPerson size={22} />}
-        trailing={
-          completion > 0 ? (
-            <span className="rounded-full bg-[#EDE8FF] px-3 py-1 text-[11px] font-extrabold text-primary min-[360px]:text-[12px]">
-              {completion}% complete
-            </span>
-          ) : null
-        }
       />
 
       <div className="rounded-3xl p-[2px] linkup-gradient-primary shadow-md">
         <div className="rounded-[22px] bg-white px-4 py-4 min-[360px]:px-5 min-[360px]:py-5">
-          <div className="flex flex-col gap-4 min-[480px]:flex-row min-[480px]:items-start">
-            {profile ? (
-              <ProfileMediaGallery profile={profile} video={data?.video ?? null} variant="compact" />
-            ) : null}
+          <div className="flex items-start gap-3 min-[360px]:gap-4">
+            {profile ? <ProfileMediaGallery profile={profile} variant="compact" /> : null}
             <div className="min-w-0 flex-1">
-              <h2 className="font-display text-xl font-extrabold text-foreground min-[360px]:text-2xl">{name}</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-display text-xl font-extrabold text-foreground min-[360px]:text-2xl">{name}</h2>
+                <TierBadge tier={subscriptionState.effectiveTier} size="md" />
+              </div>
               <p className="truncate text-[13px] font-semibold text-muted">{user.email}</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {verified ? (
@@ -154,31 +146,15 @@ export function ProfileScreen() {
                     Not verified
                   </span>
                 )}
-                {subscriber ? (
-                  <span className="rounded-full bg-secondary/15 px-2.5 py-0.5 text-[11px] font-extrabold text-secondary">
-                    Premium
-                  </span>
-                ) : null}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="linkup-card p-5 text-center">
-          <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted">Profile</p>
-          <p className="font-display mt-1 text-3xl font-extrabold text-primary">{completion}%</p>
-          <p className="text-[13px] font-semibold text-muted">complete</p>
-        </div>
-        <div className="linkup-card p-5 text-center">
-          <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted">Verification</p>
-          <p className="font-display mt-1 text-3xl font-extrabold text-foreground">{verified ? 'On' : 'Off'}</p>
-          <p className="text-[13px] font-semibold text-muted">
-            {verified ? 'Others see your badge' : 'Add in Trust center'}
-          </p>
-        </div>
-      </div>
+      <ProfileVerificationCard verificationStatus={dbUser?.verification_status} />
+
+      <ProfileSpotlightCard userId={user.id} spotlightUntil={profile?.spotlight_until} />
 
       <div className="linkup-card grid grid-cols-3 divide-x divide-border text-center">
         <div className="p-3 min-[360px]:p-4">
@@ -202,12 +178,18 @@ export function ProfileScreen() {
         </div>
       ) : null}
 
-      <ProfilePremiumCard isSubscriber={subscriber} premiumUntilLabel={premiumLabel} />
+      <SubscriptionStatusCard />
 
       <PremiumSectionHead title="Settings & account" />
 
       <div className="rounded-3xl p-[2px] linkup-gradient-primary shadow-md">
         <nav className="overflow-hidden rounded-[22px] bg-white">
+          <ProfileSettingsRow
+            href="/subscription"
+            icon={IoDiamondOutline}
+            label="Subscription"
+            subtitle={trialNavHint}
+          />
           <ProfileSettingsRow href="/profile/edit" icon={IoCreateOutline} label="Edit profile" />
           <ProfileSettingsRow
             href="/trust"
@@ -238,7 +220,7 @@ export function ProfileScreen() {
             href="/profile/travel"
             icon={IoAirplaneOutline}
             label="Travel mode"
-            subtitle={subscriber ? 'Active pin' : 'Premium'}
+            subtitle={subscriptionState.effectiveTier !== 'FREE' ? 'Active pin' : 'Gold'}
           />
           <ProfileSettingsRow href="/support" icon={IoHelpCircleOutline} label="Help & support" />
           <ProfileSettingsRow href="/disputes" icon={IoGitMergeOutline} label="Disputes" />

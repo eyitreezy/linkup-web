@@ -17,6 +17,8 @@ import {
 } from '@/lib/plans/moodPlanUi';
 import type { CreatorPlanRow } from '@/lib/plans/planManagement';
 import type { LocationSuggestion } from '@/lib/location/types';
+import { useGatedAction } from '@/contexts/UpgradeGateContext';
+import { moodLive } from '@/lib/plans/planManagement';
 import { requiresVerificationGate } from '@/lib/verification/access';
 import { createClient } from '@/lib/supabase/client';
 import { updateCreatorPlan } from '@/services/planManagement.service';
@@ -78,6 +80,7 @@ export function PlanCreatorEditModal({ plan, offersCount, onClose, onSaved }: Pr
   const [escrowPattern, setEscrowPattern] = useState<EscrowPattern | null>('A');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const runGated = useGatedAction();
 
   const { data: profileBundle } = useQuery({
     queryKey: ['profile-bundle', user?.id],
@@ -347,6 +350,19 @@ export function PlanCreatorEditModal({ plan, offersCount, onClose, onSaved }: Pr
                 <p className="text-[12px] font-semibold text-muted">
                   How long your mood stays visible after publishing.
                 </p>
+                {plan && plan.is_mood_plan && moodLive(plan) ? (
+                  <button
+                    type="button"
+                    className="mt-2 rounded-full border border-secondary/30 bg-white px-4 py-2 text-[13px] font-extrabold text-secondary"
+                    onClick={() => {
+                      void runGated('mood_plan.extend', () => {
+                        setMoodListingHours((h) => (h < 12 ? ((h + 3) as MoodListingHours) : 12));
+                      });
+                    }}
+                  >
+                    Extend mood window
+                  </button>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -409,7 +425,11 @@ export function PlanCreatorEditModal({ plan, offersCount, onClose, onSaved }: Pr
                       <button
                         key={e.id}
                         type="button"
-                        onClick={() => setEscrowPattern(e.id)}
+                        onClick={() => {
+                          if (e.id === 'B') void runGated('escrow.pattern_b', () => setEscrowPattern(e.id));
+                          else if (e.id === 'C') void runGated('escrow.pattern_c', () => setEscrowPattern(e.id));
+                          else setEscrowPattern(e.id);
+                        }}
                         className={cn(
                           'rounded-full px-3 py-2 text-[13px] font-extrabold',
                           escrowPattern === e.id

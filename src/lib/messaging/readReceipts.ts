@@ -8,12 +8,12 @@ export function approxReadByMessageId(
   if (!myUserId) return new Map();
   let latestPeerMs = 0;
   for (const m of messages) {
-    if (m.sender_id === myUserId) continue;
+    if (!m.sender_id || m.sender_id === myUserId) continue;
     latestPeerMs = Math.max(latestPeerMs, new Date(m.created_at).getTime());
   }
   const map = new Map<string, boolean>();
   for (const m of messages) {
-    if (m.sender_id !== myUserId) continue;
+    if (!m.sender_id || m.sender_id !== myUserId) continue;
     const t = new Date(m.created_at).getTime();
     map.set(m.id, latestPeerMs > t);
   }

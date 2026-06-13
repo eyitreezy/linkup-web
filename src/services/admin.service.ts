@@ -40,9 +40,18 @@ export type EscrowDisputeRow = {
   admin_resolution: string | null;
   support_ticket_id: string | null;
   detail: string | null;
+  queue_priority: number | null;
+  sla_deadline: string | null;
   escrow_row?: Pick<
     DbEscrowTransaction,
-    'id' | 'amount_cents' | 'currency' | 'plan_id' | 'payer_id' | 'payee_id' | 'status'
+    | 'id'
+    | 'amount_cents'
+    | 'currency'
+    | 'plan_id'
+    | 'payer_id'
+    | 'payee_id'
+    | 'status'
+    | 'platform_fee_cents'
   > | null;
 };
 
@@ -93,9 +102,10 @@ export async function loadAdminDashboard(): Promise<AdminDashboardData> {
   const { data: d } = await client
     .from('escrow_disputes')
     .select(
-      'id, reason, status, created_at, resolved_at, escrow_id, opened_by, admin_resolution, support_ticket_id, detail'
+      'id, reason, status, created_at, resolved_at, escrow_id, opened_by, admin_resolution, support_ticket_id, detail, queue_priority, sla_deadline'
     )
-    .order('created_at', { ascending: false })
+    .order('queue_priority', { ascending: true })
+    .order('created_at', { ascending: true })
     .limit(40);
 
   let escrowDisputes: EscrowDisputeRow[] = [];
@@ -109,7 +119,7 @@ export async function loadAdminDashboard(): Promise<AdminDashboardData> {
     if (escrowIds.length) {
       const { data: escrows } = await client
         .from('escrow_transactions')
-        .select('id, amount_cents, currency, plan_id, payer_id, payee_id, status')
+        .select('id, amount_cents, currency, plan_id, payer_id, payee_id, status, platform_fee_cents')
         .in('id', escrowIds);
       for (const e of escrows ?? []) {
         byEscrow[e.id as string] = e as EscrowDisputeRow['escrow_row'];
@@ -123,8 +133,11 @@ export async function loadAdminDashboard(): Promise<AdminDashboardData> {
 
   const { data: t } = await client
     .from('support_tickets')
-    .select('id, user_id, subject, body, status, priority, created_at, updated_at')
-    .order('created_at', { ascending: false })
+    .select(
+      'id, user_id, subject, body, status, priority, queue_priority, sla_deadline, is_concierge, created_at, updated_at'
+    )
+    .order('queue_priority', { ascending: true })
+    .order('created_at', { ascending: true })
     .limit(120);
 
   const { data: r } = await client.from('reports').select('*').order('created_at', { ascending: false }).limit(80);
@@ -310,7 +323,8 @@ export async function resolvePlanDispute(
   disputeId: string,
   status: 'resolved' | 'rejected',
   resolution: 'refund' | 'partial' | 'none' | null,
-  notes: string
+  notes: string,
+  partialBps?: number | null
 ) {
   const client = createClient();
   return client.rpc('admin_resolve_plan_dispute', {
@@ -318,6 +332,48 @@ export async function resolvePlanDispute(
     p_new_status: status,
     p_resolution: status === 'resolved' ? resolution : 'none',
     p_internal_notes: notes.trim() || null,
+    p_partial_bps: resolution === 'partial' ? (partialBps ?? null) : null,
+  });
+}
+
+export async function resolveEscrowDisputeRpc(
+  disputeId: string,
+  decision: 'release' | 'refund' | 'split',
+  splitBps: number | null,
+  resolutionNote: string | null
+) {
+  const client = createClient();
+  return client.rpc('admin_resolve_escrow_dispute', {
+    p_dispute_id: disputeId,
+    p_decision: decision,
+    p_split_bps: splitBps,
+    p_resolution_note: resolutionNote,
+  });
+}
+
+export async function loadTicketReplies(ticketId: string) {
+  const client = createClient();
+  const { data } = await client
+    .from('ticket_replies')
+    .select('*')
+    .eq('ticket_id', ticketId)
+    .order('created_at', { ascending: true });
+  return (data ?? []) as import('@/types/database').DbTicketReply[];
+}
+
+export async function sendTicketReply(args: {
+  ticketId: string;
+  senderId: string;
+  body: string;
+  isInternal: boolean;
+}) {
+  const client = createClient();
+  return client.from('ticket_replies').insert({
+    ticket_id: args.ticketId,
+    sender_id: args.senderId,
+    sender_role: 'admin',
+    body: args.body.trim(),
+    is_internal: args.isInternal,
   });
 }
 

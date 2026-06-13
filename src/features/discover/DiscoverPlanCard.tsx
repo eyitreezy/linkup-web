@@ -2,14 +2,18 @@
 
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { HostPresenceChip } from '@/components/presence/HostPresenceChip';
+import { CreatorSpotlightChip } from '@/components/plans/CreatorSpotlightChip';
 import { BoostPill } from '@/components/plans/BoostPill';
 import { PlanCardHero } from '@/components/plans/PlanCardHero';
+import { TierBadge } from '@/components/subscription/TierBadge';
+import { isCreatorSpotlightActive } from '@/lib/plans/creatorSpotlight';
 import { derivePresenceUi, type PresenceUi } from '@/lib/presence/hostPresenceStatus';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
+import { MOOD_REACH_DISPLAY } from '@/lib/plans/moodPlanTierConfig';
 import type { PlanFeedRow } from '@/services/plans.service';
 import type { DbProfile } from '@/types/database';
 import Link from 'next/link';
-import { IoShieldCheckmark } from 'react-icons/io5';
+import { IoGlobeOutline, IoShieldCheckmark } from 'react-icons/io5';
 
 type Props = {
   plan: PlanFeedRow;
@@ -33,10 +37,19 @@ export function DiscoverPlanCard({
   const name = plan.creator?.display_name ?? 'Host';
   const verified = !!plan.creator?.verified_badge;
   const boosted = isPlanBoostActive(plan.boosted_until);
+  const isPlatinum = plan.creator?.subscription_tier === 'PLATINUM';
+  const isCreatorSpotlighted =
+    !boosted && !isPlatinum && isCreatorSpotlightActive(plan.creator?.spotlight_until);
   const isOwn = viewerUserId != null && plan.creator_id === viewerUserId;
   const showPresence = !isOwn;
   const presenceUi = showPresence
-    ? (presence ?? derivePresenceUi(viewerProfile, plan.creator?.preferences, null))
+    ? (presence ??
+        derivePresenceUi(
+          viewerProfile,
+          plan.creator?.preferences,
+          null,
+          !!plan.creator?.masked_activity_enabled
+        ))
     : null;
 
   return (
@@ -68,16 +81,28 @@ export function DiscoverPlanCard({
             </span>
           ) : null}
         </div>
+        {plan.is_mood_plan && plan.mood_reach ? (
+          <p className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-muted">
+            <IoGlobeOutline size={12} />
+            {MOOD_REACH_DISPLAY[plan.mood_reach] ?? plan.mood_reach}
+          </p>
+        ) : null}
         <div className="mt-3 flex items-center gap-2.5">
-          <AvatarWithPresence
-            uri={plan.creator?.avatar_url}
-            name={name}
-            size={40}
-            presence={presenceUi}
-            showDot={showPresence && !!presenceUi?.dot}
-          />
+          <div className="relative shrink-0">
+            <AvatarWithPresence
+              uri={plan.creator?.avatar_url}
+              name={name}
+              size={40}
+              presence={presenceUi}
+              showDot={showPresence && !!presenceUi?.dot}
+            />
+          </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-extrabold text-foreground">{name}</p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="truncate text-[13px] font-extrabold text-foreground">{name}</p>
+              {isPlatinum ? <TierBadge tier="PLATINUM" size="sm" /> : null}
+              {isCreatorSpotlighted ? <CreatorSpotlightChip /> : null}
+            </div>
             <p className="truncate text-[12px] font-semibold text-muted">
               {plan.location_label ?? 'Location TBD'}
             </p>

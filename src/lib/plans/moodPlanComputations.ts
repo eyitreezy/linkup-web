@@ -1,5 +1,9 @@
 export type MoodWindowPreset = 'now' | 'within_1h' | 'tonight' | 'weekend' | 'custom';
 export type MoodListingHours = 1 | 3 | 6 | 12 | 24;
+
+export function isFridayActivation(now = new Date()): boolean {
+  return now.getDay() === 5;
+}
 export type UrgencyLevel = 'happening_now' | 'ending_soon' | 'tonight_only' | 'last_spot';
 
 export function computeMoodWindowBounds(

@@ -6,10 +6,25 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import type { DbDispute, PlanDisputeStatus } from '@/types/database';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { cn } from '@/utils/cn';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { IoDocumentTextOutline, IoShieldCheckmarkOutline, IoWalletOutline } from 'react-icons/io5';
 
-type EscrowDisp = { id: string; reason: string; status: string; escrow_id: string };
+type EscrowDisp = {
+  id: string;
+  reason: string;
+  status: string;
+  escrow_id: string;
+  queue_priority: number | null;
+};
+
+const PRIORITY_LABELS: Record<number, { label: string; className: string }> = {
+  1: { label: 'Platinum priority', className: 'bg-violet-100 text-violet-700' },
+  2: { label: 'Gold priority', className: 'bg-amber-100 text-amber-700' },
+  3: { label: 'Silver priority', className: 'bg-slate-100 text-slate-600' },
+  4: { label: 'Standard', className: 'bg-gray-100 text-gray-500' },
+};
 
 type DisputeFilterTab = 'all' | 'plans' | 'escrow';
 
@@ -53,6 +68,7 @@ function escrowStatusClass(status: string): string {
 
 export function DisputesScreen() {
   const user = useAuthStore((s) => s.user);
+  const router = useRouter();
   const [escrowRows, setEscrowRows] = useState<EscrowDisp[]>([]);
   const [planRows, setPlanRows] = useState<DbDispute[]>([]);
   const [filter, setFilter] = useState<DisputeFilterTab>('all');
@@ -78,7 +94,7 @@ export function DisputesScreen() {
     } else {
       const { data } = await client
         .from('escrow_disputes')
-        .select('id, reason, status, escrow_id')
+        .select('id, reason, status, escrow_id, queue_priority')
         .in('escrow_id', ids);
       setEscrowRows((data as EscrowDisp[]) ?? []);
     }
@@ -190,7 +206,18 @@ export function DisputesScreen() {
               <h2 className="mb-3 text-[12px] font-extrabold uppercase tracking-wide text-muted">Plan issues</h2>
               <ul className="space-y-2">
                 {planRows.map((d) => (
-                  <li key={d.id} className="linkup-card p-4">
+                  <li key={d.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (d.status === 'pending') {
+                          router.push(`/plan/${d.plan_id}`);
+                        } else {
+                          router.push(`/dispute/${d.plan_id}/detail`);
+                        }
+                      }}
+                      className="linkup-card w-full p-4 text-left transition hover:ring-2 hover:ring-primary/15"
+                    >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <p className="font-extrabold text-foreground">
                         {d.reporter_note?.slice(0, 80) ?? d.category.replace(/_/g, ' ')}
@@ -204,6 +231,7 @@ export function DisputesScreen() {
                     <p className="mt-2 text-[12px] font-semibold text-muted">
                       {new Date(d.created_at).toLocaleString()}
                     </p>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -223,9 +251,26 @@ export function DisputesScreen() {
               <h2 className="mb-3 text-[12px] font-extrabold uppercase tracking-wide text-muted">Escrow</h2>
               <ul className="space-y-2">
                 {escrowRows.map((d) => (
-                  <li key={d.id} className="linkup-card p-4">
+                  <li key={d.id}>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/escrow/${d.escrow_id}`)}
+                      className="linkup-card w-full p-4 text-left transition hover:ring-2 hover:ring-primary/15"
+                    >
                     <div className="flex flex-wrap items-start justify-between gap-2">
-                      <p className="font-extrabold text-foreground">{d.reason}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-extrabold text-foreground">{d.reason}</p>
+                        {d.queue_priority && PRIORITY_LABELS[d.queue_priority] ? (
+                          <span
+                            className={cn(
+                              'inline-flex rounded-full px-2 py-0.5 text-[11px] font-extrabold',
+                              PRIORITY_LABELS[d.queue_priority].className
+                            )}
+                          >
+                            {PRIORITY_LABELS[d.queue_priority].label}
+                          </span>
+                        ) : null}
+                      </div>
                       <span
                         className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${escrowStatusClass(d.status)}`}
                       >
@@ -233,6 +278,7 @@ export function DisputesScreen() {
                       </span>
                     </div>
                     <p className="mt-2 text-[12px] font-semibold text-muted">Escrow {d.escrow_id.slice(0, 8)}…</p>
+                    </button>
                   </li>
                 ))}
               </ul>

@@ -178,6 +178,8 @@
 
 .plan-mgmt .pm-header-create {
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
 }
 
 @media (max-width: 424px) {

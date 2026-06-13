@@ -5,7 +5,9 @@ import {
   resolveHostPresenceKind,
 } from '@/lib/presence/hostPresenceStatus';
 import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
-import { isPlanBoostActive } from '@/lib/plans/planBoost';
+import { rankDiscoveryPlans } from '@/lib/plans/feedRanking';
+import { filterPremiumVisibilityPlans } from '@/lib/plans/premiumVisibilityFilter';
+import type { SubscriptionTier } from '@/lib/subscription/types';
 import {
   parseStoredFeedFilters,
   type FeedFilterState,
@@ -32,44 +34,13 @@ export function planDistanceFromViewer(
   return distanceKm(viewerLat, viewerLng, plan.latitude, plan.longitude);
 }
 
-/**
- * Default discover ordering — proximity-first (Tinder / Hinge / Badoo style).
- * Mirrors mobile `rebuildRows` in app/(tabs)/index.tsx:
- * live mood → boost → nearest plan → newest.
- */
+/** Proximity-aware discover ordering — mood → tier → boost → distance → recency. */
 export function sortDiscoverRows(
   rows: PlanFeedRow[],
   viewerLat: number | null,
   viewerLng: number | null
 ): PlanFeedRow[] {
-  const hasViewerCoords = viewerLat != null && viewerLng != null;
-  const moodDeadline = (p: PlanFeedRow) =>
-    p.is_mood_plan && p.mood_expires_at ? new Date(p.mood_expires_at).getTime() : Infinity;
-
-  return [...rows].sort((a, b) => {
-    if (a.is_mood_plan !== b.is_mood_plan) return a.is_mood_plan ? -1 : 1;
-
-    if (a.is_mood_plan && b.is_mood_plan) {
-      const ma = moodDeadline(a);
-      const mb = moodDeadline(b);
-      if (ma !== mb) return ma - mb;
-    }
-
-    const ba = isPlanBoostActive(a.boosted_until) ? 1 : 0;
-    const bb = isPlanBoostActive(b.boosted_until) ? 1 : 0;
-    if (ba !== bb) return bb - ba;
-
-    if (hasViewerCoords) {
-      if (a.latitude == null || a.longitude == null) return 1;
-      if (b.latitude == null || b.longitude == null) return -1;
-
-      const da = planDistanceFromViewer(a, viewerLat, viewerLng);
-      const db = planDistanceFromViewer(b, viewerLat, viewerLng);
-      if (da !== db) return da - db;
-    }
-
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
+  return rankDiscoveryPlans(rows, { effectiveLat: viewerLat, effectiveLng: viewerLng });
 }
 
 export function applyDiscoverFilters(
@@ -81,14 +52,32 @@ export function applyDiscoverFilters(
     viewerLat: number | null;
     viewerLng: number | null;
     baseRadiusKm: number;
+    browseRadiusKm?: number;
     viewerProfile?: DbProfile | null;
     presenceByUser?: Record<string, DbUserPresence>;
+    effectiveTier?: SubscriptionTier;
+    hiddenPlanIds?: Set<string>;
   }
 ): PlanFeedRow[] {
-  const { mood, filter, viewerId, viewerLat, viewerLng, baseRadiusKm, viewerProfile, presenceByUser } =
-    opts;
+  const {
+    mood,
+    filter,
+    viewerId,
+    viewerLat,
+    viewerLng,
+    baseRadiusKm,
+    browseRadiusKm,
+    viewerProfile,
+    presenceByUser,
+    effectiveTier = 'FREE',
+    hiddenPlanIds,
+  } = opts;
   let out = filterPlansByMood(rows, mood);
-  const maxKm = filter.maxDistanceKm ?? baseRadiusKm;
+  out = filterPremiumVisibilityPlans(out, effectiveTier);
+  if (hiddenPlanIds?.size) {
+    out = out.filter((row) => !hiddenPlanIds.has(row.id));
+  }
+  const maxKm = filter.maxDistanceKm ?? browseRadiusKm ?? baseRadiusKm;
 
   out = out.filter((row) => {
     if (row.is_mood_plan && isPlanMoodWindowClosed(row)) return false;
@@ -115,7 +104,8 @@ export function applyDiscoverFilters(
       const kind = resolveHostPresenceKind(
         viewerProfile ?? null,
         row.creator?.preferences,
-        presenceByUser[row.creator_id] ?? null
+        presenceByUser[row.creator_id] ?? null,
+        !!row.creator?.masked_activity_enabled
       );
       if (!hostPresenceMatchesFilter(kind, filter.hostPresence)) return false;
     }

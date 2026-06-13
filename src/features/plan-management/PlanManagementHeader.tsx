@@ -1,7 +1,7 @@
 'use client';
 
+import { CreatePlanLink } from '@/components/navigation/CreatePlanLink';
 import { cn } from '@/utils/cn';
-import Link from 'next/link';
 import { IoAdd, IoAlbums } from 'react-icons/io5';
 
 const MOBILE_SUB =
@@ -30,18 +30,17 @@ export function PlanManagementHeader() {
           </h1>
         </div>
 
-        <Link
-          href="/plan/create"
+        <CreatePlanLink
           aria-label="Create plan"
           className={cn(
-            'pm-header-create pm-tap-target inline-flex shrink-0 items-center justify-center rounded-full linkup-gradient-primary text-white shadow-md transition hover:opacity-95',
+            'pm-header-create pm-tap-target inline-flex shrink-0 items-center justify-center rounded-full linkup-gradient-primary text-white shadow-md transition hover:opacity-95 active:scale-[0.98]',
             'h-11 w-11 min-[425px]:rounded-[400px]',
             'md:h-12 md:min-h-[48px] md:w-auto md:min-w-0 md:gap-2 md:rounded-full md:px-5'
           )}
         >
           <IoAdd className="h-5 w-5 shrink-0 md:hidden" aria-hidden />
           <span className="hidden text-[14px] font-extrabold md:inline">Create plan</span>
-        </Link>
+        </CreatePlanLink>
       </header>
 
       <p className="pm-mobile-sub font-semibold text-muted xl:hidden">{MOBILE_SUB}</p>

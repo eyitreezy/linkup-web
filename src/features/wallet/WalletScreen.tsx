@@ -2,6 +2,8 @@
 
 import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { GoodwillCreditRow } from '@/components/wallet/GoodwillCreditRow';
+import { formatNGN } from '@/lib/escrow/escrowFormatters';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import type { DbGoodwillCredit, DbWalletLedgerRow } from '@/types/database';
@@ -12,6 +14,7 @@ import {
   IoPulse,
   IoReceiptOutline,
   IoShieldCheckmark,
+  IoSparkles,
   IoTimeOutline,
   IoWallet,
 } from 'react-icons/io5';
@@ -30,9 +33,16 @@ export function WalletScreen() {
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['wallet', user?.id],
     queryFn: async () => {
-      if (!user?.id) return { ledger: [] as DbWalletLedgerRow[], goodwill: [] as DbGoodwillCredit[] };
+      if (!user?.id) {
+        return {
+          ledger: [] as DbWalletLedgerRow[],
+          goodwill: [] as DbGoodwillCredit[],
+          goodwillHistory: [] as DbGoodwillCredit[],
+        };
+      }
       const client = createClient();
-      const [l, g] = await Promise.all([
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      const [l, g, history] = await Promise.all([
         client
           .from('wallet_ledger')
           .select('*')
@@ -46,12 +56,21 @@ export function WalletScreen() {
           .gt('expires_at', new Date().toISOString())
           .order('expires_at', { ascending: true })
           .limit(40),
+        client
+          .from('goodwill_credits')
+          .select('*')
+          .eq('user_id', user.id)
+          .gte('created_at', ninetyDaysAgo)
+          .order('created_at', { ascending: false })
+          .limit(40),
       ]);
       if (l.error) throw new Error(l.error.message);
       if (g.error) throw new Error(g.error.message);
+      if (history.error) throw new Error(history.error.message);
       return {
         ledger: (l.data ?? []) as DbWalletLedgerRow[],
         goodwill: (g.data ?? []) as DbGoodwillCredit[],
+        goodwillHistory: (history.data ?? []) as DbGoodwillCredit[],
       };
     },
     enabled: !!user?.id,
@@ -59,12 +78,23 @@ export function WalletScreen() {
 
   const ledger = data?.ledger ?? [];
   const goodwill = data?.goodwill ?? [];
+  const goodwillHistory = data?.goodwillHistory ?? [];
 
   let balanceCents = 0;
   for (const row of ledger) {
+    if (row.is_display_only) continue;
     if (row.type === 'credit') balanceCents += row.amount;
     else balanceCents -= row.amount;
   }
+
+  const expiringSoonCredits = goodwillHistory.filter((c) => {
+    const daysUntilExpiry = (new Date(c.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    return daysUntilExpiry > 0 && daysUntilExpiry <= 7 && c.used_amount < c.amount;
+  });
+  const expiringSoonTotal = expiringSoonCredits.reduce(
+    (sum, c) => sum + (c.amount - c.used_amount),
+    0
+  );
 
   let goodwillRemaining = 0;
   for (const c of goodwill) {
@@ -145,7 +175,55 @@ export function WalletScreen() {
               Issued when a host cancels within 48h or no-shows. Offsets platform fees on future escrows ·
               expires 60 days from issue.
             </p>
+            {goodwill.length > 0 ? (
+              <ul className="mt-4 space-y-2 border-t border-[#FCD34D]/40 pt-4">
+                {goodwill.map((credit) => {
+                  const remaining = Math.max(credit.amount - credit.used_amount, 0);
+                  const tier = credit.tier_at_award;
+                  return (
+                    <li
+                      key={credit.id}
+                      className="flex items-center justify-between gap-3 text-[13px] font-semibold text-muted"
+                    >
+                      <span>
+                        {formatMoney(remaining)} remaining
+                        {tier && tier !== 'FREE' ? (
+                          <span className="ml-1 text-[11px] text-gray-400">
+                            ({tier === 'PLATINUM' ? '2× enhanced' : '1.5× accelerated'})
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="text-[11px]">
+                        Expires {new Date(credit.expires_at).toLocaleDateString()}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
           </div>
+
+          {expiringSoonCredits.length > 0 ? (
+            <div className="flex items-center gap-2 rounded-2xl border border-amber-200/80 bg-amber-50 px-4 py-3">
+              <IoTimeOutline size={18} className="shrink-0 text-amber-600" />
+              <p className="text-[14px] font-semibold text-amber-800">
+                {formatNGN(expiringSoonTotal)} in goodwill credits expire within 7 days
+              </p>
+            </div>
+          ) : null}
+
+          <section className="space-y-2">
+            <h3 className="text-[15px] font-extrabold text-foreground">Goodwill history</h3>
+            {goodwillHistory.length === 0 ? (
+              <p className="py-4 text-[14px] font-semibold text-muted">No goodwill credits yet</p>
+            ) : (
+              <div className="linkup-card divide-y divide-border/50 overflow-hidden">
+                {goodwillHistory.map((credit) => (
+                  <GoodwillCreditRow key={credit.id} credit={credit} />
+                ))}
+              </div>
+            )}
+          </section>
 
           <div className="linkup-card flex gap-4 p-5">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#EDE8FF] text-primary">
@@ -176,45 +254,66 @@ export function WalletScreen() {
             />
           ) : (
             <ul className="space-y-2">
-              {ledger.map((row) => (
-                <li key={row.id} className="linkup-card relative overflow-hidden pl-1">
-                  <div
-                    className={`absolute bottom-0 left-0 top-0 w-1 ${
-                      row.type === 'credit' ? 'bg-[#10B981]' : 'bg-[#EF4444]'
-                    }`}
-                    aria-hidden
-                  />
-                  <div className="flex items-center justify-between gap-4 py-4 pl-4 pr-4">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[14px] font-extrabold text-foreground">
-                          {row.type === 'credit' ? 'Credit' : 'Debit'}
+              {ledger.map((row) => {
+                if (row.source === 'goodwill' && row.is_display_only) {
+                  return (
+                    <li key={row.id} className="linkup-card px-4 py-3">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="flex items-center gap-1.5 text-[14px] font-semibold text-[#059669]">
+                          <IoSparkles size={14} />
+                          Goodwill applied to platform fee
                         </span>
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${
-                            row.type === 'credit'
-                              ? 'bg-[#10B981]/12 text-[#059669]'
-                              : 'bg-[#EF4444]/10 text-[#EF4444]'
-                          }`}
-                        >
-                          {sourcePretty(row.source)}
+                        <span className="text-[14px] font-extrabold text-[#059669]">
+                          −{formatNGN(row.amount)}
                         </span>
                       </div>
                       <p className="mt-1 text-[12px] font-semibold text-muted">
                         {new Date(row.created_at).toLocaleString()}
                       </p>
-                    </div>
-                    <p
-                      className={`shrink-0 text-[16px] font-extrabold tabular-nums ${
-                        row.type === 'debit' ? 'text-[#EF4444]' : 'text-[#059669]'
+                    </li>
+                  );
+                }
+
+                return (
+                  <li key={row.id} className="linkup-card relative overflow-hidden pl-1">
+                    <div
+                      className={`absolute bottom-0 left-0 top-0 w-1 ${
+                        row.type === 'credit' ? 'bg-[#10B981]' : 'bg-[#EF4444]'
                       }`}
-                    >
-                      {row.type === 'credit' ? '+' : '−'}
-                      {formatMoney(row.amount)}
-                    </p>
-                  </div>
-                </li>
-              ))}
+                      aria-hidden
+                    />
+                    <div className="flex items-center justify-between gap-4 py-4 pl-4 pr-4">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[14px] font-extrabold text-foreground">
+                            {row.type === 'credit' ? 'Credit' : 'Debit'}
+                          </span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${
+                              row.type === 'credit'
+                                ? 'bg-[#10B981]/12 text-[#059669]'
+                                : 'bg-[#EF4444]/10 text-[#EF4444]'
+                            }`}
+                          >
+                            {sourcePretty(row.source)}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[12px] font-semibold text-muted">
+                          {new Date(row.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                      <p
+                        className={`shrink-0 text-[16px] font-extrabold tabular-nums ${
+                          row.type === 'debit' ? 'text-[#EF4444]' : 'text-[#059669]'
+                        }`}
+                      >
+                        {row.type === 'credit' ? '+' : '−'}
+                        {formatMoney(row.amount)}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </>

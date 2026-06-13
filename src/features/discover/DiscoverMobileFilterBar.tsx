@@ -4,6 +4,7 @@ import { DiscoverFilterPanel } from '@/features/discover/DiscoverFilterPanel';
 import { isDiscoverFiltersActive } from '@/lib/discovery/discoverFilterSummary';
 import type { FeedFilterState } from '@/lib/discovery/feedFilters';
 import type { DiscoveryMood } from '@/lib/discovery/moodFilter';
+import type { SubscriptionTier } from '@/lib/subscription/types';
 import { cn } from '@/utils/cn';
 import { useEffect } from 'react';
 import { IoClose, IoFunnel } from 'react-icons/io5';
@@ -14,7 +15,10 @@ type Props = {
   filter: FeedFilterState;
   mood: DiscoveryMood;
   baseRadiusKm: number;
-  isPremium: boolean;
+  browseRadiusKm?: number;
+  hasWiderRadius?: boolean;
+  effectiveTier?: SubscriptionTier;
+  advancedFiltersAllowed: boolean;
   onApply: (filter: FeedFilterState, mood: DiscoveryMood) => void;
 };
 
@@ -65,7 +69,10 @@ export function DiscoverFilterSheet({
   filter,
   mood,
   baseRadiusKm,
-  isPremium,
+  browseRadiusKm,
+  hasWiderRadius,
+  effectiveTier,
+  advancedFiltersAllowed,
   onApply,
 }: Props) {
   useEffect(() => {
@@ -98,7 +105,7 @@ export function DiscoverFilterSheet({
         onClick={() => onOpenChange(false)}
       />
       <div
-        className="relative flex max-h-[min(88vh,640px)] w-full flex-col overflow-hidden rounded-t-3xl border border-border bg-surface shadow-2xl"
+        className="relative flex h-[min(88dvh,640px)] w-full max-h-[min(88dvh,640px)] flex-col overflow-hidden rounded-t-3xl border border-border bg-surface shadow-2xl"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-border/80 px-4 py-3">
@@ -118,7 +125,10 @@ export function DiscoverFilterSheet({
             filter={filter}
             mood={mood}
             baseRadiusKm={baseRadiusKm}
-            isPremium={isPremium}
+            browseRadiusKm={browseRadiusKm}
+            hasWiderRadius={hasWiderRadius}
+            effectiveTier={effectiveTier}
+            advancedFiltersAllowed={advancedFiltersAllowed}
             onApply={onApply}
             onApplied={() => onOpenChange(false)}
           />

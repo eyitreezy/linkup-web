@@ -1,15 +1,18 @@
 'use client';
 
+import { FirstSessionModalQueue } from '@/components/discover/FirstSessionModalQueue';
 import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { PlanCardSkeleton } from '@/components/ui/Skeleton';
 import { DiscoverFeedToolbar, type DiscoverViewMode } from '@/features/discover/DiscoverFeedToolbar';
 import { DiscoverPlanCard } from '@/features/discover/DiscoverPlanCard';
 import { DiscoverPlanListCard } from '@/features/discover/DiscoverPlanListCard';
+import { DiscoverLocationPrompt } from '@/features/discover/DiscoverLocationPrompt';
 import { DiscoverSwipeSection } from '@/features/discover/DiscoverSwipeSection';
 import { MoodPlanDiscoverPill } from '@/features/discover/MoodPlanDiscoverPill';
 import { MoodTimelineCarousel } from '@/features/discover/MoodTimelineCarousel';
 import { useDiscoverPage } from '@/features/discover/DiscoverPageContext';
+import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import { useHasMounted } from '@/hooks/use-has-mounted';
 import { useIsMobileDiscoverLayout } from '@/hooks/use-media-query';
 import {
@@ -22,12 +25,22 @@ import { planDistanceFromViewer } from '@/lib/discovery/feedFilters';
 import { derivePresenceUi } from '@/lib/presence/hostPresenceStatus';
 import { createClient } from '@/lib/supabase/client';
 import { fetchPresenceMap } from '@/services/presence.service';
-import { fetchDiscoverPlans, type PlanFeedRow } from '@/services/plans.service';
+import {
+  DISCOVER_PAGE_SIZE,
+  fetchDiscoverPlansPage,
+  type PlanFeedRow,
+} from '@/services/plans.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/utils/cn';
-import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
-import { IoFunnelOutline, IoHeart, IoHeartOutline, IoNavigateOutline } from 'react-icons/io5';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  IoEyeOffOutline,
+  IoFunnelOutline,
+  IoHeart,
+  IoHeartOutline,
+  IoNavigateOutline,
+} from 'react-icons/io5';
 
 const VIEW_STORAGE_KEY = 'linkup_discover_view_mode';
 
@@ -74,14 +87,32 @@ export function DiscoverFeed() {
     mood,
     filter: activeFilter,
     baseRadiusKm,
+    browseRadiusKm,
+    hasWiderRadius,
+    effectiveTier,
     viewerLat,
     viewerLng,
-    isPremium,
+    advancedFiltersAllowed,
     viewerProfile,
+    isIncognitoActive,
+    hiddenPlanIds,
+    canUndoSwipe,
+    hidePlan,
+    undoHiddenPlans,
+    requestDeviceLocation,
+    hasDeviceLocation,
     applyFilters,
     profileLoading,
   } = useDiscoverPage();
+  const { subscriptionState } = useSubscriptionContext();
+  const queryClient = useQueryClient();
+  const discoverQueryKey = useMemo(() => ['discover', user?.id] as const, [user?.id]);
   const [view, setView] = useState<DiscoverViewMode>('list');
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const fetchGenRef = useRef(0);
+  const loadMoreLockRef = useRef(false);
 
   useEffect(() => {
     if (!mounted) return;
@@ -99,29 +130,157 @@ export function DiscoverFeed() {
     }
   };
 
-  const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ['discover'],
-    queryFn: async () => {
+  const fetchDiscoverPage = useCallback(
+    async (pageIndex: number) => {
       const client = createClient();
-      const { data: rows, error: err } = await fetchDiscoverPlans(client);
+      const from = pageIndex * DISCOVER_PAGE_SIZE;
+      const to = from + DISCOVER_PAGE_SIZE - 1;
+      const { data: rows, error: err } = await fetchDiscoverPlansPage(client, from, to, {
+        viewerUserId: user?.id ?? null,
+        skipClientRank: true,
+      });
       if (err) throw new Error(err.message);
       return rows;
     },
+    [user?.id]
+  );
+
+  const {
+    data: feedRows = [],
+    isPending,
+    error,
+    refetch,
+    isFetching,
+  } = useQuery({
+    queryKey: discoverQueryKey,
+    queryFn: async () => {
+      const generation = ++fetchGenRef.current;
+      const rows = await fetchDiscoverPage(0);
+      if (generation !== fetchGenRef.current) {
+        const cached = queryClient.getQueryData<PlanFeedRow[]>(discoverQueryKey);
+        return cached ?? rows;
+      }
+      setPage(0);
+      setHasMore(rows.length >= DISCOVER_PAGE_SIZE);
+      return rows;
+    },
+    enabled: mounted,
+    staleTime: 30_000,
     refetchInterval: 90_000,
+    refetchOnWindowFocus: false,
   });
 
+  const showInitialLoading = isPending && feedRows.length === 0;
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || isFetching || loadMoreLockRef.current || showInitialLoading) return;
+    loadMoreLockRef.current = true;
+    const generation = fetchGenRef.current;
+    const next = page + 1;
+    try {
+      const rows = await fetchDiscoverPage(next);
+      if (generation !== fetchGenRef.current) return;
+      setHasMore(rows.length >= DISCOVER_PAGE_SIZE);
+      queryClient.setQueryData<PlanFeedRow[]>(discoverQueryKey, (prev) => {
+        const base = prev ?? [];
+        const seen = new Set(base.map((p) => p.id));
+        const merged = [...base];
+        for (const row of rows) {
+          if (!seen.has(row.id)) merged.push(row);
+        }
+        return merged;
+      });
+      setPage(next);
+    } finally {
+      loadMoreLockRef.current = false;
+    }
+  }, [
+    hasMore,
+    isFetching,
+    page,
+    fetchDiscoverPage,
+    showInitialLoading,
+    queryClient,
+    discoverQueryKey,
+  ]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting && hasMore && !isFetching && !showInitialLoading) {
+          void loadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, isFetching, showInitialLoading, loadMore]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const client = createClient();
+    const channel = client
+      .channel(`discover-plans-status:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'plans' },
+        (payload) => {
+          const updated = payload.new as {
+            id?: string;
+            status?: string;
+            is_suppressed?: boolean;
+            archived_at?: string | null;
+          };
+          if (!updated?.id) return;
+          const remove =
+            updated.is_suppressed === true ||
+            (updated.archived_at != null && updated.archived_at !== '') ||
+            (updated.status != null &&
+              ['agreed', 'active', 'completed', 'cancelled'].includes(updated.status));
+          if (remove) {
+            queryClient.setQueryData<PlanFeedRow[]>(discoverQueryKey, (prev) =>
+              (prev ?? []).filter((p) => p.id !== updated.id)
+            );
+          } else {
+            void queryClient.invalidateQueries({ queryKey: discoverQueryKey });
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [user?.id, queryClient, discoverQueryKey]);
+
   const preFiltered = useMemo(() => {
-    const rows = data ?? [];
-    return applyDiscoverFilters(rows, {
+    return applyDiscoverFilters(feedRows, {
       mood,
       filter: activeFilter,
       viewerId: user?.id,
       viewerLat,
       viewerLng,
       baseRadiusKm,
+      browseRadiusKm,
       viewerProfile,
+      effectiveTier: subscriptionState.effectiveTier,
+      hiddenPlanIds,
     });
-  }, [data, mood, activeFilter, user?.id, viewerLat, viewerLng, baseRadiusKm, viewerProfile]);
+  }, [
+    feedRows,
+    mood,
+    activeFilter,
+    user?.id,
+    viewerLat,
+    viewerLng,
+    baseRadiusKm,
+    browseRadiusKm,
+    viewerProfile,
+    subscriptionState.effectiveTier,
+    hiddenPlanIds,
+  ]);
 
   const creatorIds = useMemo(() => {
     const ids = new Set<string>();
@@ -150,8 +309,11 @@ export function DiscoverFeed() {
       viewerLat,
       viewerLng,
       baseRadiusKm,
+      browseRadiusKm,
       viewerProfile,
       presenceByUser,
+      effectiveTier: subscriptionState.effectiveTier,
+      hiddenPlanIds,
     });
   }, [
     preFiltered,
@@ -161,8 +323,11 @@ export function DiscoverFeed() {
     viewerLat,
     viewerLng,
     baseRadiusKm,
+    browseRadiusKm,
     viewerProfile,
     presenceByUser,
+    subscriptionState.effectiveTier,
+    hiddenPlanIds,
   ]);
 
   const moodRows = useMemo(() => moodTimelinePlans(filteredWithPresence), [filteredWithPresence]);
@@ -170,8 +335,13 @@ export function DiscoverFeed() {
 
   const filterKey = `${mood}-${activeFilter.clientFiltersActive}-${activeFilter.maxDistanceKm}`;
 
-  const presenceFor = (creatorId: string, prefs: PlanFeedRow['creator']) =>
-    derivePresenceUi(viewerProfile, prefs?.preferences, presenceByUser[creatorId] ?? null);
+  const presenceFor = (creatorId: string, creator: PlanFeedRow['creator']) =>
+    derivePresenceUi(
+      viewerProfile,
+      creator?.preferences,
+      presenceByUser[creatorId] ?? null,
+      !!creator?.masked_activity_enabled
+    );
 
   const distanceForPlan = (plan: PlanFeedRow) => distanceLabelFor(plan, viewerLat, viewerLng);
 
@@ -194,7 +364,7 @@ export function DiscoverFeed() {
         </p>
       ) : null}
 
-      {isLoading ? (
+      {showInitialLoading ? (
         <div
           className={cn(
             effectiveView === 'grid'
@@ -211,7 +381,7 @@ export function DiscoverFeed() {
             Array.from({ length: 4 }).map((_, i) => <PlanCardSkeleton key={i} />)
           )}
         </div>
-      ) : filteredWithPresence.length === 0 && !isLoading && !error ? (
+      ) : filteredWithPresence.length === 0 && !showInitialLoading && !error ? (
         <AppEmptyState
           emoji="🔍"
           title="Nothing matches right now"
@@ -249,13 +419,16 @@ export function DiscoverFeed() {
           presenceFor={presenceFor}
           distanceLabelFor={distanceForPlan}
           filterKey={filterKey}
+          onHidePlan={hidePlan}
+          onUndoHidden={undoHiddenPlans}
+          canUndoSwipe={canUndoSwipe}
         />
       ) : effectiveView === 'list' ? (
         <ul className="flex w-full min-w-0 max-w-full flex-col gap-3 overflow-hidden">
           {filteredWithPresence.map((plan) => (
             <li key={plan.id}>
               {plan.is_mood_plan && plan.mood_expires_at ? (
-                <MoodPlanDiscoverPill plan={plan} />
+                <MoodPlanDiscoverPill plan={plan} viewerUserId={user?.id} />
               ) : (
                 <DiscoverPlanListCard
                   plan={plan}
@@ -278,7 +451,7 @@ export function DiscoverFeed() {
         >
           {filteredWithPresence.map((plan) =>
             plan.is_mood_plan && plan.mood_expires_at ? (
-              <MoodPlanDiscoverPill key={plan.id} plan={plan} />
+              <MoodPlanDiscoverPill key={plan.id} plan={plan} viewerUserId={user?.id} />
             ) : (
               <DiscoverPlanCard
                 key={plan.id}
@@ -293,9 +466,10 @@ export function DiscoverFeed() {
         </div>
       )}
 
-      {isFetching && !isLoading ? (
+      {isFetching && !showInitialLoading ? (
         <p className="text-center text-[12px] font-semibold text-muted">Refreshing feed…</p>
       ) : null}
+      <div ref={sentinelRef} className="h-4 shrink-0" aria-hidden />
     </>
   );
 
@@ -312,11 +486,26 @@ export function DiscoverFeed() {
         kicker="Discover"
         title="Meetups worth showing up for"
         icon={<IoHeart size={22} />}
+        trailing={
+          isIncognitoActive ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-[#F5F6FA] px-2 py-0.5 text-[11px] font-extrabold text-muted">
+              <IoEyeOffOutline size={12} />
+              Incognito
+            </span>
+          ) : null
+        }
         className={isMobileLayout ? '!gap-2 shrink-0' : undefined}
+      />
+
+      <DiscoverLocationPrompt
+        onRequestLocation={requestDeviceLocation}
+        hasDeviceLocation={hasDeviceLocation}
+        className={cn(isMobileLayout ? 'shrink-0' : undefined)}
       />
 
       <MoodTimelineCarousel
         plans={moodRows}
+        viewerUserId={user?.id}
         className={cn(isMobileLayout && 'shrink-0 !space-y-2')}
       />
 
@@ -335,7 +524,10 @@ export function DiscoverFeed() {
               filter={activeFilter}
               mood={mood}
               baseRadiusKm={baseRadiusKm}
-              isPremium={isPremium}
+              browseRadiusKm={browseRadiusKm}
+              hasWiderRadius={hasWiderRadius}
+              effectiveTier={effectiveTier}
+              advancedFiltersAllowed={advancedFiltersAllowed}
               profileLoading={profileLoading}
               onApply={applyFilters}
               view={effectiveView}
@@ -362,7 +554,10 @@ export function DiscoverFeed() {
             filter={activeFilter}
             mood={mood}
             baseRadiusKm={baseRadiusKm}
-            isPremium={isPremium}
+            browseRadiusKm={browseRadiusKm}
+            hasWiderRadius={hasWiderRadius}
+            effectiveTier={effectiveTier}
+            advancedFiltersAllowed={advancedFiltersAllowed}
             profileLoading={profileLoading}
             onApply={applyFilters}
             view={effectiveView}
@@ -372,6 +567,7 @@ export function DiscoverFeed() {
           {feedContent}
         </>
       )}
+      <FirstSessionModalQueue />
     </div>
   );
 }

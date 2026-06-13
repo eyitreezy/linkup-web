@@ -1,6 +1,8 @@
 'use client';
 
+import { TierBadge } from '@/components/subscription/TierBadge';
 import { HostMediaGallery } from '@/components/profile/HostMediaGallery';
+import type { SubscriptionTier } from '@/lib/subscription/types';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppStatusDialog } from '@/components/ui/AppStatusDialog';
@@ -56,15 +58,18 @@ export function UserProfileScreen({ userId }: Props) {
     queryKey: ['public-profile', userId],
     queryFn: async () => {
       const client = createClient();
-      const { data: profile, error: pe } = await client
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
+      const [{ data: profile, error: pe }, { data: userRow }] = await Promise.all([
+        client.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
+        client.from('users').select('subscription_tier').eq('id', userId).maybeSingle(),
+      ]);
       if (pe) throw new Error(pe.message);
       if (!profile) return null;
       const video = await fetchProfileVideo(client, userId);
-      return { profile: profile as DbProfile, video };
+      return {
+        profile: profile as DbProfile,
+        video,
+        subscriptionTier: (userRow as { subscription_tier?: SubscriptionTier } | null)?.subscription_tier ?? 'FREE',
+      };
     },
   });
 
@@ -73,12 +78,19 @@ export function UserProfileScreen({ userId }: Props) {
   const viewerProfile = viewerBundleQuery.data?.profile ?? null;
 
   useEffect(() => {
-    if (!canInteract || !data?.profile || data.profile.is_profile_public === false) return;
+    if (!canInteract || !data?.profile || data.profile.is_profile_public === false || !viewer?.id) return;
     const client = createClient();
-    void client.from('profile_views').insert({
-      viewer_id: viewer!.id,
-      viewed_user_id: userId,
-    });
+    void (async () => {
+      const { fetchViewerPrivacyPrefs, shouldSkipProfileViewRecording } = await import(
+        '@/lib/plans/incognitoEngagement'
+      );
+      const prefs = await fetchViewerPrivacyPrefs(client, viewer.id);
+      if (shouldSkipProfileViewRecording(prefs)) return;
+      await client.from('profile_views').insert({
+        viewer_id: viewer.id,
+        viewed_user_id: userId,
+      });
+    })();
   }, [canInteract, data?.profile, userId, viewer]);
 
   useEffect(() => {
@@ -177,7 +189,7 @@ export function UserProfileScreen({ userId }: Props) {
     );
   }
 
-  const { profile, video } = data;
+  const { profile, video, subscriptionTier } = data;
   const primary = resolvePrimaryPhotoUrl(profile);
   const prefs = profile.preferences ?? {};
   const name = profile.display_name?.trim() || 'LinkUp member';
@@ -195,7 +207,10 @@ export function UserProfileScreen({ userId }: Props) {
 
       <div className="text-center">
         <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-secondary">Member</p>
-        <h1 className="mt-1 font-display text-2xl font-extrabold text-foreground min-[400px]:text-3xl">{name}</h1>
+        <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+          <h1 className="font-display text-2xl font-extrabold text-foreground min-[400px]:text-3xl">{name}</h1>
+          <TierBadge tier={subscriptionTier} size="md" />
+        </div>
         <p className="mt-1 text-[13px] font-semibold text-muted">
           {isSelf ? 'This is how others see your public profile.' : 'Public profile on LinkUp'}
         </p>
@@ -214,6 +229,7 @@ export function UserProfileScreen({ userId }: Props) {
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
             <p className="font-display text-lg font-extrabold text-foreground">{name}</p>
+            <TierBadge tier={subscriptionTier} size="md" />
             {profile.verified_badge ? (
               <span className="inline-flex items-center gap-1 rounded-full linkup-gradient-primary px-2.5 py-1 text-[11px] font-extrabold text-white shadow-sm">
                 <IoCheckmarkCircle size={13} />

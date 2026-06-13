@@ -1,10 +1,12 @@
 'use client';
 
+import { TrialBanner } from '@/components/subscription/TrialBanner';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { ContextPanel } from '@/components/layout/ContextPanel';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { cn } from '@/utils/cn';
-import { useEffect, type ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 type Props = {
   children: ReactNode;
@@ -18,6 +20,8 @@ type Props = {
   fixedMain?: boolean;
   /** Plan management (etc.): page owns horizontal gutters on mobile. */
   flushMobileGutter?: boolean;
+  /** Subscription / pricing grids — use full center column width (no xl cap). */
+  wideMain?: boolean;
 };
 
 export function AppShell({
@@ -28,7 +32,16 @@ export function AppShell({
   noContext,
   fixedMain,
   flushMobileGutter,
+  wideMain,
 }: Props) {
+  const pathname = usePathname();
+  const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (fixedMain) return;
+    mainRef.current?.scrollTo(0, 0);
+  }, [pathname, fixedMain]);
+
   useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
@@ -47,8 +60,10 @@ export function AppShell({
       <Sidebar />
 
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:pl-[240px] xl:pl-[260px]">
+        <TrialBanner />
         <div className="flex h-full min-h-0 flex-1 overflow-hidden">
           <main
+            ref={mainRef}
             className={cn(
               'h-full max-h-full min-h-0 min-w-0 flex-1',
               fixedMain ? 'flex flex-col overflow-hidden' : 'overflow-y-auto overflow-x-hidden overscroll-y-contain',
@@ -56,7 +71,8 @@ export function AppShell({
               fullWidth
                 ? 'w-full min-w-0 max-w-full overflow-x-hidden px-0 py-0'
                 : cn(
-                    'mx-auto min-w-0 w-full max-w-3xl overflow-x-hidden px-4 py-6 md:px-6 lg:max-w-none lg:pb-0 xl:max-w-4xl',
+                    'mx-auto min-w-0 w-full overflow-x-hidden px-4 py-6 md:px-6 lg:max-w-none lg:pb-0',
+                    wideMain ? 'max-w-3xl xl:max-w-none' : 'max-w-3xl xl:max-w-4xl',
                     flushMobileGutter
                       ? 'max-lg:px-0 max-lg:py-2.5'
                       : 'max-[424px]:px-2 max-[424px]:py-2.5 max-[374px]:px-1.5 max-[374px]:py-2 max-[359px]:px-1 max-[359px]:py-2'

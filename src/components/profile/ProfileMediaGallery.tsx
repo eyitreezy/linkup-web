@@ -6,7 +6,7 @@ import type { DbProfileVideo } from '@/lib/profile/media/types';
 import type { DbProfile } from '@/types/database';
 import { cn } from '@/utils/cn';
 import { useState } from 'react';
-import { IoCheckmarkCircle, IoPlay } from 'react-icons/io5';
+import { IoCheckmarkCircle } from 'react-icons/io5';
 
 type Props = {
   profile: Pick<DbProfile, 'primary_photo_url' | 'photo_urls' | 'avatar_url' | 'display_name'>;
@@ -25,7 +25,7 @@ export function ProfileMediaGallery({ profile, video = null, variant = 'full', c
   if (variant === 'compact') {
     const thumb = bundle.primaryPhotoUrl;
     return (
-      <div className={cn('flex items-center gap-3', className)}>
+      <div className={cn('shrink-0', className)}>
         {thumb ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={thumb} alt="" className="h-14 w-14 rounded-2xl border-2 border-secondary/30 object-cover shadow-sm" />
@@ -34,19 +34,6 @@ export function ProfileMediaGallery({ profile, video = null, variant = 'full', c
             {(profile.display_name ?? '?').charAt(0)}
           </div>
         )}
-        {video ? (
-          <div className="relative h-14 w-24 overflow-hidden rounded-xl border border-primary/15">
-            {video.thumbnailUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={video.thumbnailUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <div className="h-full bg-[#EDE8FF]/80" />
-            )}
-            <span className="absolute inset-0 flex items-center justify-center bg-black/25 text-white">
-              <IoPlay size={18} />
-            </span>
-          </div>
-        ) : null}
       </div>
     );
   }

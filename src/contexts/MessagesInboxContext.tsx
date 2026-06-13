@@ -1,11 +1,10 @@
 'use client';
 
 import { invalidateInboxQueries } from '@/lib/messaging/invalidate';
-import { MESSAGES_UNREAD_QUERY_KEY } from '@/lib/messaging/queryKeys';
+import { useInboxQuery } from '@/lib/messaging/useInboxQuery';
 import { createClient } from '@/lib/supabase/client';
-import { countUnreadConversations } from '@/services/messages.service';
 import { useAuthStore } from '@/stores/auth-store';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   createContext,
   useCallback,
@@ -16,7 +15,6 @@ import {
 } from 'react';
 
 type MessagesInboxContextValue = {
-  /** Number of conversations with unread messages (same as mobile `unreadTotal`). */
   unreadCount: number;
   loading: boolean;
   refresh: () => Promise<void>;
@@ -25,25 +23,20 @@ type MessagesInboxContextValue = {
 const MessagesInboxCtx = createContext<MessagesInboxContextValue | undefined>(undefined);
 
 export function MessagesInboxProvider({ children }: { children: ReactNode }) {
-  const user = useAuthStore((s) => s.user);
+  const userId = useAuthStore((s) => s.user?.id);
   const queryClient = useQueryClient();
+  const { data, isPending, isFetching, refetch } = useInboxQuery();
 
-  const { data: unreadCount = 0, isLoading, refetch } = useQuery({
-    queryKey: [MESSAGES_UNREAD_QUERY_KEY, user?.id],
-    queryFn: async () => {
-      if (!user?.id) return 0;
-      const client = createClient();
-      return countUnreadConversations(client, user.id);
-    },
-    enabled: !!user?.id,
-    refetchInterval: 60_000,
-  });
+  const unreadCount = useMemo(
+    () => data?.rows.filter((r) => r.unread).length ?? 0,
+    [data?.rows]
+  );
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!userId) return;
     const client = createClient();
     const channel = client
-      .channel(`inbox-messages:${user.id}`)
+      .channel(`inbox-user-${userId}`)
       .on(
         'postgres_changes',
         {
@@ -52,28 +45,39 @@ export function MessagesInboxProvider({ children }: { children: ReactNode }) {
           table: 'messages',
         },
         () => {
-          invalidateInboxQueries(queryClient, user.id);
+          invalidateInboxQueries(queryClient, userId);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+        },
+        () => {
+          invalidateInboxQueries(queryClient, userId);
         }
       )
       .subscribe();
     return () => {
       void client.removeChannel(channel);
     };
-  }, [user?.id, queryClient]);
+  }, [userId, queryClient]);
 
   const refresh = useCallback(async () => {
-    if (!user?.id) return;
-    invalidateInboxQueries(queryClient, user.id);
+    if (!userId) return;
+    invalidateInboxQueries(queryClient, userId);
     await refetch();
-  }, [user?.id, queryClient, refetch]);
+  }, [userId, queryClient, refetch]);
 
   const value = useMemo(
     () => ({
       unreadCount,
-      loading: isLoading,
+      loading: isPending || isFetching,
       refresh,
     }),
-    [unreadCount, isLoading, refresh]
+    [unreadCount, isPending, isFetching, refresh]
   );
 
   return <MessagesInboxCtx.Provider value={value}>{children}</MessagesInboxCtx.Provider>;

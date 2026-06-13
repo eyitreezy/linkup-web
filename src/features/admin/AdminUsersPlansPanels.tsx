@@ -1,5 +1,7 @@
 'use client';
 
+import { AdminGoodwillPanel } from '@/components/admin/AdminGoodwillPanel';
+import { AdminTrialPanel } from '@/components/admin/AdminTrialPanel';
 import { ConfirmDialog } from '@/features/plan-management/ConfirmDialog';
 import {
   AdminListCard,
@@ -238,6 +240,8 @@ function UserEditModal({
             <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
             Public profile
           </label>
+          <AdminGoodwillPanel userId={user.id} />
+          <AdminTrialPanel userId={user.id} />
         </div>
         <div className="mt-6 flex flex-wrap gap-2">
           <button

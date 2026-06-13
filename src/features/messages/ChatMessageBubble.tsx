@@ -1,12 +1,14 @@
 'use client';
 
 import { formatMessageTime } from '@/lib/messaging/formatMessageTime';
+import type { ReplyQuotePreview } from '@/lib/messaging/chatReply';
 import { messageDisplayText, parseLegacyImageBody } from '@/lib/messaging/messagePreview';
 import type { ResolvedChatBubbleTheme } from '@/lib/messaging/chatAppearance';
 import type { ChatMessageRow } from '@/services/messages.service';
 import { cn } from '@/utils/cn';
 import { IoCheckmark, IoCheckmarkDone } from 'react-icons/io5';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, MouseEvent } from 'react';
+import { useRef } from 'react';
 
 export type ChatBubbleMeta = {
   timeLabel: string;
@@ -20,13 +22,35 @@ type Props = {
   theme?: ResolvedChatBubbleTheme | null;
   meta?: ChatBubbleMeta | null;
   compact?: boolean;
+  quote?: ReplyQuotePreview | null;
+  highlighted?: boolean;
+  senderLabel?: string | null;
+  isAdmin?: boolean;
+  isSystem?: boolean;
+  onOpenActions?: () => void;
+  onQuotePress?: () => void;
+  messageRef?: (el: HTMLDivElement | null) => void;
 };
 
 function bubbleGradient(colors: [string, string, string]): CSSProperties {
   return { background: `linear-gradient(135deg, ${colors[0]}, ${colors[1]}, ${colors[2]})` };
 }
 
-export function ChatMessageBubble({ message, mine, theme, meta, compact }: Props) {
+export function ChatMessageBubble({
+  message,
+  mine,
+  theme,
+  meta,
+  compact,
+  quote,
+  highlighted,
+  senderLabel,
+  isAdmin,
+  isSystem,
+  onOpenActions,
+  onQuotePress,
+  messageRef,
+}: Props) {
   const text = messageDisplayText(message);
   const legacyImage = parseLegacyImageBody(message.body ?? message.text ?? null);
   const mediaUrl = message.mediaUrl ?? legacyImage;
@@ -34,9 +58,38 @@ export function ChatMessageBubble({ message, mine, theme, meta, compact }: Props
   const t = theme;
   const timeLabel = meta?.timeLabel ?? formatMessageTime(message.created_at);
 
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleContextMenu(e: MouseEvent) {
+    if (!onOpenActions) return;
+    e.preventDefault();
+    onOpenActions();
+  }
+
+  function clearLongPress() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
+
+  if (isSystem) {
+    return (
+      <div ref={messageRef} className="flex justify-center py-1">
+        <span className="rounded-full bg-[#F3F4F6] px-3 py-1 text-[12px] font-semibold text-muted">
+          {text ?? 'System message'}
+        </span>
+      </div>
+    );
+  }
+
   if (message.deleted_at) {
     return (
-      <div className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
+      <div
+        ref={messageRef}
+        className={cn('flex', mine ? 'justify-end' : 'justify-start')}
+        onContextMenu={handleContextMenu}
+      >
         <span
           className={cn(
             'rounded-2xl bg-[#F3F4F6] italic text-muted',
@@ -60,7 +113,32 @@ export function ChatMessageBubble({ message, mine, theme, meta, compact }: Props
       : undefined;
 
   return (
-    <div className={cn('flex flex-col gap-0.5', mine ? 'items-end' : 'items-start')}>
+    <div
+      ref={messageRef}
+      className={cn(
+        'flex flex-col gap-0.5 transition',
+        mine ? 'items-end' : 'items-start',
+        highlighted && 'rounded-2xl ring-2 ring-amber-300/80'
+      )}
+      onContextMenu={handleContextMenu}
+      onTouchStart={() => {
+        if (!onOpenActions) return;
+        clearLongPress();
+        longPressTimer.current = setTimeout(() => onOpenActions(), 480);
+      }}
+      onTouchEnd={clearLongPress}
+      onTouchMove={clearLongPress}
+    >
+      {!mine && senderLabel ? (
+        <div className="mb-0.5 flex items-center gap-1 px-1">
+          <span className="text-[12px] font-extrabold text-foreground">{senderLabel}</span>
+          {isAdmin ? (
+            <span className="rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-extrabold text-primary">
+              Admin
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       {mediaUrl ? (
         <div
           className={cn(
@@ -76,7 +154,7 @@ export function ChatMessageBubble({ message, mine, theme, meta, compact }: Props
           )}
         </div>
       ) : null}
-      {text ? (
+      {text || quote ? (
         <span
           className={cn(
             'max-w-[88%] rounded-2xl font-semibold min-[360px]:max-w-[85%] lg:max-w-[80%]',
@@ -92,6 +170,24 @@ export function ChatMessageBubble({ message, mine, theme, meta, compact }: Props
             color: mine && t ? t.textMine : !mine && t ? t.textThem : undefined,
           }}
         >
+          {quote ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onQuotePress?.();
+              }}
+              className={cn(
+                'mb-2 block w-full rounded-lg border-l-2 py-1 pl-2 text-left text-[12px] font-semibold',
+                mine ? 'border-white/60 bg-black/10' : 'border-primary bg-primary/5 text-primary'
+              )}
+            >
+              <span className="block text-[10px] font-extrabold uppercase opacity-80">
+                {quote.senderLabel}
+              </span>
+              <span className={cn('line-clamp-2', quote.isDeleted && 'italic')}>{quote.preview}</span>
+            </button>
+          ) : null}
           {text}
         </span>
       ) : null}
@@ -104,6 +200,9 @@ export function ChatMessageBubble({ message, mine, theme, meta, compact }: Props
           )}
           style={{ color: mine && t ? t.metaTimeMine : !mine && t ? t.metaTimeThem : undefined }}
         >
+          {message.edited_at ? (
+            <span className={!t ? 'text-muted' : undefined}>Edited</span>
+          ) : null}
           <span className={!t ? 'text-muted' : undefined}>{timeLabel}</span>
           {mine && meta.showSent ? (
             meta.showRead ? (

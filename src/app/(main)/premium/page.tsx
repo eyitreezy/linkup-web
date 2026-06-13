@@ -1,7 +1,5 @@
-import { PremiumScreen } from '@/features/premium/PremiumScreen';
+import { redirect } from 'next/navigation';
 
-export const metadata = { title: 'Premium' };
-
-export default function PremiumPage() {
-  return <PremiumScreen />;
+export default function PremiumRedirectPage() {
+  redirect('/subscription');
 }

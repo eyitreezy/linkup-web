@@ -35,7 +35,10 @@ export function DiscoverForYouRail() {
         filter={ctx.filter}
         mood={ctx.mood}
         baseRadiusKm={ctx.baseRadiusKm}
-        isPremium={ctx.isPremium}
+        browseRadiusKm={ctx.browseRadiusKm}
+        hasWiderRadius={ctx.hasWiderRadius}
+        effectiveTier={ctx.effectiveTier}
+        advancedFiltersAllowed={ctx.advancedFiltersAllowed}
         onApply={ctx.applyFilters}
       />
     </div>

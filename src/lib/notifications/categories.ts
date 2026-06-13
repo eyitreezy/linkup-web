@@ -27,6 +27,7 @@ const PAYMENTS: NotificationEventType[] = [
   'dispute_resolved',
   'wallet_updated',
   'credit_issued',
+  'credit_expiring',
 ];
 
 const SYSTEM: NotificationEventType[] = [
@@ -38,6 +39,9 @@ const SYSTEM: NotificationEventType[] = [
   'account_restriction',
   'report_submitted',
   'premium_activated',
+  'trial_started',
+  'trial_expiring',
+  'trial_expired',
   'strike_added',
   'user_suspended',
   'user_banned',
@@ -74,6 +78,7 @@ export function notificationTab(type: string): NotificationFilterTab {
     t.startsWith('strike_') ||
     t.startsWith('moderation_') ||
     t.startsWith('report_') ||
+    t.startsWith('trial_') ||
     t === 'premium_activated'
   ) {
     return 'system';

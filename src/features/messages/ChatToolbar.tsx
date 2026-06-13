@@ -1,8 +1,8 @@
 'use client';
 
+import { CreatePlanLink } from '@/components/navigation/CreatePlanLink';
 import type { ChatAppearancePreset } from '@/lib/messaging/chatAppearance';
 import { cn } from '@/utils/cn';
-import Link from 'next/link';
 import { IoCalendarOutline, IoFlashOutline, IoImageOutline, IoLocationOutline } from 'react-icons/io5';
 
 type Props = {
@@ -38,8 +38,7 @@ export function ChatToolbar({
         role="toolbar"
         aria-label="Chat actions"
       >
-        <Link
-          href="/plan/create"
+        <CreatePlanLink
           className="flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-xl px-1 py-1 transition active:scale-95 hover:bg-black/5"
           aria-label="Suggest a plan"
         >
@@ -47,7 +46,7 @@ export function ChatToolbar({
             <IoCalendarOutline size={18} style={iconStyle} />
           </span>
           <span className="text-[9px] font-extrabold text-muted min-[360px]:text-[10px]">Plan</span>
-        </Link>
+        </CreatePlanLink>
         <button
           type="button"
           onClick={onOffer}
@@ -92,16 +91,16 @@ export function ChatToolbar({
 
   return (
     <div className={cn('flex gap-1 overflow-x-auto px-2.5 pb-2 scrollbar-none min-[360px]:px-3', className)}>
-      <Link
-        href="/plan/create"
+      <CreatePlanLink
         className="flex shrink-0 flex-col items-center gap-1 rounded-xl px-2 py-1.5 transition hover:bg-black/5 min-[360px]:px-3"
+        aria-label="Suggest a plan"
       >
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-sm ring-1 ring-black/5 min-[400px]:h-9 min-[400px]:w-9">
           <IoCalendarOutline size={18} style={iconStyle} className="min-[400px]:hidden" />
           <IoCalendarOutline size={20} style={iconStyle} className="hidden min-[400px]:block" />
         </span>
         <span className="text-[10px] font-extrabold text-muted min-[360px]:text-[11px]">Plan</span>
-      </Link>
+      </CreatePlanLink>
       <button
         type="button"
         onClick={onOffer}

@@ -2,8 +2,11 @@
 
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { HostPresenceChip } from '@/components/presence/HostPresenceChip';
+import { CreatorSpotlightChip } from '@/components/plans/CreatorSpotlightChip';
 import { BoostPill } from '@/components/plans/BoostPill';
 import { MoodPlanCountdown } from '@/components/plans/MoodPlanCountdown';
+import { TierBadge } from '@/components/subscription/TierBadge';
+import { isCreatorSpotlightActive } from '@/lib/plans/creatorSpotlight';
 import { derivePresenceUi, type PresenceUi } from '@/lib/presence/hostPresenceStatus';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { moodDiscoverMeta } from '@/lib/plans/moodDiscoverUi';
@@ -52,15 +55,23 @@ export function DiscoverPlanListCard({
   const name = plan.creator?.display_name?.trim() || 'Host';
   const verified = !!plan.creator?.verified_badge;
   const boosted = isPlanBoostActive(plan.boosted_until);
+  const isPlatinum = plan.creator?.subscription_tier === 'PLATINUM';
+  const isCreatorSpotlighted =
+    !boosted && !isPlatinum && isCreatorSpotlightActive(plan.creator?.spotlight_until);
   const isOwn = viewerUserId != null && plan.creator_id === viewerUserId;
   const showPresence = !isOwn;
   const presenceUi = useMemo(
     () =>
       showPresence
         ? presence ??
-          derivePresenceUi(viewerProfile, plan.creator?.preferences, null)
+          derivePresenceUi(
+            viewerProfile,
+            plan.creator?.preferences,
+            null,
+            !!plan.creator?.masked_activity_enabled
+          )
         : null,
-    [showPresence, presence, viewerProfile, plan.creator?.preferences]
+    [showPresence, presence, viewerProfile, plan.creator?.preferences, plan.creator?.masked_activity_enabled]
   );
   const moodMeta = useMemo(() => moodDiscoverMeta(plan), [plan]);
   const trustScore = plan.creator?.ai_trust_score;
@@ -126,7 +137,11 @@ export function DiscoverPlanListCard({
             showDot={showPresence && !!presenceUi?.dot}
           />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-extrabold text-foreground">{name}</p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="truncate text-[13px] font-extrabold text-foreground">{name}</p>
+              {isPlatinum ? <TierBadge tier="PLATINUM" size="sm" /> : null}
+              {isCreatorSpotlighted ? <CreatorSpotlightChip /> : null}
+            </div>
             <div className="mt-1 flex flex-wrap items-center gap-1">
               <HostPresenceChip presence={presenceUi} className="!py-0.5 !text-[10px]" />
               {showTrust ? (

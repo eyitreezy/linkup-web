@@ -16,7 +16,7 @@ function isProtectedAppPath(pathname: string) {
     '/offers',
     '/messages',
     '/profile',
-    '/premium',
+    '/subscription',
     '/settings',
     '/wallet',
     '/trust',
@@ -46,6 +46,12 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     const rest = pathname.slice('/settings'.length) || '';
     url.pathname = `/profile${rest}`;
+    return NextResponse.redirect(url);
+  }
+
+  if (pathname === '/premium' || pathname.startsWith('/premium/')) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname.replace(/^\/premium/, '/subscription');
     return NextResponse.redirect(url);
   }
 

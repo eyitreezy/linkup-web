@@ -184,3 +184,13 @@ body {
 .mood-gear-spin {
   animation: mood-gear-spin 2.8s linear infinite;
 }
+
+@keyframes tier-shimmer {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.12);
+  }
+}

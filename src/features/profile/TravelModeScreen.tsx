@@ -4,7 +4,7 @@ import { LocationSearchField } from '@/components/location/LocationSearchField';
 import { FormCard } from '@/components/settings/FormCard';
 import { SettingsPageHeader } from '@/components/settings/SettingsPageHeader';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
-import { isPremiumSubscriber } from '@/lib/premium/access';
+import { usePermission } from '@/hooks/usePermission';
 import { createClient } from '@/lib/supabase/client';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { useAuthStore } from '@/stores/auth-store';
@@ -49,8 +49,7 @@ export function TravelModeScreen() {
   });
 
   const profile = data?.profile ?? null;
-  const dbUser = data?.dbUser ?? null;
-  const premium = isPremiumSubscriber(dbUser);
+  const { allowed: travelAllowed, loading: travelPermLoading } = usePermission('discover.travel_mode');
   const tm = profile?.preferences?.travel_mode;
 
   useEffect(() => {
@@ -88,17 +87,17 @@ export function TravelModeScreen() {
     );
   }
 
-  if (isLoading) {
+  if (isLoading || travelPermLoading) {
     return <div className="h-40 animate-pulse rounded-2xl bg-[#EDE8FF]/70" />;
   }
 
-  if (!premium) {
+  if (!travelAllowed) {
     return (
       <div className="space-y-8 pb-10">
         <SettingsPageHeader
-          kicker="Premium"
+          kicker="Gold"
           title="Travel mode"
-          subtitle="Explore another city as if you were there — a Premium feature on LinkUp."
+          subtitle="Explore another city as if you were there with Gold Explorer on LinkUp."
         />
         <div className="rounded-3xl p-[2px] linkup-gradient-primary shadow-lg">
           <div className="rounded-[22px] bg-white px-6 py-8 text-center">
@@ -113,10 +112,10 @@ export function TravelModeScreen() {
               ))}
             </ul>
             <Link
-              href="/premium"
+              href="/subscription?tier=GOLD"
               className="mt-8 inline-flex min-h-[48px] items-center justify-center rounded-full linkup-gradient-primary px-8 text-[15px] font-extrabold text-white shadow-md"
             >
-              Upgrade to Premium
+              Upgrade to Gold
             </Link>
           </div>
         </div>
@@ -127,7 +126,7 @@ export function TravelModeScreen() {
   return (
     <div className="space-y-8 pb-10">
       <SettingsPageHeader
-        kicker="Premium"
+        kicker="Gold"
         title="Travel mode"
         subtitle="Set a temporary city pin. Discover and distances follow it until you turn it off."
       />

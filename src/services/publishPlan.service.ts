@@ -4,6 +4,7 @@ import {
   moodNegotiationExpiresAt,
   type MoodListingHours,
 } from '@/lib/plans/moodPlanComputations';
+import { validateMultiCitySelection } from '@/lib/plans/nigerianCities';
 import { MIN_ESCROW_CENTS } from '@/lib/plans/planFinancialConfig';
 import type { EscrowPattern } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -17,7 +18,7 @@ export type PublishPlanDraft = {
   longitude: number | null;
   scheduledAt: Date;
   durationMinutes: number | null;
-  visibility: 'public' | 'radius' | 'friends';
+  visibility: 'public' | 'radius' | 'friends' | 'premium';
   isPaid: boolean;
   startingPriceNgn: string;
   escrowPattern: EscrowPattern | null;
@@ -27,6 +28,13 @@ export type PublishPlanDraft = {
   moodListingHours: MoodListingHours;
   spotlightBoost: boolean;
   premiumSubscriber: boolean;
+  hideFromDiscovery?: boolean;
+  isGroupPlan?: boolean;
+  maxGuests?: number | null;
+  maxFreeGuests?: number | null;
+  maxPremiumGuests?: number | null;
+  multiCity?: boolean;
+  cityIds?: string[];
 };
 
 export function validatePublishDraft(draft: PublishPlanDraft): string | null {
@@ -41,6 +49,11 @@ export function validatePublishDraft(draft: PublishPlanDraft): string | null {
     if (!draft.startingPriceNgn.trim() || Number.isNaN(n)) return 'Enter a valid price in NGN.';
     if (cents < MIN_ESCROW_CENTS) return `Minimum paid plan amount is ₦${MIN_ESCROW_CENTS / 100}.`;
     if (!draft.escrowPattern) return 'Pick who funds the commitment (host, split, or guest).';
+  }
+
+  if (draft.isGroupPlan && draft.multiCity) {
+    const cityErr = validateMultiCitySelection(draft.cityIds ?? []);
+    if (cityErr) return cityErr;
   }
 
   return null;
@@ -111,6 +124,13 @@ export async function publishPlan(
     negotiation_expires_at: isMoodRow ? negotiationIso : null,
     spotlight_enabled: !!draft.spotlightBoost,
     boosted_until: boostedUntilIso,
+    is_group_plan: !!draft.isGroupPlan,
+    max_free_guests: draft.isGroupPlan ? draft.maxFreeGuests ?? null : null,
+    max_premium_guests: draft.isGroupPlan ? draft.maxPremiumGuests ?? null : null,
+    max_guests: draft.isGroupPlan ? draft.maxGuests ?? null : null,
+    multi_city: draft.isGroupPlan && draft.multiCity,
+    city_ids: draft.isGroupPlan && draft.cityIds?.length ? draft.cityIds : null,
+    hide_from_discovery: !!draft.hideFromDiscovery,
   };
 
   const { data: planIdRaw, error } = await client.rpc('publish_plan', { payload: insertRow });

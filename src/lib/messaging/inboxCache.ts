@@ -1,3 +1,5 @@
+import { markConversationReadDefault } from '@/lib/messaging/conversationReads';
+
 const KEY = 'linkup/inbox_last_read_v1';
 
 export function getLastReadMap(): Record<string, string> {
@@ -12,9 +14,17 @@ export function getLastReadMap(): Record<string, string> {
   }
 }
 
-export function setConversationLastRead(conversationId: string, iso: string): void {
+export function setConversationLastRead(
+  conversationId: string,
+  iso: string,
+  messageId?: string | null
+): void {
   if (typeof window === 'undefined') return;
   const map = getLastReadMap();
-  map[conversationId] = iso;
-  localStorage.setItem(KEY, JSON.stringify(map));
+  const prev = map[conversationId];
+  if (!prev || new Date(iso) > new Date(prev)) {
+    map[conversationId] = iso;
+    localStorage.setItem(KEY, JSON.stringify(map));
+  }
+  markConversationReadDefault(conversationId, messageId ?? null);
 }

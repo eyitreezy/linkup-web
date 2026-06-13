@@ -7,9 +7,10 @@ import { cn } from '@/utils/cn';
 type Props = {
   plans: PlanFeedRow[];
   className?: string;
+  viewerUserId?: string;
 };
 
-export function MoodTimelineCarousel({ plans, className }: Props) {
+export function MoodTimelineCarousel({ plans, className, viewerUserId }: Props) {
   if (plans.length === 0) return null;
 
   return (
@@ -27,7 +28,7 @@ export function MoodTimelineCarousel({ plans, className }: Props) {
       <div className="-mx-0.5 flex gap-2.5 overflow-x-auto pb-2 scrollbar-none min-[360px]:-mx-1 min-[360px]:gap-3">
         {plans.map((plan) => (
           <div key={plan.id} className="w-[min(82vw,300px)] shrink-0 min-[360px]:w-[min(88vw,340px)] sm:w-[340px]">
-            <MoodPlanDiscoverPill plan={plan} />
+            <MoodPlanDiscoverPill plan={plan} viewerUserId={viewerUserId} />
           </div>
         ))}
       </div>

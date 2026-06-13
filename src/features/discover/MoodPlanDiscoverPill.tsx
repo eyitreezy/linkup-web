@@ -2,12 +2,14 @@
 
 import { MoodLiveBorder } from '@/components/discovery/MoodLiveBorder';
 import { MoodPlanCountdown } from '@/components/plans/MoodPlanCountdown';
+import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { moodDiscoverMeta } from '@/lib/plans/moodDiscoverUi';
+import { MOOD_REACH_DISPLAY } from '@/lib/plans/moodPlanTierConfig';
 import type { PlanFeedRow } from '@/services/plans.service';
 import { cn } from '@/utils/cn';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { IoHourglassOutline, IoSparkles } from 'react-icons/io5';
+import { IoGlobeOutline, IoHourglassOutline, IoSparkles } from 'react-icons/io5';
 
 function useMoodWindowLive(expiresAtIso: string | null | undefined): boolean {
   const [live, setLive] = useState(() =>
@@ -29,13 +31,18 @@ function useMoodWindowLive(expiresAtIso: string | null | undefined): boolean {
 type Props = {
   plan: PlanFeedRow;
   className?: string;
+  viewerUserId?: string;
 };
 
-export function MoodPlanDiscoverPill({ plan, className }: Props) {
+export function MoodPlanDiscoverPill({ plan, className, viewerUserId }: Props) {
   const meta = useMemo(() => moodDiscoverMeta(plan), [plan]);
   const name = plan.creator?.display_name?.trim() || 'Host';
   const avatar = plan.creator?.avatar_url;
   const isLive = useMoodWindowLive(plan.mood_expires_at);
+  const isOwnPlan = !!(viewerUserId && plan.creator_id === viewerUserId);
+  const boosted = isPlanBoostActive(plan.boosted_until);
+  const reachLabel =
+    isOwnPlan && plan.mood_reach ? MOOD_REACH_DISPLAY[plan.mood_reach] ?? plan.mood_reach : null;
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -49,6 +56,13 @@ export function MoodPlanDiscoverPill({ plan, className }: Props) {
           className="pointer-events-none absolute inset-0 bg-gradient-to-r from-primary/5 via-secondary/5 to-transparent"
           aria-hidden
         />
+        {boosted ? (
+          <span className="pointer-events-none absolute right-2 top-2 z-10" aria-hidden>
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full linkup-gradient-primary text-[10px] font-extrabold leading-none text-white">
+              ⚡
+            </span>
+          </span>
+        ) : null}
         <Link
           href={`/plan/${plan.id}`}
           className={cn(
@@ -75,6 +89,12 @@ export function MoodPlanDiscoverPill({ plan, className }: Props) {
                   {plan.title}
                 </p>
                 <p className="truncate text-[13px] font-semibold text-muted">{name}</p>
+                {reachLabel ? (
+                  <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-muted">
+                    <IoGlobeOutline size={12} />
+                    {reachLabel}
+                  </p>
+                ) : null}
               </div>
               {plan.mood_expires_at ? (
                 <div className="flex shrink-0 items-center gap-1.5 rounded-xl border border-secondary/20 bg-secondary/5 px-2.5 py-1.5">

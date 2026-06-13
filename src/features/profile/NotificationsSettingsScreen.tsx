@@ -3,7 +3,10 @@
 import { FormCard } from '@/components/settings/FormCard';
 import { SettingsPageHeader } from '@/components/settings/SettingsPageHeader';
 import { ToggleRow } from '@/components/settings/ToggleRow';
+import { TierBadge } from '@/components/subscription/TierBadge';
+import { useGatedAction } from '@/contexts/UpgradeGateContext';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
+import { usePermission } from '@/hooks/usePermission';
 import { defaultVisibilityPrefs, readVisibilityFromProfile } from '@/lib/presence/visibilityPrefs';
 import { createClient } from '@/lib/supabase/client';
 import { fetchUserProfileBundle } from '@/services/profile.service';
@@ -24,6 +27,8 @@ export function NotificationsSettingsScreen() {
   const [shareTyping, setShareTyping] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const runGated = useGatedAction();
+  const { allowed: hasReadReceipts } = usePermission('messaging.read_receipts');
 
   const { data, isLoading } = useQuery({
     queryKey: ['profile-bundle', user?.id],
@@ -166,14 +171,27 @@ export function NotificationsSettingsScreen() {
             patch({ showLastSeen: v });
           }}
         />
-        <ToggleRow
-          label="Read receipts"
-          checked={readReceipts}
-          onChange={(v) => {
-            setReadReceipts(v);
-            patch({ readReceipts: v });
-          }}
-        />
+        {hasReadReceipts ? (
+          <ToggleRow
+            label="Read receipts"
+            checked={readReceipts}
+            onChange={(v) => {
+              setReadReceipts(v);
+              patch({ readReceipts: v });
+            }}
+          />
+        ) : (
+          <Link
+            href="/subscription"
+            className="flex items-center justify-between border-t border-border/60 py-4 first:border-t-0"
+          >
+            <div>
+              <p className="text-[15px] font-extrabold text-foreground">Read receipts</p>
+              <p className="mt-0.5 text-[13px] font-semibold text-muted">Available on Silver and above</p>
+            </div>
+            <TierBadge tier="SILVER" size="sm" />
+          </Link>
+        )}
         <ToggleRow
           label="Typing indicator"
           checked={shareTyping}

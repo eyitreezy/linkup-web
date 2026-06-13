@@ -1,7 +1,5 @@
-import { PremiumSuccessScreen } from '@/features/premium/PremiumSuccessScreen';
+import { redirect } from 'next/navigation';
 
-export const metadata = { title: 'Premium activated' };
-
-export default function PremiumSuccessPage() {
-  return <PremiumSuccessScreen />;
+export default function PremiumSuccessRedirectPage() {
+  redirect('/subscription');
 }

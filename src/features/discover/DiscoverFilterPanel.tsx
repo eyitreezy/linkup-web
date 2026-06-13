@@ -7,9 +7,14 @@ import {
 } from '@/lib/discovery/feedFilters';
 import type { DiscoveryMood } from '@/lib/discovery/moodFilter';
 import { cn } from '@/utils/cn';
+import { TierBadge } from '@/components/subscription/TierBadge';
+import { useGatedAction, useUpgradeGate } from '@/contexts/UpgradeGateContext';
+import { effectiveDiscoveryRadiusKm } from '@/lib/plans/discoveryRadius';
+import { TIER_META } from '@/lib/subscription/constants';
+import type { SubscriptionTier } from '@/lib/subscription/types';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { IoFunnel, IoLockClosed } from 'react-icons/io5';
+import { IoFunnel, IoLockClosed, IoNavigateOutline } from 'react-icons/io5';
 
 const MOODS: { id: DiscoveryMood; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -29,7 +34,10 @@ type Props = {
   filter: FeedFilterState;
   mood: DiscoveryMood;
   baseRadiusKm: number;
-  isPremium: boolean;
+  browseRadiusKm?: number;
+  hasWiderRadius?: boolean;
+  effectiveTier?: SubscriptionTier;
+  advancedFiltersAllowed: boolean;
   onApply: (filter: FeedFilterState, mood: DiscoveryMood) => void;
   /** Inside ContextPanel Discover filter rail — no card chrome or duplicate title. */
   embedded?: boolean;
@@ -44,7 +52,10 @@ export function DiscoverFilterPanel({
   filter,
   mood,
   baseRadiusKm,
-  isPremium,
+  browseRadiusKm = baseRadiusKm,
+  hasWiderRadius = false,
+  effectiveTier = 'FREE',
+  advancedFiltersAllowed,
   onApply,
   embedded,
   sheet,
@@ -56,6 +67,8 @@ export function DiscoverFilterPanel({
   const [minPriceText, setMinPriceText] = useState(() => formatFilterPriceMajor(filter.minPriceCents));
   const [maxPriceText, setMaxPriceText] = useState(() => formatFilterPriceMajor(filter.maxPriceCents));
   const [priceError, setPriceError] = useState<string | null>(null);
+  const { checkFeaturePermission } = useUpgradeGate();
+  const runGated = useGatedAction();
 
   useEffect(() => {
     setDraft(filter);
@@ -64,26 +77,35 @@ export function DiscoverFilterPanel({
     setMaxPriceText(formatFilterPriceMajor(filter.maxPriceCents));
   }, [filter, mood]);
 
-  function apply() {
+  async function apply() {
     const minPriceCents = parseFilterPriceMajor(minPriceText);
     const maxPriceCents = parseFilterPriceMajor(maxPriceText);
     if (minPriceCents != null && maxPriceCents != null && minPriceCents > maxPriceCents) {
       setPriceError('Minimum price cannot be higher than maximum.');
       return;
     }
+    const usesAdvanced =
+      minPriceCents != null ||
+      maxPriceCents != null ||
+      draft.hostPresence !== 'all' ||
+      draft.verifiedHostsOnly;
+    if (usesAdvanced && !advancedFiltersAllowed) {
+      const { allowed } = await checkFeaturePermission('discover.advanced_filters');
+      if (!allowed) return;
+    }
     setPriceError(null);
     const next: FeedFilterState = {
       maxDistanceKm: draft.maxDistanceKm,
       minPriceCents,
       maxPriceCents,
-      verifiedHostsOnly: isPremium ? draft.verifiedHostsOnly : false,
+      verifiedHostsOnly: advancedFiltersAllowed ? draft.verifiedHostsOnly : false,
       hostPresence: draft.hostPresence,
       clientFiltersActive: isDiscoverFilterConstraintActive(
         {
           maxDistanceKm: draft.maxDistanceKm,
           minPriceCents,
           maxPriceCents,
-          verifiedHostsOnly: isPremium ? draft.verifiedHostsOnly : false,
+          verifiedHostsOnly: advancedFiltersAllowed ? draft.verifiedHostsOnly : false,
           hostPresence: draft.hostPresence,
         },
         baseRadiusKm
@@ -91,6 +113,14 @@ export function DiscoverFilterPanel({
     };
     onApply(next, draftMood);
     onApplied?.();
+  }
+
+  async function onVerifiedHostsChange(checked: boolean) {
+    if (checked && !advancedFiltersAllowed) {
+      const { allowed } = await checkFeaturePermission('discover.advanced_filters');
+      if (!allowed) return;
+    }
+    setDraft((d) => ({ ...d, verifiedHostsOnly: checked }));
   }
 
   function reset() {
@@ -160,7 +190,7 @@ export function DiscoverFilterPanel({
         <input
           type="range"
           min={5}
-          max={200}
+          max={Math.max(200, browseRadiusKm, baseRadiusKm, draft.maxDistanceKm)}
           step={5}
           value={draft.maxDistanceKm}
           onChange={(e) =>
@@ -168,6 +198,24 @@ export function DiscoverFilterPanel({
           }
           className="w-full accent-primary"
         />
+        {hasWiderRadius && effectiveTier !== 'FREE' ? (
+          <p className="mt-1 text-[11px] font-semibold text-muted">
+            Your {TIER_META[effectiveTier].label} subscription extends your reach to{' '}
+            <span className="font-extrabold text-foreground">
+              {effectiveDiscoveryRadiusKm(baseRadiusKm, effectiveTier, true)} km
+            </span>
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => runGated('discover.wider_radius', () => {})}
+            className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-muted transition hover:text-foreground"
+          >
+            <IoNavigateOutline size={14} className="text-primary" />
+            Wider reach available on Silver
+            <TierBadge tier="SILVER" size="sm" />
+          </button>
+        )}
         <p className="mt-1 text-[11px] font-semibold text-muted">
           Uses your profile location when plans have map coordinates.
         </p>
@@ -224,26 +272,25 @@ export function DiscoverFilterPanel({
 
       <label
         className={cn(
-          'flex items-center justify-between gap-3 rounded-xl border px-3 py-3',
-          isPremium ? 'border-border' : 'border-border bg-[#F9FAFB] opacity-80'
+          'flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-3',
+          advancedFiltersAllowed ? 'border-border' : 'border-border bg-[#F9FAFB]'
         )}
       >
         <span className="text-[13px] font-extrabold text-foreground">Verified hosts only</span>
         <input
           type="checkbox"
           checked={draft.verifiedHostsOnly}
-          disabled={!isPremium}
-          onChange={(e) => setDraft((d) => ({ ...d, verifiedHostsOnly: e.target.checked }))}
-          className="h-5 w-5 accent-primary"
+          onChange={(e) => void onVerifiedHostsChange(e.target.checked)}
+          className="relative z-10 h-5 w-5 shrink-0 cursor-pointer accent-primary"
         />
       </label>
-      {!isPremium ? (
+      {!advancedFiltersAllowed ? (
         <p className="-mt-3 text-[11px] font-semibold text-muted">
           <IoLockClosed className="mr-1 inline" size={12} />
-          <Link href="/premium" className="font-extrabold text-primary underline">
-            Go Premium
+          <Link href="/subscription?tier=SILVER" className="font-extrabold text-primary underline">
+            Upgrade to Silver
           </Link>{' '}
-          to filter verified hosts only.
+          for advanced filters.
         </p>
       ) : null}
 

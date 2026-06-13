@@ -4,7 +4,7 @@ function isPlanSubRoute(pathname: string): boolean {
 }
 
 export function isPremiumRoute(pathname: string): boolean {
-  return pathname === '/premium' || pathname.startsWith('/premium/');
+  return pathname === '/subscription' || pathname.startsWith('/subscription/');
 }
 
 export function isAdminRoute(pathname: string): boolean {
