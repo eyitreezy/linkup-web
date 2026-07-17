@@ -5,6 +5,8 @@ import {
   type OfferDashboardRow,
   type OfferDisplayStatus,
 } from '@/services/offers.service';
+import { planIsPastNegotiation, resolvePlanAgreementHref } from '@/lib/plans/planAgreementRoute';
+import { planNegotiateHref } from '@/lib/plans/negotiateRoute';
 import { cn } from '@/utils/cn';
 import Link from 'next/link';
 import { IoCheckmarkCircle, IoChevronForward } from 'react-icons/io5';
@@ -46,16 +48,20 @@ type Props = {
 export function OfferListCard({ row, mode, busy, onAccept, onReject }: Props) {
   const { offer, plan, otherName, otherAvatarUrl, otherVerified } = row;
   const display = getOfferDisplayStatus(offer);
+  const pastNegotiation = display === 'accepted' || planIsPastNegotiation(plan.status);
+  const agreementHref = resolvePlanAgreementHref(plan, { offerId: offer.id });
+  const negotiateHref = planNegotiateHref(plan.id, { offerId: offer.id });
+  const detailHref = pastNegotiation ? agreementHref : negotiateHref;
+  const counterHref = planNegotiateHref(plan.id, { offerId: offer.id, action: 'counter' });
   const ts = new Date(offer.created_at).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
   });
+  const amountCents = offer.current_amount_cents ?? offer.amount_cents;
   const amount =
-    offer.amount_cents != null
-      ? `₦${(offer.amount_cents / 100).toLocaleString()}`
-      : 'Open amount';
+    amountCents != null ? `₦${(amountCents / 100).toLocaleString()}` : 'Open amount';
   const canActHost = mode === 'received' && display === 'pending' && !!onAccept && !!onReject;
   const initial = otherName.charAt(0).toUpperCase();
 
@@ -73,7 +79,7 @@ export function OfferListCard({ row, mode, busy, onAccept, onReject }: Props) {
           <span className="text-[11px] font-bold tabular-nums text-muted min-[360px]:text-[12px]">{ts}</span>
         </div>
 
-        <Link href={`/plan/${plan.id}`} className="block transition hover:opacity-95">
+        <Link href={detailHref} className="block transition hover:opacity-95">
           <h3 className="font-display text-base font-extrabold leading-snug text-foreground line-clamp-2 min-[360px]:text-lg">
             {plan.title}
           </h3>
@@ -104,9 +110,9 @@ export function OfferListCard({ row, mode, busy, onAccept, onReject }: Props) {
             </p>
           </div>
           <Link
-            href={`/plan/${plan.id}`}
+            href={detailHref}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#EDE8FF]/80 text-primary"
-            aria-label="Open plan"
+            aria-label={pastNegotiation ? 'Open agreement' : 'Open manage offers'}
           >
             <IoChevronForward size={18} />
           </Link>
@@ -131,12 +137,26 @@ export function OfferListCard({ row, mode, busy, onAccept, onReject }: Props) {
               Decline
             </button>
             <Link
-              href={`/plan/${plan.id}`}
+              href={counterHref}
               className="flex min-h-[44px] w-full items-center justify-center rounded-full border border-primary/25 bg-[#EDE8FF]/50 py-2.5 text-center text-[13px] font-extrabold text-primary"
             >
               Counter / negotiate
             </Link>
           </div>
+        ) : mode === 'sent' && display === 'pending' ? (
+          <Link
+            href={detailHref}
+            className="mt-4 block text-center text-[13px] font-semibold text-primary"
+          >
+            {pastNegotiation ? 'View agreement' : 'Tap to open negotiation'}
+          </Link>
+        ) : pastNegotiation ? (
+          <Link
+            href={agreementHref}
+            className="mt-4 block text-center text-[13px] font-semibold text-primary"
+          >
+            View agreement
+          </Link>
         ) : null}
       </div>
     </article>

@@ -5,7 +5,9 @@ import { QuotaPipRow } from '@/components/subscription/QuotaPipRow';
 import { TierBadge } from '@/components/subscription/TierBadge';
 import { useGatedAction } from '@/contexts/UpgradeGateContext';
 import { activatePlanBoost, hasLegacyBoostCredit } from '@/lib/premium/boostPlan';
+import { RADIUS_VISIBILITY_KM } from '@/lib/plans/planVisibilityConfig';
 import { createClient } from '@/lib/supabase/client';
+import { resolveClientEffectiveTier } from '@/lib/subscription/effectiveTier';
 import {
   boost24Label,
   boost72Label,
@@ -14,7 +16,7 @@ import {
   type BoostQuotaMeta,
 } from '@/lib/subscription/boostQuota';
 import { clearPermissionCache } from '@/hooks/usePermission';
-import type { DbUser } from '@/types/database';
+import type { DbPlan, DbUser } from '@/types/database';
 import { cn } from '@/utils/cn';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -38,6 +40,8 @@ type Props = {
   canBoost72: boolean;
   boost24Meta?: BoostQuotaMeta;
   boost72Meta?: BoostQuotaMeta;
+  planVisibility?: DbPlan['visibility'];
+  boostRadiusKm?: number | null;
   onBoosted: () => void;
   onRefreshPermissions?: () => void;
 };
@@ -57,6 +61,8 @@ export function PlanBoostControls({
   canBoost72,
   boost24Meta,
   boost72Meta,
+  planVisibility,
+  boostRadiusKm,
   onBoosted,
   onRefreshPermissions,
 }: Props) {
@@ -78,6 +84,10 @@ export function PlanBoostControls({
   const boost72Monthly = boost72Meta?.boosts_72hr_monthly;
   const boost24Unlimited = boost24Monthly === -1;
   const boost72Unlimited = boost72Monthly === -1;
+  const creatorTier = resolveClientEffectiveTier(dbUser);
+  const showGoldPremiumBoostNote =
+    creatorTier === 'GOLD' && planVisibility === 'premium' && !boosted;
+  const boostRadiusLabel = boostRadiusKm ?? RADIUS_VISIBILITY_KM;
 
   const disabled24 =
     moodClosed || busy || boosted || !canUse24 || (canBoost24 && boost24Exhausted);
@@ -165,6 +175,13 @@ export function PlanBoostControls({
             </span>
           </span>
         </button>
+      ) : null}
+
+      {showGoldPremiumBoostNote ? (
+        <p className="col-span-full text-[12px] font-semibold text-muted">
+          While boosted, Platinum members within {boostRadiusLabel}km will also be able to discover
+          this plan.
+        </p>
       ) : null}
 
       {canUse24 ? (

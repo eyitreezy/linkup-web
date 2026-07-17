@@ -15,8 +15,11 @@ export type PlanStatus =
 export type OfferStatus =
   | 'pending'
   | 'countered'
+  | 'countered_by_host'
+  | 'countered_by_guest'
   | 'accepted'
   | 'declined'
+  | 'withdrawn'
   | 'superseded'
   | 'expired';
 export type EscrowStatus =
@@ -174,6 +177,8 @@ export interface DbProfile {
 export type EscrowPattern = 'A' | 'B' | 'C';
 export type BudgetTier = 'low' | 'mid' | 'high';
 
+export type MeetTypeApprovalStatus = 'pending' | 'approved' | 'rejected';
+
 export interface DbMeetType {
   id: string;
   name: string;
@@ -188,8 +193,16 @@ export interface DbMeetType {
   sort_order: number;
   is_active: boolean;
   created_at: string;
+  /** Short picker subtitle; null for legacy catalog rows. */
+  description?: string | null;
+  /** Public Storage URL for catalog tile cover; legacy rows use slug → bundled assets. */
+  meet_type_images?: string | null;
   /** Set when the row is created by a user (custom type); catalog seeds use null. */
   created_by?: string | null;
+  /** Admin catalog rows — not editable by regular users. */
+  is_admin_managed?: boolean;
+  /** User custom types: pending until admin approves (catalog defaults to approved). */
+  approval_status?: MeetTypeApprovalStatus;
 }
 
 export interface DbPlan {
@@ -206,10 +219,15 @@ export interface DbPlan {
   /** Hidden from discovery feeds when moderation escalates */
   is_suppressed?: boolean;
   boosted_until: string | null;
+  /** Gold-creator boost audience expansion radius (km) for premium visibility. */
+  boost_radius_km?: number | null;
   scheduled_at: string | null;
   location_label: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** Meetup pin stamped at publish — preferred for distance eligibility and ranking. */
+  meetup_latitude?: number | null;
+  meetup_longitude?: number | null;
   accepted_offer_id: string | null;
   /** Snapshot at accept — PL6a confirmation uses these. */
   agreed_price_cents: number | null;
@@ -245,6 +263,19 @@ export interface DbPlan {
   host_tier_rank?: number | null;
   is_group_plan?: boolean;
   max_guests?: number | null;
+  accepted_guest_count?: number;
+  /** Group dynamic split: sum of accepted guest offer amounts (kobo). */
+  accepted_guest_amounts_sum_cents?: number | null;
+  /** Group dynamic split: suggested per-slot share for new offers (kobo). */
+  current_suggested_share_cents?: number | null;
+  /** Group dynamic split: plan total commitment (kobo); falls back to starting_price_cents. */
+  total_amount_cents?: number | null;
+  /** Group dynamic split: when host closed the group to new guests. */
+  group_closed_at?: string | null;
+  /** Group dynamic split: host leg escrow row after close. */
+  host_escrow_id?: string | null;
+  /** When false on paid split/guest-funded plans, guests request to join at formula price. Default true. */
+  is_negotiable?: boolean;
   max_free_guests?: number | null;
   max_premium_guests?: number | null;
   multi_city?: boolean | null;
@@ -270,17 +301,62 @@ export interface DbMessage {
   created_at: string;
 }
 
+export type JoinRequestStatus = 'pending' | 'approved' | 'declined';
+
+export interface DbPlanJoinRequest {
+  id: string;
+  plan_id: string;
+  requester_id: string;
+  status: JoinRequestStatus;
+  message: string | null;
+  created_at: string;
+  updated_at: string;
+  responded_at: string | null;
+}
+
+export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'expired' | 'cancelled';
+
+export interface DbPlanInvitation {
+  id: string;
+  plan_id: string;
+  host_id: string;
+  invitee_user_id: string | null;
+  invitee_email: string | null;
+  invitation_token: string;
+  status: InvitationStatus;
+  slot_held: boolean;
+  created_at: string;
+  expires_at: string;
+  responded_at: string | null;
+}
+
 export interface DbPlanOffer {
   id: string;
   plan_id: string;
   bidder_id: string;
   amount_cents: number | null;
+  current_amount_cents?: number | null;
   message: string | null;
   status: OfferStatus;
+  last_action_by?: 'host' | 'guest' | null;
+  awaiting_response_from?: 'host' | 'guest' | null;
   round: number;
   expires_at: string | null;
   proposed_scheduled_at: string | null;
   proposed_location: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface DbPlanOfferRound {
+  id: string;
+  offer_id: string;
+  plan_id: string;
+  proposer_id: string;
+  proposer_role: 'host' | 'guest';
+  action: 'offer' | 'counter' | 'accept' | 'decline' | 'withdraw';
+  amount_cents: number | null;
+  note: string | null;
   created_at: string;
 }
 
@@ -358,6 +434,44 @@ export interface DbReport {
   updated_at: string;
 }
 
+export interface DbNigerianBank {
+  bank_code: string;
+  bank_name: string;
+  is_active?: boolean;
+  supports_account_resolution?: boolean;
+}
+
+export interface DbUserPaymentAccount {
+  id: string;
+  user_id: string;
+  bank_code: string;
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+  is_default: boolean;
+  ndpr_consent_at: string;
+  verified_at: string;
+  created_at?: string;
+}
+
+export interface DbVirtualAccountSession {
+  id: string;
+  escrow_id: string;
+  user_id: string;
+  account_number: string;
+  bank_name: string;
+  bank_code: string;
+  amount_cents: number;
+  flutterwave_order_ref: string;
+  refund_account_id: string | null;
+  one_time_refund_bank_code: string | null;
+  one_time_refund_account_number: string | null;
+  one_time_refund_account_name: string | null;
+  status: 'pending' | 'funded' | 'expired';
+  created_at: string;
+  expires_at: string;
+}
+
 export interface DbEscrowTransaction {
   id: string;
   plan_id: string;
@@ -377,6 +491,15 @@ export interface DbEscrowTransaction {
   guest_funded_at: string | null;
   amount_cents: number;
   currency: string;
+  payment_tx_ref?: string | null;
+  flutterwave_transaction_id?: string | null;
+  funded_at?: string | null;
+  payment_method?: 'card' | 'bank_transfer' | null;
+  sender_bank_account_number?: string | null;
+  sender_bank_code?: string | null;
+  sender_bank_name?: string | null;
+  refund_account_id?: string | null;
+  refund_status?: 'not_applicable' | 'initiated' | 'completed' | null;
   paystack_reference: string | null;
   status: EscrowStatus;
   metadata: Record<string, unknown> | null;
@@ -482,6 +605,10 @@ export type NotificationPriority = 'high' | 'medium' | 'low';
 export type NotificationEventType =
   | 'offer_new'
   | 'offer_counter'
+  | 'offer_received'
+  | 'offer_countered'
+  | 'offer_accepted'
+  | 'offer_declined'
   | 'mutual_agreement'
   | 'premium_activated'
   | 'escrow_funded'
@@ -514,11 +641,25 @@ export type NotificationEventType =
   | 'trial_started'
   | 'trial_expiring'
   | 'trial_expired'
+  | 'meet_type_submitted'
+  | 'meet_type_approved'
+  | 'meet_type_rejected'
+  | 'join_request_received'
+  | 'join_request_approved'
+  | 'join_request_declined'
+  | 'plan_invitation_received'
+  | 'plan_invitation_accepted'
+  | 'plan_invitation_declined'
+  | 'plan_invitation_expired'
+  | 'escrow_funded_bank_transfer'
+  | 'refund_initiated'
   | string;
 
 /** JSON `data` for deep links — keep push payloads generic (no amounts). */
 export interface NotificationPayload {
   href?: string;
+  /** Admin dashboard tab when href is `/admin` (e.g. meet_types). */
+  adminTab?: string;
   planId?: string;
   offerId?: string;
   escrowId?: string;
@@ -681,4 +822,24 @@ export interface DbProfileView {
   viewer_id: string;
   viewed_user_id: string;
   created_at: string;
+}
+
+export type PrivacyConsentMethod = 'signup' | 're_consent';
+
+export interface DbPrivacyPolicyVersion {
+  id: string;
+  version: string;
+  content: string;
+  summary_of_changes: string | null;
+  effective_date: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface DbPrivacyPolicyConsent {
+  id: string;
+  user_id: string;
+  policy_version_id: string;
+  consented_at: string;
+  consent_method: PrivacyConsentMethod;
 }

@@ -1,10 +1,12 @@
 'use client';
 
+import { useEscrowConfirmation } from '@/hooks/useEscrowConfirmation';
+import { invokeVerifyEscrowPayment } from '@/lib/escrow/verifyEscrowPayment';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef, useState } from 'react';
-import { IoCheckmarkCircle, IoHourglassOutline, IoWalletOutline } from 'react-icons/io5';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { IoHourglassOutline } from 'react-icons/io5';
 
 function parseEscrowId(searchParams: URLSearchParams): string | null {
   const direct = searchParams.get('escrow_id');
@@ -12,7 +14,7 @@ function parseEscrowId(searchParams: URLSearchParams): string | null {
   const txRef = searchParams.get('tx_ref');
   if (!txRef) return null;
   const parts = txRef.split('_');
-  if (parts.length >= 3 && parts[0] === 'linkup' && parts[1] === 'escrow') {
+  if (parts.length >= 3 && parts[0] === 'linkup' && parts[1] === 'esc') {
     return parts[2] ?? null;
   }
   return null;
@@ -22,15 +24,45 @@ function EscrowCallbackContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const status = searchParams.get('status');
+  const txRef = searchParams.get('tx_ref');
   const escrowId = parseEscrowId(searchParams);
-  const [phase, setPhase] = useState<'processing' | 'success' | 'partial' | 'failed'>('processing');
-  const [message, setMessage] = useState('Confirming your payment with Flutterwave…');
-  const polled = useRef(false);
+  const [checkBusy, setCheckBusy] = useState(false);
+  const [planId, setPlanId] = useState<string | null>(null);
+
+  const client = useMemo(() => createClient(), []);
+
+  const confirmEnabled = status === 'successful' && !!escrowId;
+
+  const onVerified = useCallback(() => {
+    if (escrowId) {
+      router.replace(`/escrow/${escrowId}`);
+    }
+  }, [escrowId, router]);
+
+  const { status: confirmationStatus, secondsElapsed, retryVerify } = useEscrowConfirmation(
+    client,
+    escrowId ?? undefined,
+    {
+      enabled: confirmEnabled,
+      txRef,
+      onVerified,
+    }
+  );
+
+  useEffect(() => {
+    if (!escrowId) return;
+    void client
+      .from('escrow_transactions')
+      .select('plan_id')
+      .eq('id', escrowId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.plan_id) setPlanId(data.plan_id as string);
+      });
+  }, [client, escrowId]);
 
   useEffect(() => {
     if (status === 'cancelled' || status === 'failed') {
-      setPhase('failed');
-      setMessage('Payment was not completed.');
       const timer = setTimeout(() => {
         if (escrowId) router.replace(`/escrow/${escrowId}`);
         else router.replace('/offers');
@@ -38,8 +70,6 @@ function EscrowCallbackContent() {
       return () => clearTimeout(timer);
     }
     if (status && status !== 'successful') {
-      setPhase('failed');
-      setMessage('Unknown payment status.');
       const timer = setTimeout(() => {
         if (escrowId) router.replace(`/escrow/${escrowId}`);
         else router.replace('/offers');
@@ -48,56 +78,94 @@ function EscrowCallbackContent() {
     }
   }, [status, escrowId, router]);
 
-  useEffect(() => {
-    if (status !== 'successful' || !escrowId || polled.current) return;
-    polled.current = true;
-    const started = Date.now();
-    const client = createClient();
-
-    const interval = setInterval(() => {
-      void (async () => {
-        const { data } = await client
-          .from('escrow_transactions')
-          .select('status, host_funded_at, guest_funded_at, escrow_pattern')
-          .eq('id', escrowId)
-          .maybeSingle();
-        if (!data) return;
-
-        const fullyFunded = data.status === 'funded' || data.status === 'active';
-        const partial =
-          data.escrow_pattern === 'B' &&
-          (data.host_funded_at || data.guest_funded_at) &&
-          !fullyFunded;
-
-        if (fullyFunded) {
-          clearInterval(interval);
-          setPhase('success');
-          setMessage('Payment confirmed — escrow is funded and held securely.');
-          setTimeout(() => router.replace(`/escrow/${escrowId}`), 1500);
-        } else if (partial) {
-          clearInterval(interval);
-          setPhase('partial');
-          setMessage('Your share is funded — waiting for the other party.');
-          setTimeout(() => router.replace(`/escrow/${escrowId}`), 1500);
-        } else if (Date.now() - started > 30_000) {
-          clearInterval(interval);
-          setPhase('failed');
-          setMessage('Still processing — check your escrow page in a moment.');
+  async function onCheckAgain() {
+    if (!escrowId) return;
+    setCheckBusy(true);
+    try {
+      const funded = await retryVerify();
+      if (!funded) {
+        const result = await invokeVerifyEscrowPayment(client, escrowId, txRef ?? undefined);
+        if (result.funded) {
+          router.replace(`/escrow/${escrowId}`);
+        } else if (planId) {
+          router.replace(`/plan/${planId}`);
+        } else {
+          router.replace(`/support?ref=payment_delayed&escrow=${escrowId}`);
         }
-      })();
-    }, 2000);
+      }
+    } finally {
+      setCheckBusy(false);
+    }
+  }
 
-    return () => clearInterval(interval);
-  }, [status, escrowId, router]);
+  if (status === 'cancelled' || status === 'failed') {
+    return (
+      <CallbackShell
+        phase="failed"
+        title="Almost there"
+        message="Payment was not completed."
+        escrowId={escrowId}
+      />
+    );
+  }
 
-  const icon =
-    phase === 'success' ? (
-      <IoCheckmarkCircle size={40} className="text-emerald-500" />
-    ) : phase === 'partial' ? (
-      <IoWalletOutline size={40} className="text-primary" />
-    ) : phase === 'failed' ? (
-      <IoHourglassOutline size={40} className="text-amber-500" />
-    ) : null;
+  if (status && status !== 'successful') {
+    return (
+      <CallbackShell
+        phase="failed"
+        title="Almost there"
+        message="Unknown payment status."
+        escrowId={escrowId}
+      />
+    );
+  }
+
+  if (confirmationStatus === 'verified') {
+    return null;
+  }
+
+  if (confirmationStatus === 'timeout') {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background p-6">
+        <div className="linkup-card relative max-w-md overflow-hidden rounded-3xl p-8 text-center shadow-lg">
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-primary/10 to-transparent"
+            aria-hidden
+          />
+          <div className="relative flex flex-col items-center gap-4">
+            <IoHourglassOutline size={48} className="text-amber-500" />
+            <p className="text-[11px] font-extrabold uppercase tracking-wide text-secondary">
+              Secure payment
+            </p>
+            <h1 className="font-display text-2xl font-extrabold text-foreground">
+              Taking longer than expected
+            </h1>
+            <p className="text-[14px] font-semibold leading-relaxed text-muted">
+              Your payment was received by Flutterwave. We&apos;re still waiting for the
+              confirmation to reach us. This can occasionally take a minute.
+            </p>
+            <button
+              type="button"
+              onClick={() => void onCheckAgain()}
+              disabled={checkBusy}
+              className="w-full max-w-xs rounded-full linkup-gradient-primary py-3 text-[14px] font-extrabold text-white disabled:opacity-60"
+            >
+              {checkBusy ? 'Checking…' : 'Check again'}
+            </button>
+            {planId ? (
+              <button
+                type="button"
+                onClick={() => router.replace(`/plan/${planId}`)}
+                className="text-[14px] font-semibold text-muted hover:text-foreground"
+              >
+                Return to plan
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background p-6">
@@ -107,25 +175,49 @@ function EscrowCallbackContent() {
           aria-hidden
         />
         <div className="relative">
-          {phase === 'processing' ? (
             <div className="mx-auto h-14 w-14 animate-spin rounded-full border-4 border-primary/15 border-t-primary" />
-          ) : (
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EDE8FF]/80">
-              {icon}
-            </div>
-          )}
           <p className="mt-4 text-[11px] font-extrabold uppercase tracking-wide text-secondary">
             Secure payment
           </p>
-          <h1 className="mt-1 font-display text-2xl font-extrabold text-foreground">
-            {phase === 'success'
-              ? 'Funded!'
-              : phase === 'partial'
-                ? 'Share funded'
-                : phase === 'failed'
-                  ? 'Almost there'
-                  : 'Processing'}
-          </h1>
+          <h1 className="mt-1 font-display text-2xl font-extrabold text-foreground">Processing</h1>
+          <p className="mt-2 text-[14px] font-semibold leading-relaxed text-muted">
+            Your Flutterwave payment is being applied.
+            {secondsElapsed > 8
+              ? ' This is taking a moment. Please wait.'
+              : ' This usually takes a few seconds.'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CallbackShell({
+  phase,
+  title,
+  message,
+  escrowId,
+}: {
+  phase: 'failed';
+  title: string;
+  message: string;
+  escrowId: string | null;
+}) {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background p-6">
+      <div className="linkup-card relative max-w-md overflow-hidden rounded-3xl p-8 text-center shadow-lg">
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-primary/10 to-transparent"
+          aria-hidden
+        />
+        <div className="relative">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EDE8FF]/80">
+            <IoHourglassOutline size={40} className="text-amber-500" />
+            </div>
+          <p className="mt-4 text-[11px] font-extrabold uppercase tracking-wide text-secondary">
+            Secure payment
+          </p>
+          <h1 className="mt-1 font-display text-2xl font-extrabold text-foreground">{title}</h1>
           <p className="mt-2 text-[14px] font-semibold leading-relaxed text-muted">{message}</p>
           {phase === 'failed' && escrowId ? (
             <Link

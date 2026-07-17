@@ -1,5 +1,8 @@
+import { hasDiscoverPriceFilter, normalizeDiscoverPriceCents } from '@/lib/discovery/discoverPriceFilter';
+
 export type FeedFilterState = {
-  maxDistanceKm: number;
+  /** `null` = no distance cap (empty filter on load). */
+  maxDistanceKm: number | null;
   minPriceCents: number | null;
   maxPriceCents: number | null;
   verifiedHostsOnly: boolean;
@@ -17,14 +20,9 @@ type StoredFeedFilters = {
   maxPrice?: number | null;
 };
 
-function normalizePriceCents(value: unknown): number | null {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null;
-  return Math.round(value);
-}
-
-export function defaultDiscoverFeedFilter(fallbackMaxKm: number): FeedFilterState {
+export function defaultDiscoverFeedFilter(): FeedFilterState {
   return {
-    maxDistanceKm: fallbackMaxKm,
+    maxDistanceKm: null,
     minPriceCents: null,
     maxPriceCents: null,
     verifiedHostsOnly: false,
@@ -37,34 +35,55 @@ export function isDiscoverFilterConstraintActive(
   f: Pick<
     FeedFilterState,
     'maxDistanceKm' | 'minPriceCents' | 'maxPriceCents' | 'verifiedHostsOnly' | 'hostPresence'
-  >,
-  baseRadiusKm: number
+  >
 ): boolean {
+  if (f.maxDistanceKm != null) return true;
   if (f.hostPresence !== 'all') return true;
   if (f.verifiedHostsOnly) return true;
-  if (f.minPriceCents != null) return true;
-  if (f.maxPriceCents != null) return true;
-  if (f.maxDistanceKm !== baseRadiusKm) return true;
+  if (hasDiscoverPriceFilter(f)) return true;
   return false;
 }
 
-export function parseStoredFeedFilters(raw: unknown, fallbackMaxKm: number): FeedFilterState {
-  const defaults = defaultDiscoverFeedFilter(fallbackMaxKm);
+/** True when price, verified-host, or host-presence constraints are set (excludes distance). */
+export function hasAdvancedDiscoverFilters(
+  f: Pick<
+    FeedFilterState,
+    'minPriceCents' | 'maxPriceCents' | 'verifiedHostsOnly' | 'hostPresence'
+  >
+): boolean {
+  if (f.hostPresence !== 'all') return true;
+  if (f.verifiedHostsOnly) return true;
+  if (hasDiscoverPriceFilter(f)) return true;
+  return false;
+}
+
+/** True when a max-distance cap is applied to the feed. */
+export function isDistanceFilterActive(
+  filter: Pick<FeedFilterState, 'maxDistanceKm'>
+): boolean {
+  return filter.maxDistanceKm != null;
+}
+
+export function parseStoredFeedFilters(
+  raw: unknown,
+  _fallbackMaxKm: number,
+  _sliderMaxKm?: number
+): FeedFilterState {
+  const defaults = defaultDiscoverFeedFilter();
   if (!raw || typeof raw !== 'object') return defaults;
 
   const f = raw as StoredFeedFilters;
+  // Distance is never restored from profile — always empty on app load.
   const draft = {
-    maxDistanceKm:
-      typeof f.maxDistanceKm === 'number' && f.maxDistanceKm > 0 ? f.maxDistanceKm : fallbackMaxKm,
-    minPriceCents: normalizePriceCents(f.minPriceCents),
-    maxPriceCents: f.clientFiltersActive === true ? normalizePriceCents(f.maxPriceCents) : null,
+    maxDistanceKm: null,
+    minPriceCents: normalizeDiscoverPriceCents(f.minPriceCents),
+    maxPriceCents: normalizeDiscoverPriceCents(f.maxPriceCents),
     verifiedHostsOnly: !!f.verifiedHostsOnly,
     hostPresence:
       f.hostPresence === 'online' || f.hostPresence === 'offline' ? f.hostPresence : ('all' as const),
   };
 
-  const clientFiltersActive =
-    f.clientFiltersActive === true || isDiscoverFilterConstraintActive(draft, fallbackMaxKm);
+  const clientFiltersActive = isDiscoverFilterConstraintActive(draft);
 
   if (!clientFiltersActive) return defaults;
 

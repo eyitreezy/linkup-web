@@ -4,6 +4,7 @@ import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { GoodwillCreditRow } from '@/components/wallet/GoodwillCreditRow';
 import { formatNGN } from '@/lib/escrow/escrowFormatters';
+import { useWalletRealtime } from '@/hooks/useWalletRealtime';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import type { DbGoodwillCredit, DbWalletLedgerRow } from '@/types/database';
@@ -29,6 +30,8 @@ function sourcePretty(source: string): string {
 
 export function WalletScreen() {
   const user = useAuthStore((s) => s.user);
+
+  useWalletRealtime(user?.id);
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['wallet', user?.id],

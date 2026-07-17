@@ -2,7 +2,7 @@
 
 import { cn } from '@/utils/cn';
 import { IoAddCircleOutline, IoArrowUp } from 'react-icons/io5';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { useRef } from 'react';
 
 export type MessageComposerLook = {
@@ -29,6 +29,9 @@ type Props = {
   /** Replaces attach on mobile (e.g. + toggle for tools). */
   leadingSlot?: ReactNode;
   hideAttachButton?: boolean;
+  inputRef?: RefObject<HTMLTextAreaElement | null>;
+  placeholder?: string;
+  onSelectionChange?: (start: number, end: number) => void;
 };
 
 export function MessageComposer({
@@ -42,6 +45,9 @@ export function MessageComposer({
   compact,
   leadingSlot,
   hideAttachButton,
+  inputRef,
+  placeholder,
+  onSelectionChange,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const canSend = value.trim().length > 0 && !sending && !disabled;
@@ -79,9 +85,10 @@ export function MessageComposer({
           </button>
         ) : null}
         <textarea
+          ref={inputRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Message…"
+          placeholder={placeholder ?? 'Message…'}
           rows={1}
           maxLength={4000}
           disabled={sending || disabled}
@@ -106,6 +113,18 @@ export function MessageComposer({
               e.preventDefault();
               if (canSend) onSend();
             }
+          }}
+          onSelect={(e) => {
+            const target = e.currentTarget;
+            onSelectionChange?.(target.selectionStart ?? 0, target.selectionEnd ?? 0);
+          }}
+          onClick={(e) => {
+            const target = e.currentTarget;
+            onSelectionChange?.(target.selectionStart ?? 0, target.selectionEnd ?? 0);
+          }}
+          onKeyUp={(e) => {
+            const target = e.currentTarget;
+            onSelectionChange?.(target.selectionStart ?? 0, target.selectionEnd ?? 0);
           }}
         />
         <button

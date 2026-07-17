@@ -13,6 +13,7 @@ import {
   fetchSentOffers,
   type OfferDashboardRow,
 } from '@/services/offers.service';
+import { useOffersDashboardRealtime } from '@/hooks/useOffersRealtime';
 import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/utils/cn';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -29,6 +30,8 @@ export function OffersDashboard() {
   const queryClient = useQueryClient();
   const [segment, setSegment] = useState<Segment>('sent');
   const [busyOfferId, setBusyOfferId] = useState<string | null>(null);
+
+  useOffersDashboardRealtime(user?.id);
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['offers-dashboard', user?.id],
@@ -79,17 +82,17 @@ export function OffersDashboard() {
       return;
     }
     void queryClient.invalidateQueries({ queryKey: ['offers-dashboard'] });
-    router.push(`/plan/${row.plan.id}`);
+    router.push(`/plan/${row.plan.id}/agreement`);
   }
 
   async function handleReject(row: OfferDashboardRow) {
     if (!window.confirm('Decline this offer? The guest will see it as declined.')) return;
     setBusyOfferId(row.offer.id);
     const client = createClient();
-    const { error: err } = await client
-      .from('plan_offers')
-      .update({ status: 'declined' })
-      .eq('id', row.offer.id);
+    const { error: err } = await client.rpc('host_respond_to_offer', {
+      p_offer_id: row.offer.id,
+      p_action: 'decline',
+    });
     setBusyOfferId(null);
     if (err) window.alert(err.message);
     else void queryClient.invalidateQueries({ queryKey: ['offers-dashboard'] });
@@ -112,7 +115,7 @@ export function OffersDashboard() {
         <TabPageHeader
           kicker="Negotiations"
           title="Offers"
-          description="Proposals you&apos;ve sent and offers on your plans — synced with the mobile app."
+          description="Proposals you&apos;ve sent and offers on your plans, synced with the mobile app."
           icon={<IoPricetag size={22} />}
         />
         {total > 0 ? (
@@ -179,7 +182,7 @@ export function OffersDashboard() {
           description={
             segment === 'sent'
               ? 'When you negotiate on a plan, every round you send appears here with status and timing.'
-              : 'When someone wants in on your plan, their offer lands here — accept to move to agreement.'
+              : 'When someone wants in on your plan, their offer lands here. Accept to move to agreement.'
           }
           action={{ label: 'Browse Discover', href: '/discover' }}
           secondaryAction={

@@ -1,13 +1,13 @@
 'use client';
 
 import { cn } from '@/utils/cn';
-import { IoCheckmarkCircle, IoCloseCircle } from 'react-icons/io5';
+import { IoCheckmarkCircle, IoCloseCircle, IoInformationCircleOutline } from 'react-icons/io5';
 
 type Props = {
   open: boolean;
   title: string;
   message: string;
-  variant?: 'success' | 'error';
+  variant?: 'success' | 'error' | 'info';
   buttonLabel?: string;
   onClose: () => void;
 };
@@ -23,6 +23,7 @@ export function AppStatusDialog({
   if (!open) return null;
 
   const isSuccess = variant === 'success';
+  const isInfo = variant === 'info';
 
   return (
     <div
@@ -40,11 +41,19 @@ export function AppStatusDialog({
           <span
             className={cn(
               'mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
-              isSuccess ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
+              isSuccess && 'bg-emerald-50 text-emerald-600',
+              variant === 'error' && 'bg-red-50 text-red-600',
+              isInfo && 'bg-primary/10 text-primary'
             )}
             aria-hidden
           >
-            {isSuccess ? <IoCheckmarkCircle size={24} /> : <IoCloseCircle size={24} />}
+            {isSuccess ? (
+              <IoCheckmarkCircle size={24} />
+            ) : isInfo ? (
+              <IoInformationCircleOutline size={24} />
+            ) : (
+              <IoCloseCircle size={24} />
+            )}
           </span>
           <div className="min-w-0 flex-1">
             <h2 id="status-dialog-title" className="font-display text-lg font-extrabold text-foreground">
@@ -59,7 +68,7 @@ export function AppStatusDialog({
             onClick={onClose}
             className={cn(
               'min-h-[44px] w-full rounded-full px-4 text-[14px] font-extrabold text-white transition hover:opacity-95',
-              isSuccess ? 'linkup-gradient-primary' : 'bg-[#EF4444]'
+              isSuccess || isInfo ? 'linkup-gradient-primary' : 'bg-[#EF4444]'
             )}
           >
             {buttonLabel}

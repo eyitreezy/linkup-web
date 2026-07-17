@@ -3,6 +3,7 @@
 import { TabIcon, type TabIconName } from '@/components/navigation/TabIcon';
 import type { NavTabItem } from '@/components/navigation/tabNavConfig';
 import { isMainNavItemActive } from '@/lib/navigation/navActive';
+import { shouldPrefetchNavRoute } from '@/lib/navigation/prefetchNav';
 import { NavItemUnreadIndicator } from '@/components/navigation/NavItemUnreadIndicator';
 import { cn } from '@/utils/cn';
 import Link from 'next/link';
@@ -64,6 +65,7 @@ export function BottomNavMoreSheet({ open, onClose, items }: Props) {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  prefetch={shouldPrefetchNavRoute(item.href)}
                   onClick={onClose}
                   className={cn(
                     'flex flex-col items-center gap-2 rounded-2xl border px-3 py-4 transition active:scale-[0.98]',

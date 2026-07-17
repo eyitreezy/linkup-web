@@ -1,6 +1,6 @@
 import { isPlanSaved, recordPlanView } from '@/lib/plans/planEngagement';
 import type { PlanFeedRow } from '@/services/plans.service';
-import type { DbPlanOffer, DbProfile } from '@/types/database';
+import type { DbPlanOffer, DbProfile, JoinRequestStatus } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type ProfileMini = Pick<
@@ -21,6 +21,9 @@ export type PlanDetailBundle = {
   profilesById: Record<string, ProfileMini>;
   saved: boolean;
   completionSelfAcked: boolean;
+  myJoinRequest: { id: string; status: JoinRequestStatus } | null;
+  availableSlots: number;
+  pendingInvitationCount: number;
 };
 
 export async function fetchPlanDetailBundle(
@@ -85,6 +88,9 @@ export async function fetchPlanDetailBundle(
 
   let saved = false;
   let completionSelfAcked = false;
+  let myJoinRequest: { id: string; status: JoinRequestStatus } | null = null;
+  let availableSlots = 0;
+  let pendingInvitationCount = 0;
 
   if (viewerId) {
     saved = await isPlanSaved(client, planId, viewerId);
@@ -100,6 +106,29 @@ export async function fetchPlanDetailBundle(
         .maybeSingle();
       completionSelfAcked = !!ack;
     }
+
+    const { data: joinReq } = await client
+      .from('plan_join_requests')
+      .select('id, status')
+      .eq('plan_id', planId)
+      .eq('requester_id', viewerId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    myJoinRequest = joinReq as { id: string; status: JoinRequestStatus } | null;
+  }
+
+  if (viewerId && feedRow.creator_id === viewerId && feedRow.is_group_plan) {
+    const [{ data: slotsRaw }, { count: pendingCount }] = await Promise.all([
+      client.rpc('get_plan_available_slots', { p_plan_id: planId }),
+      client
+        .from('plan_invitations')
+        .select('*', { count: 'exact', head: true })
+        .eq('plan_id', planId)
+        .eq('status', 'pending'),
+    ]);
+    availableSlots = typeof slotsRaw === 'number' ? slotsRaw : 0;
+    pendingInvitationCount = pendingCount ?? 0;
   }
 
   return {
@@ -109,6 +138,9 @@ export async function fetchPlanDetailBundle(
       profilesById,
       saved,
       completionSelfAcked,
+      myJoinRequest,
+      availableSlots,
+      pendingInvitationCount,
     },
     error: null,
   };

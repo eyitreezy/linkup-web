@@ -1,10 +1,14 @@
 import { PlanAgreementScreen } from '@/features/plans/PlanAgreementScreen';
 
-export const metadata = { title: 'Agreement' };
+export const metadata = { title: 'Confirm plan' };
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ offerId?: string }>;
+};
 
-export default async function PlanAgreementPage({ params }: Props) {
+export default async function PlanAgreementPage({ params, searchParams }: Props) {
   const { id } = await params;
-  return <PlanAgreementScreen planId={id} />;
+  const { offerId } = await searchParams;
+  return <PlanAgreementScreen planId={id} offerId={offerId} />;
 }

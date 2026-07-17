@@ -12,7 +12,7 @@ type Props = {
 
 /**
  * Cold-start splash overlay — minimum brand display, then hands off to the app.
- * Mirrors mobile SplashGate: 5s minimum + wait for session restore, then fade out.
+ * Mirrors mobile SplashGate: minimum brand display + wait for session restore, then fade out.
  */
 export function SplashGate({ children }: Props) {
   const { loading: authLoading } = useSession();
@@ -38,7 +38,7 @@ export function SplashGate({ children }: Props) {
       {overlayVisible ? (
         <div
           className={cn(
-            'fixed inset-0 z-[10000] transition-opacity duration-[420ms] ease-out',
+            'fixed inset-0 z-[10000] h-[100dvh] w-full transition-opacity duration-[420ms] ease-out',
             fading ? 'pointer-events-none opacity-0' : 'opacity-100'
           )}
           role="dialog"

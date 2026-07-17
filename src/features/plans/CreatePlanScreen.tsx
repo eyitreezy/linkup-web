@@ -1,5 +1,6 @@
 'use client';
 
+import { PlanBudgetFeeNotifier } from '@/components/plans/PlanBudgetFeeNotifier';
 import { GroupPlanSettingsSection } from '@/components/plans/create/GroupPlanSettingsSection';
 import {
   MeetTypeSelectorSection,
@@ -10,7 +11,7 @@ import { TierBadge } from '@/components/subscription/TierBadge';
 import { LocationSearchField } from '@/components/location/LocationSearchField';
 import { ToggleSwitch } from '@/components/settings/ToggleRow';
 import { Input } from '@/components/ui/Input';
-import { useGatedAction } from '@/contexts/UpgradeGateContext';
+import { useGatedAction, useUpgradeGate } from '@/contexts/UpgradeGateContext';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
 import { usePermission } from '@/hooks/usePermission';
 import { getMoodPlanCooldown } from '@/lib/plans/moodPlanCooldown';
@@ -26,6 +27,7 @@ import {
   MOOD_WINDOW_CAP_HOURS,
   tierForListingHours,
 } from '@/lib/plans/moodPlanTierConfig';
+import { getFourthVisibilityOptionCopy, canCreatorSelectPremiumVisibility } from '@/lib/plans/tierRelativePremiumVisibility';
 import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import { createClient } from '@/lib/supabase/client';
 import type { LocationSuggestion } from '@/lib/location/types';
@@ -41,7 +43,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { IoArrowBack, IoLocationOutline, IoLockClosed, IoShieldCheckmark, IoSparkles } from 'react-icons/io5';
+import { IoArrowBack, IoInformationCircleOutline, IoLocationOutline, IoLockClosed, IoShieldCheckmark, IoSparkles } from 'react-icons/io5';
 
 const DURATIONS = [
   { m: 30, label: '30m' },
@@ -53,16 +55,10 @@ const DURATIONS = [
 
 const MOOD_TYPES = ['Chill', 'Active', 'Social', 'Premium vibe'] as const;
 
-const VISIBILITY = [
+const VISIBILITY_BASE = [
   { value: 'public' as const, title: 'Public', description: 'Anyone on LinkUp can discover this plan.' },
-  { value: 'radius' as const, title: 'Within radius', description: 'Shown within your discovery radius.' },
+  { value: 'radius' as const, title: 'Within radius', description: 'Only visible to people within 50km of your meetup location.' },
   { value: 'friends' as const, title: 'Friends only', description: 'Connections only when friends ship.' },
-  {
-    value: 'premium' as const,
-    title: 'Gold & Platinum only',
-    description: 'Only Gold and Platinum users will see this plan.',
-    tier: 'PLATINUM' as const,
-  },
 ];
 
 const ESCROW: { id: EscrowPattern; label: string; sub: string }[] = [
@@ -113,18 +109,34 @@ export function CreatePlanScreen() {
   const [isPaid, setIsPaid] = useState(true);
   const [startingPriceNgn, setStartingPriceNgn] = useState('');
   const [escrowPattern, setEscrowPattern] = useState<EscrowPattern>('A');
+  const [isNegotiable, setIsNegotiable] = useState(true);
   const [spotlightBoost, setSpotlightBoost] = useState(false);
   const [hideFromDiscovery, setHideFromDiscovery] = useState(false);
   const [upgradeNudge, setUpgradeNudge] = useState<PublishUpgradeNudge>(null);
   const [busy, setBusy] = useState(false);
   const runGated = useGatedAction();
+  const { showUpgradePrompt } = useUpgradeGate();
   const { subscriptionState } = useSubscriptionContext();
   const { allowed: spotlightAllowed } = usePermission('spotlight.profile', { checkQuota: true });
   const { allowed: canPatternB } = usePermission('escrow.pattern_b');
   const { allowed: canPatternC } = usePermission('escrow.pattern_c');
-  const { allowed: canPremiumVisibility } = usePermission('privacy.plan_creation');
   const { effectiveTier: moodTier } = usePermission('mood_plan.activate');
   const effectiveTier = moodTier ?? subscriptionState.effectiveTier;
+  const canSelectPremiumVisibility = canCreatorSelectPremiumVisibility(effectiveTier);
+
+  const fourthOptionCopy = getFourthVisibilityOptionCopy(effectiveTier);
+  const visibilityOptions = useMemo(
+    () => [
+      ...VISIBILITY_BASE,
+      {
+        value: 'premium' as const,
+        title: fourthOptionCopy.label,
+        description: fourthOptionCopy.description,
+        tierBadge: fourthOptionCopy.tierBadge,
+      },
+    ],
+    [fourthOptionCopy]
+  );
   const windowCap = MOOD_WINDOW_CAP_HOURS[effectiveTier] ?? 24;
   const [error, setError] = useState<string | null>(null);
   const [showCityValidation, setShowCityValidation] = useState(false);
@@ -218,8 +230,12 @@ export function CreatePlanScreen() {
   }
 
   function selectVisibility(value: 'public' | 'radius' | 'friends' | 'premium') {
-    if (value === 'premium') {
-      void runGated('privacy.plan_creation', () => setVisibility('premium'));
+    if (value === 'premium' && !canSelectPremiumVisibility) {
+      showUpgradePrompt({
+        feature: 'visibility.tier_audience',
+        requiredTier: 'SILVER',
+        currentTier: effectiveTier,
+      });
       return;
     }
     setVisibility(value);
@@ -280,6 +296,7 @@ export function CreatePlanScreen() {
       maxPremiumGuests: isGroupPlan ? maxPremiumGuests : null,
       multiCity: isGroupPlan && multiCity,
       cityIds: isGroupPlan ? cityIds : [],
+      isNegotiable,
     });
     setBusy(false);
 
@@ -506,10 +523,10 @@ export function CreatePlanScreen() {
       <PremiumSectionHead title="Visibility" />
 
       <div className="space-y-2" role="radiogroup" aria-label="Plan visibility">
-        {VISIBILITY.map((opt) => {
+        {visibilityOptions.map((opt) => {
           const selected = visibility === opt.value;
           const isPremiumOpt = opt.value === 'premium';
-          const locked = isPremiumOpt && !canPremiumVisibility;
+          const locked = isPremiumOpt && !canSelectPremiumVisibility;
           return (
             <button
               key={opt.value}
@@ -529,7 +546,9 @@ export function CreatePlanScreen() {
                 <p className={cn('text-[15px] font-extrabold', selected ? 'text-primary' : 'text-foreground')}>
                   {opt.title}
                 </p>
-                {locked ? <TierBadge tier="PLATINUM" size="sm" /> : null}
+                {locked && fourthOptionCopy.tierBadge ? (
+                  <TierBadge tier={fourthOptionCopy.tierBadge} size="sm" />
+                ) : null}
                 <span
                   className={cn(
                     'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
@@ -561,6 +580,11 @@ export function CreatePlanScreen() {
                   value={startingPriceNgn}
                   onChange={(e) => setStartingPriceNgn(e.target.value)}
                   inputMode="decimal"
+                />
+                <PlanBudgetFeeNotifier
+                  budgetCents={Math.round(amountNgn * 100)}
+                  participantCount={isGroupPlan ? maxGuests + 1 : 1}
+                  isGroupPlan={isGroupPlan}
                 />
                 {amountNgn > MAX_ESCROW_TIER1_NGN ? (
                   <div className="mt-2 flex items-start gap-2 rounded-lg border border-violet-200 bg-violet-50 p-3">
@@ -604,6 +628,34 @@ export function CreatePlanScreen() {
                     );
                   })}
                 </div>
+                {(escrowPattern === 'B' || escrowPattern === 'C') ? (
+                  <div className="space-y-3 border-t border-border/60 pt-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-[15px] font-extrabold text-foreground">Allow price negotiation</p>
+                        <p className="text-[12px] font-semibold text-muted">
+                          {isNegotiable
+                            ? 'Guests can make offers and negotiate the price with you.'
+                            : 'Guests request to join at the formula price. You approve or decline each request.'}
+                        </p>
+                      </div>
+                      <ToggleSwitch
+                        id="plan-negotiable"
+                        checked={isNegotiable}
+                        onChange={setIsNegotiable}
+                      />
+                    </div>
+                    {!isNegotiable ? (
+                      <div className="flex items-start gap-2 rounded-xl border border-primary/15 bg-[#EDE8FF]/50 p-3">
+                        <IoInformationCircleOutline className="mt-0.5 shrink-0 text-primary" size={16} />
+                        <p className="text-[12px] font-semibold leading-relaxed text-primary">
+                          Guests will see the formula share price and can request to join. You will receive a
+                          notification for each request and can approve or decline.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 {patternCWarning ? (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-[13px] font-semibold text-amber-900">
                     Pattern C requires Tier 2 identity verification. Your plan will use Pattern A until Tier

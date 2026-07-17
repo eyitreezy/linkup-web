@@ -1,16 +1,25 @@
 'use client';
 
+import { MeetTypeReviewPendingModal } from '@/components/plans/MeetTypeReviewPendingModal';
 import { MeetTypeIcon } from '@/components/plans/MeetTypeIcon';
 import { AppStatusDialog } from '@/components/ui/AppStatusDialog';
 import { Input } from '@/components/ui/Input';
 import { ConfirmDialog } from '@/features/plan-management/ConfirmDialog';
 import { useGatedAction } from '@/contexts/UpgradeGateContext';
-import { inferMeetTypeIcon, isUserMeetType } from '@/lib/plans/inferMeetTypeIcon';
+import { useAdminAccess } from '@/hooks/useAdminAccess';
+import { useMeetTypesRealtime } from '@/hooks/useMeetTypesRealtime';
+import {
+  canUserManageMeetType,
+  isPendingMeetType,
+  selectableMeetTypes,
+} from '@/lib/plans/meetTypes';
+import { inferMeetTypeIcon } from '@/lib/plans/inferMeetTypeIcon';
 import { createClient } from '@/lib/supabase/client';
 import {
   createUserMeetType,
   deleteUserMeetType,
-  fetchActiveMeetTypes,
+  fetchMeetTypesForUser,
+  invokeMeetTypeEmail,
   updateUserMeetType,
 } from '@/services/meetTypes.service';
 import { useAuthStore } from '@/stores/auth-store';
@@ -34,6 +43,8 @@ type Props = {
 
 export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
   const user = useAuthStore((s) => s.user);
+  const { isAdmin } = useAdminAccess();
+  useMeetTypesRealtime(user?.id);
   const queryClient = useQueryClient();
   const runGated = useGatedAction();
   const [modalOpen, setModalOpen] = useState(false);
@@ -45,14 +56,19 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
   const [deleteTarget, setDeleteTarget] = useState<DbMeetType | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteBlockedMsg, setDeleteBlockedMsg] = useState<string | null>(null);
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewModalMode, setReviewModalMode] = useState<'submitted' | 'pending'>('pending');
+  const [reviewModalType, setReviewModalType] = useState<DbMeetType | null>(null);
 
   const { data: meetTypes, isLoading } = useQuery({
-    queryKey: ['meet-types'],
+    queryKey: ['meet-types', user?.id],
     queryFn: async () => {
-      const { rows, error } = await fetchActiveMeetTypes(createClient());
+      if (!user?.id) return [];
+      const { rows, error } = await fetchMeetTypesForUser(createClient(), user.id);
       if (error) throw new Error(error);
       return rows;
     },
+    enabled: !!user?.id,
   });
 
   const previewIcon = inferMeetTypeIcon(formName);
@@ -62,10 +78,22 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
   onSelectRef.current = onSelect;
 
   useEffect(() => {
-    if (!meetTypes?.length || meetTypeId) return;
-    const dinner = meetTypes.find((t) => t.slug === 'dinner') ?? meetTypes[0];
-    onSelectRef.current(dinner);
-  }, [meetTypes, meetTypeId]);
+    if (!meetTypes?.length || !user?.id) return;
+    const selectable = selectableMeetTypes(meetTypes, user.id);
+    if (!selectable.length) return;
+
+    const current = meetTypeId ? meetTypes.find((t) => t.id === meetTypeId) : null;
+    if (current && isPendingMeetType(current, user.id)) {
+      const fallback = selectable.find((t) => t.slug === 'dinner') ?? selectable[0];
+      onSelectRef.current(fallback);
+      return;
+    }
+
+    if (!meetTypeId) {
+      const dinner = selectable.find((t) => t.slug === 'dinner') ?? selectable[0];
+      onSelectRef.current(dinner);
+    }
+  }, [meetTypes, meetTypeId, user?.id]);
 
   function openCreateModal() {
     setEditingType(null);
@@ -90,6 +118,12 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
   }
 
   function handleSelect(mt: DbMeetType) {
+    if (isPendingMeetType(mt, user?.id)) {
+      setReviewModalType(mt);
+      setReviewModalMode('pending');
+      setReviewModalOpen(true);
+      return;
+    }
     if (mt.slug === 'group' && user?.id) {
       void runGated('group_plan.host', () => onSelect(mt));
       return;
@@ -98,7 +132,10 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
   }
 
   async function refreshMeetTypes() {
-    await queryClient.invalidateQueries({ queryKey: ['meet-types'] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['meet-types', user?.id] }),
+      queryClient.invalidateQueries({ queryKey: ['meetr-meet-types', user?.id] }),
+    ]);
   }
 
   async function handleSave() {
@@ -133,7 +170,15 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
     }
     closeModal();
     await refreshMeetTypes();
-    onSelect(row);
+    void invokeMeetTypeEmail(createClient(), {
+      type: 'meet_type_submitted',
+      meetTypeId: row.id,
+      meetTypeName: row.name,
+      creatorId: user.id,
+    });
+    setReviewModalType(row);
+    setReviewModalMode('submitted');
+    setReviewModalOpen(true);
   }
 
   async function handleConfirmDelete() {
@@ -155,9 +200,11 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
     const deletedId = deleteTarget.id;
     setDeleteTarget(null);
     await refreshMeetTypes();
-    const { rows } = await fetchActiveMeetTypes(createClient());
+    if (!user?.id) return;
+    const { rows } = await fetchMeetTypesForUser(createClient(), user.id);
+    const selectable = selectableMeetTypes(rows, user.id);
     if (meetTypeId === deletedId) {
-      const fallback = rows.find((t) => t.slug === 'dinner') ?? rows[0];
+      const fallback = selectable.find((t) => t.slug === 'dinner') ?? selectable[0];
       if (fallback) onSelect(fallback);
     }
   }
@@ -177,7 +224,8 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
         <div className="flex flex-wrap gap-2">
           {(meetTypes ?? []).map((mt) => {
             const selected = meetTypeId === mt.id;
-            const custom = isUserMeetType(mt.slug, mt.created_by);
+            const pending = isPendingMeetType(mt, user?.id);
+            const custom = canUserManageMeetType(mt, user?.id) && !pending;
             return (
               <div
                 key={mt.id}
@@ -186,7 +234,8 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
                   selected
                     ? 'linkup-gradient-primary shadow-sm'
                     : 'border border-border bg-white hover:border-primary/30',
-                  custom && !selected && 'border-dashed border-primary/35 bg-[#EDE8FF]/30'
+                  custom && !selected && 'border-dashed border-primary/35 bg-[#EDE8FF]/30',
+                  pending && 'cursor-not-allowed opacity-45'
                 )}
               >
                 <button
@@ -194,13 +243,24 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
                   onClick={() => handleSelect(mt)}
                   className={cn(
                     'inline-flex items-center gap-2 px-4 py-2 text-[13px] font-extrabold',
-                    selected ? 'text-white' : 'text-foreground'
+                    selected ? 'text-white' : 'text-foreground',
+                    pending && 'cursor-not-allowed'
                   )}
                 >
                   <MeetTypeIcon icon={mt.icon} selected={selected} size={15} />
                   {mt.name}
+                  {pending ? (
+                    <span
+                      className={cn(
+                        'rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide',
+                        selected ? 'bg-white/25 text-white' : 'bg-amber-500/15 text-amber-900'
+                      )}
+                    >
+                      Pending
+                    </span>
+                  ) : null}
                 </button>
-                {custom ? (
+                {custom && !isAdmin ? (
                   <span
                     className={cn(
                       'flex items-center gap-0.5 border-l pr-1.5 pl-0.5',
@@ -244,6 +304,7 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
               </div>
             );
           })}
+          {!isAdmin ? (
           <button
             type="button"
             onClick={openCreateModal}
@@ -252,6 +313,7 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
             <IoAddCircleOutline size={18} />
             New
           </button>
+          ) : null}
         </div>
       )}
 
@@ -356,6 +418,13 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
           </div>
         </div>
       ) : null}
+
+      <MeetTypeReviewPendingModal
+        open={reviewModalOpen}
+        onOpenChange={setReviewModalOpen}
+        meetTypeName={reviewModalType?.name ?? ''}
+        mode={reviewModalMode}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

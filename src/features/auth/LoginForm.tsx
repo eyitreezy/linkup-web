@@ -1,7 +1,7 @@
 'use client';
 
 import { AuthDivider } from '@/components/auth/AuthDivider';
-import { AuthButton, AuthInput, AuthTrustLine } from '@/components/auth/AuthFormPrimitives';
+import { AuthButton, AuthInput, AuthPasswordInput, AuthTrustLine } from '@/components/auth/AuthFormPrimitives';
 import { GoogleAuthBlock } from '@/features/auth/GoogleAuthBlock';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
@@ -64,8 +64,7 @@ function LoginFields() {
           required
         />
         <div>
-          <AuthInput
-            type="password"
+          <AuthPasswordInput
             autoComplete="current-password"
             placeholder="Password"
             value={password}

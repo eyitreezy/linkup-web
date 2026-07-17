@@ -1,7 +1,8 @@
 import { PlanDetailScreen } from '@/features/plans/PlanDetailScreen';
+import { getServerAuthUser } from '@/lib/auth/server-session';
 import { isSupabaseConfigured } from '@/lib/env';
 import { createClient } from '@/lib/supabase/server';
-import { fetchPlanById } from '@/services/plans.service';
+import { fetchPlanDetailBundle } from '@/services/planDetail.service';
 import { notFound } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
@@ -12,8 +13,8 @@ export async function generateMetadata({ params }: Props) {
   const { id } = await params;
   if (!isSupabaseConfigured) return { title: 'Plan' };
   const supabase = await createClient();
-  const { data } = await fetchPlanById(supabase, id);
-  return { title: data?.title ?? 'Plan details' };
+  const { data } = await fetchPlanDetailBundle(supabase, id, null);
+  return { title: data?.plan.title ?? 'Plan details' };
 }
 
 export default async function PlanDetailPage({ params }: Props) {
@@ -26,9 +27,14 @@ export default async function PlanDetailPage({ params }: Props) {
   }
 
   const supabase = await createClient();
-  const { data: plan, error } = await fetchPlanById(supabase, id);
+  const user = await getServerAuthUser();
+  const currentUserId = user?.id ?? null;
 
-  if (error || !plan) notFound();
+  const { data: initialBundle, error } = await fetchPlanDetailBundle(supabase, id, currentUserId);
 
-  return <PlanDetailScreen planId={id} initialPlan={plan} />;
+  if (error || !initialBundle) notFound();
+
+  return (
+    <PlanDetailScreen planId={id} currentUserId={currentUserId} initialBundle={initialBundle} />
+  );
 }

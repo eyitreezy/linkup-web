@@ -4,6 +4,7 @@ import { formatMessageTime } from '@/lib/messaging/formatMessageTime';
 import type { ReplyQuotePreview } from '@/lib/messaging/chatReply';
 import { messageDisplayText, parseLegacyImageBody } from '@/lib/messaging/messagePreview';
 import type { ResolvedChatBubbleTheme } from '@/lib/messaging/chatAppearance';
+import { MentionFormattedText } from '@/features/messages/MentionFormattedText';
 import type { ChatMessageRow } from '@/services/messages.service';
 import { cn } from '@/utils/cn';
 import { IoCheckmark, IoCheckmarkDone } from 'react-icons/io5';
@@ -27,6 +28,7 @@ type Props = {
   senderLabel?: string | null;
   isAdmin?: boolean;
   isSystem?: boolean;
+  mentionNameByUserId?: Map<string, string>;
   onOpenActions?: () => void;
   onQuotePress?: () => void;
   messageRef?: (el: HTMLDivElement | null) => void;
@@ -47,6 +49,7 @@ export function ChatMessageBubble({
   senderLabel,
   isAdmin,
   isSystem,
+  mentionNameByUserId,
   onOpenActions,
   onQuotePress,
   messageRef,
@@ -188,7 +191,11 @@ export function ChatMessageBubble({
               <span className={cn('line-clamp-2', quote.isDeleted && 'italic')}>{quote.preview}</span>
             </button>
           ) : null}
-          {text}
+          {mentionNameByUserId && text ? (
+            <MentionFormattedText body={text} nameByUserId={mentionNameByUserId} mine={mine} />
+          ) : (
+            text
+          )}
         </span>
       ) : null}
       {(text || mediaUrl) && meta ? (

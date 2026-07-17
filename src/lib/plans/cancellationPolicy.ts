@@ -158,13 +158,13 @@ export type CancellationPolicyGroup = {
 
 /** Agreement screen + shared reference table. */
 export const CANCELLATION_POLICY_TABLE_ROWS: PolicyTableRow[] = [
-  { label: 'Guest cancel (any time)', value: 'No refund — escrow to host', tone: 'warn' },
+  { label: 'Guest cancel (any time)', value: 'No refund. Escrow to host', tone: 'warn' },
   { label: 'Guest no-show', value: 'Host 100% · guest flagged', tone: 'warn' },
   { label: 'Host cancel 72h+', value: '0% guest · 100% host · warning', tone: 'ok' },
-  { label: 'Host cancel 48–72h', value: '30% guest · 70% host · 1 strike', tone: 'muted' },
-  { label: 'Host cancel 24–48h', value: '50% / 50% · 1 strike', tone: 'muted' },
+  { label: 'Host cancel 48-72h', value: '30% guest · 70% host · 1 strike', tone: 'muted' },
+  { label: 'Host cancel 24-48h', value: '50% / 50% · 1 strike', tone: 'muted' },
   { label: 'Host cancel under 24h', value: '70% guest · 30% host · 2 strikes', tone: 'warn' },
   { label: 'Host no-show', value: '100% to guest · host forfeits', tone: 'warn' },
   { label: 'Split plan (Pattern B)', value: 'Matrix on host share; guest share back on host cancel', tone: 'ok' },
-  { label: 'Mutual cancel', value: 'Both agree in-app — neutral refund path', tone: 'ok' },
+  { label: 'Mutual cancel', value: 'Both agree in-app. Neutral refund path', tone: 'ok' },
 ];

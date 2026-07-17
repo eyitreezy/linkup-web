@@ -9,6 +9,7 @@ import { PlanManagementCard } from '@/features/plan-management/PlanManagementCar
 import { usePlanManagementPage } from '@/features/plan-management/PlanManagementPageContext';
 import { PlanManagementSortFilterRail } from '@/features/plan-management/PlanManagementSortFilterRail';
 import { distanceKm } from '@/lib/location/distance';
+import { planMeetupCoords } from '@/lib/plans/planMeetupCoords';
 import {
   countBySection,
   planMatchesSection,
@@ -27,6 +28,7 @@ import {
   unarchiveCreatorPlan,
 } from '@/services/planManagement.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
+import { useCreatorPlansRealtime } from '@/hooks/useCreatorPlansRealtime';
 import { useIsMobileShellLayout } from '@/hooks/use-media-query';
 import { PlanManagementSkeleton } from '@/features/plan-management/PlanManagementSkeleton';
 import { useAuthStore } from '@/stores/auth-store';
@@ -53,6 +55,8 @@ export function PlanManagementScreen() {
   const [editPlan, setEditPlan] = useState<CreatorPlanRow | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [shelfBusy, setShelfBusy] = useState(false);
+
+  useCreatorPlansRealtime(user?.id);
 
   const { data: profileBundle } = useQuery({
     queryKey: ['profile-bundle', user?.id],
@@ -264,9 +268,10 @@ export function PlanManagementScreen() {
       ) : (
         <ul className="pm-plan-list">
           {filtered.map((p) => {
+            const meetup = planMeetupCoords(p);
             const dist =
-              userLat != null && userLng != null && p.latitude != null && p.longitude != null
-                ? distanceKm(userLat, userLng, p.latitude, p.longitude)
+              userLat != null && userLng != null && meetup
+                ? distanceKm(userLat, userLng, meetup.lat, meetup.lng)
                 : null;
             return (
               <li key={p.id} className="w-full min-w-0">

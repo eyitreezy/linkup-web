@@ -11,6 +11,7 @@ function isAuthPath(pathname: string) {
 function isProtectedAppPath(pathname: string) {
   const prefixes = [
     '/discover',
+    '/meetr',
     '/plans',
     '/plan-management',
     '/offers',

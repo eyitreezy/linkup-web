@@ -1,5 +1,6 @@
 import type { SubscriptionTier } from '@/lib/subscription/types';
 import type { MoodListingHours } from '@/lib/plans/moodPlanComputations';
+import { MOOD_REACH_LABELS as MOOD_REACH_KM_LABELS } from '@/lib/plans/moodReachFilter';
 
 export const MOOD_WINDOW_CAP_HOURS: Record<SubscriptionTier, number> = {
   FREE: 24,
@@ -9,17 +10,17 @@ export const MOOD_WINDOW_CAP_HOURS: Record<SubscriptionTier, number> = {
 };
 
 export const MOOD_REACH_LABELS: Record<SubscriptionTier, string> = {
-  FREE: 'City-wide',
-  SILVER: 'City + adjacent zones',
-  GOLD: 'Widest city reach',
-  PLATINUM: 'All active Nigerian cities',
+  FREE: MOOD_REACH_KM_LABELS.city,
+  SILVER: MOOD_REACH_KM_LABELS.city_adjacent,
+  GOLD: MOOD_REACH_KM_LABELS.city_widest,
+  PLATINUM: MOOD_REACH_KM_LABELS.all_cities,
 };
 
 export const MOOD_REACH_DISPLAY: Record<string, string> = {
-  city: 'City-wide',
-  city_adjacent: 'City + nearby',
-  city_widest: 'Widest reach',
-  all_cities: 'All cities',
+  city: MOOD_REACH_KM_LABELS.city,
+  city_adjacent: MOOD_REACH_KM_LABELS.city_adjacent,
+  city_widest: MOOD_REACH_KM_LABELS.city_widest,
+  all_cities: MOOD_REACH_KM_LABELS.all_cities,
 };
 
 export const MOOD_LISTING_OPTIONS: { h: MoodListingHours; label: string }[] = [

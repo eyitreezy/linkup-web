@@ -27,6 +27,8 @@ import {
   ticketPriorityTone,
   ticketStatusTone,
 } from '@/lib/admin/adminLabels';
+import { AdminPrivacyPolicyPanel } from '@/components/admin/AdminPrivacyPolicyPanel';
+import { AdminMeetTypesPanel } from '@/components/admin/AdminMeetTypesPanel';
 import { EscrowDisputeResolutionPanel } from '@/components/admin/EscrowDisputeResolutionPanel';
 import { AdminSupportTicketModal } from '@/components/admin/AdminSupportTicketModal';
 import { SlaDeadlineBadge } from '@/components/admin/SlaDeadlineBadge';
@@ -58,6 +60,7 @@ import {
   IoChatbubbleEllipsesOutline,
   IoChatbubblesOutline,
   IoCheckmarkDoneOutline,
+  IoDocumentTextOutline,
   IoFingerPrintOutline,
   IoFlagOutline,
   IoFlashOutline,
@@ -825,4 +828,21 @@ export function AdminPlansSection() {
       <AdminPlansPanel />
     </>
   );
+}
+
+export function AdminPrivacyPolicySection() {
+  return (
+    <>
+      <AdminSectionHeader
+        title="Privacy policy"
+        subtitle="View the current version and publish updates — new versions trigger member re-consent."
+        icon={<IoDocumentTextOutline size={22} className="text-primary" />}
+      />
+      <AdminPrivacyPolicyPanel />
+    </>
+  );
+}
+
+export function AdminMeetTypesSection() {
+  return <AdminMeetTypesPanel />;
 }

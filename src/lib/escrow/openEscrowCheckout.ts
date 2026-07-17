@@ -9,6 +9,7 @@ export type OpenEscrowCheckoutArgs = {
   escrowId: string;
   planId: string;
   escrowLeg?: 'host' | 'guest';
+  initiatedByUserId: string;
 };
 
 export async function openEscrowCheckout(args: OpenEscrowCheckoutArgs): Promise<{
@@ -58,7 +59,7 @@ export async function openEscrowCheckout(args: OpenEscrowCheckoutArgs): Promise<
     return { ok: false, error: opened.error, reference: row.tx_ref };
   }
 
-  await recordEscrowPaymentInitiated(client, args.escrowId, row.tx_ref);
+  await recordEscrowPaymentInitiated(client, args.escrowId, row.tx_ref, args.initiatedByUserId);
 
   return { ok: true, reference: row.tx_ref };
 }

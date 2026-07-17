@@ -4,7 +4,6 @@ import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { NotificationBadge } from '@/components/notifications/NotificationBadge';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { useMessagesInboxOptional } from '@/contexts/MessagesInboxContext';
-import { ChatThread } from '@/features/messages/ChatThread';
 import { GroupAvatarCell } from '@/features/messages/GroupAvatarCell';
 import { useIsMobileShellLayout } from '@/hooks/use-media-query';
 import { useInboxQuery } from '@/lib/messaging/useInboxQuery';
@@ -12,6 +11,7 @@ import { formatRelativeShort } from '@/lib/messaging/formatRelative';
 import type { InboxRow } from '@/services/messages.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/utils/cn';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef } from 'react';
 import {
@@ -23,6 +23,17 @@ import {
   IoHeartOutline,
   IoShieldCheckmarkOutline,
 } from 'react-icons/io5';
+
+const ChatThread = dynamic(
+  () => import('@/features/messages/ChatThread').then((m) => ({ default: m.ChatThread })),
+  {
+    loading: () => (
+      <p className="flex flex-1 items-center justify-center p-8 text-[14px] font-semibold text-muted">
+        Loading conversation…
+      </p>
+    ),
+  }
+);
 
 function Avatar({ url, name, ring, compact }: { url: string | null; name: string; ring?: boolean; compact?: boolean }) {
   const initial = name.charAt(0).toUpperCase();
@@ -216,7 +227,7 @@ function InboxHeader({ unreadTotal, isMobile }: { unreadTotal: number; isMobile:
         description={
           isMobile
             ? undefined
-            : 'Straightforward chats with people you&apos;re connecting with — synced with the app.'
+            : "Chat with people you're connecting with, synced with the app."
         }
         icon={<IoChatbubbles size={22} />}
         trailing={

@@ -5,4 +5,6 @@ export type AdminTabId =
   | 'plan_disputes'
   | 'support'
   | 'users'
-  | 'plans';
+  | 'plans'
+  | 'privacy_policy'
+  | 'meet_types';

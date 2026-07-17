@@ -11,7 +11,7 @@ export function DiscoverForYouRail() {
     return (
       <div className="linkup-card space-y-3 p-4 text-[13px] font-semibold leading-relaxed text-muted">
         <p className="font-extrabold text-foreground">Trust-first discovery</p>
-        <p>Verified hosts, mood filters, and escrow-backed plans — same rules as the LinkUp app.</p>
+        <p>Verified hosts, mood filters, and escrow-backed plans follow the same rules as the LinkUp app.</p>
       </div>
     );
   }
@@ -28,15 +28,15 @@ export function DiscoverForYouRail() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-[13px] font-semibold leading-relaxed text-muted">
-        Refine what shows in your feed — saved to your profile like the mobile app.
+        Refine what shows in your feed. Your filter choices are saved to your profile, just like on the
+        LinkUp app.
       </p>
       <DiscoverFilterPanel
         embedded
         filter={ctx.filter}
         mood={ctx.mood}
         baseRadiusKm={ctx.baseRadiusKm}
-        browseRadiusKm={ctx.browseRadiusKm}
-        hasWiderRadius={ctx.hasWiderRadius}
+        sliderMaxKm={ctx.sliderMaxKm}
         effectiveTier={ctx.effectiveTier}
         advancedFiltersAllowed={ctx.advancedFiltersAllowed}
         onApply={ctx.applyFilters}

@@ -21,7 +21,7 @@ export function CancellationSummaryCard({ outcome }: Props) {
       <div>
         <h3 className="font-display text-lg font-extrabold text-foreground">Cancellation policy</h3>
         <p className="mt-2 text-[14px] font-semibold leading-relaxed text-muted">
-          LinkUp applies role- and timing-based rules on the server so outcomes stay fair and predictable.
+          LinkUp applies role and timing based rules on the server so outcomes stay fair and predictable.
         </p>
       </div>
       <CancellationPolicyRows rows={CANCELLATION_POLICY_TABLE_ROWS} dense />

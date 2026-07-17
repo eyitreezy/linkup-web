@@ -4,18 +4,44 @@ export const MAX_OFFERS_PER_PLAN = 5;
 export const OFFER_TTL_MS = 24 * 60 * 60 * 1000;
 
 export function offerCountsTowardLimit(o: Pick<DbPlanOffer, 'status'>): boolean {
-  return o.status === 'pending' || o.status === 'countered';
+  return (
+    o.status === 'pending' ||
+    o.status === 'countered' ||
+    o.status === 'countered_by_host' ||
+    o.status === 'countered_by_guest'
+  );
 }
 
 export function isOfferExpired(offer: Pick<DbPlanOffer, 'status' | 'expires_at'>): boolean {
   if (offer.status === 'expired') return true;
-  if (offer.status !== 'pending' && offer.status !== 'countered') return false;
+  if (!offerCountsTowardLimit(offer)) return false;
   if (!offer.expires_at) return false;
   return new Date(offer.expires_at).getTime() < Date.now();
 }
 
 export function countOffersTowardLimit(offers: DbPlanOffer[]): number {
   return offers.filter((o) => offerCountsTowardLimit(o) && !isOfferExpired(o)).length;
+}
+
+export function countOffersTowardLimitForBidder(offers: DbPlanOffer[], bidderId: string): number {
+  return offers.filter(
+    (o) => o.bidder_id === bidderId && offerCountsTowardLimit(o) && !isOfferExpired(o)
+  ).length;
+}
+
+export function bidderHasActiveGroupSlotOffer(
+  offers: DbPlanOffer[],
+  bidderId: string
+): DbPlanOffer | undefined {
+  return offers.find(
+    (o) =>
+      o.bidder_id === bidderId &&
+      (o.status === 'pending' ||
+        o.status === 'countered' ||
+        o.status === 'countered_by_host' ||
+        o.status === 'countered_by_guest' ||
+        o.status === 'accepted')
+  );
 }
 
 export function nextOfferRound(offers: DbPlanOffer[]): number {

@@ -15,8 +15,7 @@ type Props = {
   filter: FeedFilterState;
   mood: DiscoveryMood;
   baseRadiusKm: number;
-  browseRadiusKm?: number;
-  hasWiderRadius?: boolean;
+  sliderMaxKm?: number;
   effectiveTier?: SubscriptionTier;
   advancedFiltersAllowed: boolean;
   onApply: (filter: FeedFilterState, mood: DiscoveryMood) => void;
@@ -69,8 +68,7 @@ export function DiscoverFilterSheet({
   filter,
   mood,
   baseRadiusKm,
-  browseRadiusKm,
-  hasWiderRadius,
+  sliderMaxKm,
   effectiveTier,
   advancedFiltersAllowed,
   onApply,
@@ -125,8 +123,7 @@ export function DiscoverFilterSheet({
             filter={filter}
             mood={mood}
             baseRadiusKm={baseRadiusKm}
-            browseRadiusKm={browseRadiusKm}
-            hasWiderRadius={hasWiderRadius}
+            sliderMaxKm={sliderMaxKm}
             effectiveTier={effectiveTier}
             advancedFiltersAllowed={advancedFiltersAllowed}
             onApply={onApply}

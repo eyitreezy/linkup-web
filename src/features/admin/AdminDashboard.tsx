@@ -3,28 +3,36 @@
 import { ADMIN_TAB_ICONS, AdminShell, type AdminTabId } from '@/features/admin/AdminShell';
 import {
   AdminDisputesPanel,
+  AdminMeetTypesSection,
   AdminModerationPanel,
   AdminPlansSection,
+  AdminPrivacyPolicySection,
   AdminReportsPanel,
   AdminSupportPanel,
   AdminUsersSection,
   AdminVerifyPanel,
 } from '@/features/admin/adminPanels';
+import { useAdminDashboardRealtime } from '@/hooks/useAdminDashboardRealtime';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
+import { parseAdminTabId } from '@/lib/admin/adminTabUrl';
 import { loadAdminDashboard, type AdminDashboardData } from '@/services/admin.service';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export function AdminDashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isAdmin, isLoading: adminLoading, adminRecordId } = useAdminAccess();
-  const [tab, setTab] = useState<AdminTabId>('verify');
+  const initialTab = parseAdminTabId(searchParams.get('tab')) ?? 'verify';
+  const [tab, setTab] = useState<AdminTabId>(initialTab);
   const [data, setData] = useState<AdminDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setLoading(true);
+    }
     setErr(null);
     try {
       const d = await loadAdminDashboard();
@@ -32,8 +40,13 @@ export function AdminDashboard() {
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not load admin data');
     }
-    setLoading(false);
+    if (!options?.silent) {
+      setLoading(false);
+    }
   }, []);
+
+  const loadRef = useRef(load);
+  loadRef.current = load;
 
   useEffect(() => {
     if (!adminLoading && !isAdmin) {
@@ -44,6 +57,28 @@ export function AdminDashboard() {
   useEffect(() => {
     if (isAdmin) void load();
   }, [isAdmin, load]);
+
+  useEffect(() => {
+    const fromUrl = parseAdminTabId(searchParams.get('tab'));
+    if (fromUrl && fromUrl !== tab) {
+      setTab(fromUrl);
+    }
+  }, [searchParams, tab]);
+
+  const handleTabChange = useCallback(
+    (next: AdminTabId) => {
+      setTab(next);
+      router.replace(`/admin?tab=${next}`, { scroll: false });
+    },
+    [router]
+  );
+
+  useAdminDashboardRealtime(
+    useCallback(() => {
+      void loadRef.current({ silent: true });
+    }, []),
+    isAdmin
+  );
 
   const stats = useMemo(() => {
     if (!data) return null;
@@ -78,6 +113,12 @@ export function AdminDashboard() {
         { id: 'support' as const, label: 'Support', badge: stats?.ticketsOpen, icon: ADMIN_TAB_ICONS.support },
         { id: 'users' as const, label: 'Users', icon: ADMIN_TAB_ICONS.users },
         { id: 'plans' as const, label: 'Plans', icon: ADMIN_TAB_ICONS.plans },
+        {
+          id: 'privacy_policy' as const,
+          label: 'Privacy',
+          icon: ADMIN_TAB_ICONS.privacy_policy,
+        },
+        { id: 'meet_types' as const, label: 'Meet types', icon: ADMIN_TAB_ICONS.meet_types },
       ],
     [stats]
   );
@@ -112,7 +153,7 @@ export function AdminDashboard() {
     <div className="linkup-page-shell min-w-0 max-w-full">
     <AdminShell
       tab={tab}
-      onTabChange={setTab}
+      onTabChange={handleTabChange}
       tabs={adminTabs}
       stats={statCards}
       onRefresh={() => void load()}
@@ -141,6 +182,8 @@ export function AdminDashboard() {
       {data && tab === 'support' ? <AdminSupportPanel data={data} onReload={() => void load()} /> : null}
       {tab === 'users' ? <AdminUsersSection /> : null}
       {tab === 'plans' ? <AdminPlansSection /> : null}
+      {tab === 'privacy_policy' ? <AdminPrivacyPolicySection /> : null}
+      {tab === 'meet_types' ? <AdminMeetTypesSection /> : null}
     </AdminShell>
     </div>
   );

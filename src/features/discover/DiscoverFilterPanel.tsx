@@ -1,20 +1,29 @@
 'use client';
 
-import { formatFilterPriceMajor, parseFilterPriceMajor } from '@/lib/discovery/feedPriceFilter';
 import {
-  isDiscoverFilterConstraintActive,
+  formatFilterPriceMajor,
+  parseFilterPriceMajor,
+  validateDiscoverPriceRange,
+} from '@/lib/discovery/feedPriceFilter';
+import {
+  hasAdvancedDiscoverFilters,
   type FeedFilterState,
 } from '@/lib/discovery/feedFilters';
 import type { DiscoveryMood } from '@/lib/discovery/moodFilter';
 import { cn } from '@/utils/cn';
 import { TierBadge } from '@/components/subscription/TierBadge';
 import { useGatedAction, useUpgradeGate } from '@/contexts/UpgradeGateContext';
-import { effectiveDiscoveryRadiusKm } from '@/lib/plans/discoveryRadius';
+import {
+  clampMaxDistanceKm,
+  nextTierForWiderRadius,
+  SLIDER_MAX_KM,
+  sliderMaxKmForTier,
+} from '@/lib/plans/discoveryRadius';
 import { TIER_META } from '@/lib/subscription/constants';
 import type { SubscriptionTier } from '@/lib/subscription/types';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { IoFunnel, IoLockClosed, IoNavigateOutline } from 'react-icons/io5';
+import { IoFunnel, IoLockClosed } from 'react-icons/io5';
 
 const MOODS: { id: DiscoveryMood; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -34,8 +43,7 @@ type Props = {
   filter: FeedFilterState;
   mood: DiscoveryMood;
   baseRadiusKm: number;
-  browseRadiusKm?: number;
-  hasWiderRadius?: boolean;
+  sliderMaxKm?: number;
   effectiveTier?: SubscriptionTier;
   advancedFiltersAllowed: boolean;
   onApply: (filter: FeedFilterState, mood: DiscoveryMood) => void;
@@ -52,8 +60,7 @@ export function DiscoverFilterPanel({
   filter,
   mood,
   baseRadiusKm,
-  browseRadiusKm = baseRadiusKm,
-  hasWiderRadius = false,
+  sliderMaxKm: sliderMaxKmProp,
   effectiveTier = 'FREE',
   advancedFiltersAllowed,
   onApply,
@@ -62,8 +69,10 @@ export function DiscoverFilterPanel({
   onApplied,
   className,
 }: Props) {
+  const sliderMax = sliderMaxKmProp ?? sliderMaxKmForTier(effectiveTier);
   const [draft, setDraft] = useState(filter);
   const [draftMood, setDraftMood] = useState(mood);
+  const [distanceTouched, setDistanceTouched] = useState(() => filter.maxDistanceKm != null);
   const [minPriceText, setMinPriceText] = useState(() => formatFilterPriceMajor(filter.minPriceCents));
   const [maxPriceText, setMaxPriceText] = useState(() => formatFilterPriceMajor(filter.maxPriceCents));
   const [priceError, setPriceError] = useState<string | null>(null);
@@ -71,17 +80,30 @@ export function DiscoverFilterPanel({
   const runGated = useGatedAction();
 
   useEffect(() => {
-    setDraft(filter);
+    setDraft({
+      ...filter,
+      maxDistanceKm: filter.maxDistanceKm ?? null,
+    });
     setDraftMood(mood);
+    setDistanceTouched(filter.maxDistanceKm != null);
     setMinPriceText(formatFilterPriceMajor(filter.minPriceCents));
     setMaxPriceText(formatFilterPriceMajor(filter.maxPriceCents));
   }, [filter, mood]);
 
+  useEffect(() => {
+    setDraft((d) => {
+      if (d.maxDistanceKm == null) return d;
+      const clamped = clampMaxDistanceKm(d.maxDistanceKm, effectiveTier);
+      return clamped === d.maxDistanceKm ? d : { ...d, maxDistanceKm: clamped };
+    });
+  }, [effectiveTier]);
+
   async function apply() {
     const minPriceCents = parseFilterPriceMajor(minPriceText);
     const maxPriceCents = parseFilterPriceMajor(maxPriceText);
-    if (minPriceCents != null && maxPriceCents != null && minPriceCents > maxPriceCents) {
-      setPriceError('Minimum price cannot be higher than maximum.');
+    const priceRangeError = validateDiscoverPriceRange(minPriceCents, maxPriceCents);
+    if (priceRangeError) {
+      setPriceError(priceRangeError);
       return;
     }
     const usesAdvanced =
@@ -91,25 +113,31 @@ export function DiscoverFilterPanel({
       draft.verifiedHostsOnly;
     if (usesAdvanced && !advancedFiltersAllowed) {
       const { allowed } = await checkFeaturePermission('discover.advanced_filters');
-      if (!allowed) return;
+      if (!allowed) {
+        setPriceError('Upgrade to Silver to use price and verified-host filters.');
+        return;
+      }
     }
     setPriceError(null);
-    const next: FeedFilterState = {
-      maxDistanceKm: draft.maxDistanceKm,
+    const maxDistanceKm =
+      distanceTouched && draft.maxDistanceKm != null
+        ? clampMaxDistanceKm(draft.maxDistanceKm, effectiveTier)
+        : null;
+    const distanceFilterActive = maxDistanceKm != null;
+    const verifiedHostsOnly = advancedFiltersAllowed ? draft.verifiedHostsOnly : false;
+    const hasOtherConstraints = hasAdvancedDiscoverFilters({
       minPriceCents,
       maxPriceCents,
-      verifiedHostsOnly: advancedFiltersAllowed ? draft.verifiedHostsOnly : false,
+      verifiedHostsOnly,
       hostPresence: draft.hostPresence,
-      clientFiltersActive: isDiscoverFilterConstraintActive(
-        {
-          maxDistanceKm: draft.maxDistanceKm,
-          minPriceCents,
-          maxPriceCents,
-          verifiedHostsOnly: advancedFiltersAllowed ? draft.verifiedHostsOnly : false,
-          hostPresence: draft.hostPresence,
-        },
-        baseRadiusKm
-      ),
+    });
+    const next: FeedFilterState = {
+      maxDistanceKm,
+      minPriceCents,
+      maxPriceCents,
+      verifiedHostsOnly,
+      hostPresence: draft.hostPresence,
+      clientFiltersActive: distanceFilterActive || hasOtherConstraints,
     };
     onApply(next, draftMood);
     onApplied?.();
@@ -125,7 +153,7 @@ export function DiscoverFilterPanel({
 
   function reset() {
     const next = {
-      maxDistanceKm: baseRadiusKm,
+      maxDistanceKm: null,
       minPriceCents: null,
       maxPriceCents: null,
       verifiedHostsOnly: false,
@@ -134,12 +162,18 @@ export function DiscoverFilterPanel({
     };
     setDraft(next);
     setDraftMood('all');
+    setDistanceTouched(false);
     setMinPriceText('');
     setMaxPriceText('');
     setPriceError(null);
     onApply(next, 'all');
     onApplied?.();
   }
+
+  const nextTier = nextTierForWiderRadius(effectiveTier);
+  const distanceSet = distanceTouched && draft.maxDistanceKm != null;
+  const sliderValue = distanceSet ? Math.min(draft.maxDistanceKm!, sliderMax) : 0;
+  const distanceLabel = distanceSet ? `${sliderValue} km` : 'Any distance';
 
   return (
     <div
@@ -185,39 +219,66 @@ export function DiscoverFilterPanel({
       <div>
         <div className="mb-2 flex items-center justify-between">
           <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted">Distance</p>
-          <span className="text-[13px] font-extrabold text-primary">{draft.maxDistanceKm} km</span>
+          <span
+            className={cn(
+              'text-[13px] font-extrabold',
+              distanceSet ? 'text-primary' : 'text-muted'
+            )}
+          >
+            {distanceLabel}
+          </span>
         </div>
         <input
           type="range"
-          min={5}
-          max={Math.max(200, browseRadiusKm, baseRadiusKm, draft.maxDistanceKm)}
-          step={5}
-          value={draft.maxDistanceKm}
-          onChange={(e) =>
-            setDraft((d) => ({ ...d, maxDistanceKm: Number(e.target.value) }))
-          }
-          className="w-full accent-primary"
+          min={0}
+          max={sliderMax}
+          step={1}
+          value={sliderValue}
+          onChange={(e) => {
+            const next = Number(e.target.value);
+            if (next <= 0) {
+              setDistanceTouched(false);
+              setDraft((d) => ({ ...d, maxDistanceKm: null }));
+              return;
+            }
+            setDistanceTouched(true);
+            setDraft((d) => ({
+              ...d,
+              maxDistanceKm: clampMaxDistanceKm(next, effectiveTier),
+            }));
+          }}
+          className={cn('w-full accent-primary', !distanceSet && 'opacity-60')}
         />
-        {hasWiderRadius && effectiveTier !== 'FREE' ? (
-          <p className="mt-1 text-[11px] font-semibold text-muted">
-            Your {TIER_META[effectiveTier].label} subscription extends your reach to{' '}
-            <span className="font-extrabold text-foreground">
-              {effectiveDiscoveryRadiusKm(baseRadiusKm, effectiveTier, true)} km
-            </span>
-          </p>
-        ) : (
+        {distanceSet ? (
+          <button
+            type="button"
+            onClick={() => {
+              setDistanceTouched(false);
+              setDraft((d) => ({ ...d, maxDistanceKm: null }));
+            }}
+            className="mt-1 text-[11px] font-extrabold text-primary underline"
+          >
+            Clear distance
+          </button>
+        ) : null}
+        {effectiveTier !== 'PLATINUM' ? (
           <button
             type="button"
             onClick={() => runGated('discover.wider_radius', () => {})}
-            className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-muted transition hover:text-foreground"
+            className="mt-2 flex w-full items-center justify-between rounded-xl border border-border/80 bg-[#F5F6FA] px-3 py-2 transition hover:bg-[#EDE8FF]/40"
           >
-            <IoNavigateOutline size={14} className="text-primary" />
-            Wider reach available on Silver
-            <TierBadge tier="SILVER" size="sm" />
+            <span className="text-left text-[11px] font-semibold text-muted">
+              Search up to {SLIDER_MAX_KM[nextTier]}km on {TIER_META[nextTier].label}
+            </span>
+            <TierBadge tier={nextTier} size="sm" />
           </button>
+        ) : (
+          <p className="mt-1 text-[11px] font-semibold text-muted">
+            Your {TIER_META.PLATINUM.label} plan searches up to {sliderMax}km.
+          </p>
         )}
         <p className="mt-1 text-[11px] font-semibold text-muted">
-          Uses your profile location when plans have map coordinates.
+          Distance uses your search location and each plan&apos;s meetup pin.
         </p>
       </div>
 

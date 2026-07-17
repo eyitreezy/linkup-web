@@ -6,6 +6,7 @@ import { MessageComposer, type MessageComposerLook } from '@/features/messages/M
 import { useIsMobileShellLayout } from '@/hooks/use-media-query';
 import type { ChatAppearancePreset } from '@/lib/messaging/chatAppearance';
 import { cn } from '@/utils/cn';
+import type { ReactNode, RefObject } from 'react';
 import { useRef, useState } from 'react';
 import { IoAdd, IoClose } from 'react-icons/io5';
 
@@ -23,6 +24,10 @@ type Props = {
   threadLook?: MessageComposerLook | null;
   replyTo?: { senderLabel: string; preview: string } | null;
   onCancelReply?: () => void;
+  composeInputRef?: RefObject<HTMLTextAreaElement | null>;
+  mentionPicker?: ReactNode;
+  placeholder?: string;
+  onSelectionChange?: (start: number, end: number) => void;
 };
 
 export function ChatComposer({
@@ -39,6 +44,10 @@ export function ChatComposer({
   threadLook,
   replyTo,
   onCancelReply,
+  composeInputRef,
+  mentionPicker,
+  placeholder,
+  onSelectionChange,
 }: Props) {
   const isMobile = useIsMobileShellLayout();
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -76,6 +85,7 @@ export function ChatComposer({
           onCancel={onCancelReply}
         />
       ) : null}
+      {mentionPicker}
 
       {toolsOpen ? (
         <ChatToolbar
@@ -120,6 +130,9 @@ export function ChatComposer({
           </button>
         }
         hideAttachButton
+        inputRef={composeInputRef}
+        placeholder={placeholder}
+        onSelectionChange={onSelectionChange}
       />
     </div>
   );

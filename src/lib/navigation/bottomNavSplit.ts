@@ -6,11 +6,11 @@ import type { NavTabItem } from '@/components/navigation/tabNavConfig';
  */
 export const BOTTOM_NAV_BAR_PRIORITY = [
   '/discover',
+  '/meetr',
   '/messages',
   '/plans',
   '/offers',
   '/plan-management',
-  '/wallet',
   '/admin',
 ] as const;
 

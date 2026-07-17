@@ -2,7 +2,15 @@ import { createClient } from '@/lib/supabase/client';
 
 const LINK_STATUSES = ['negotiating', 'agreed', 'awaiting_payment', 'active', 'completed'] as const;
 
-export type LinkedMeetup = { id: string; title: string; status: string; counterpartyId: string };
+export type LinkedMeetup = {
+  id: string;
+  title: string;
+  status: string;
+  counterpartyId: string;
+  creator_id: string;
+  scheduled_at: string | null;
+  meet_type_id: string | null;
+};
 
 export async function fetchActiveMeetupWithPeer(
   userId: string,
@@ -12,7 +20,7 @@ export async function fetchActiveMeetupWithPeer(
 
   const { data: myPlans } = await supabase
     .from('plans')
-    .select('id,title,status,creator_id,accepted_offer_id')
+    .select('id,title,status,creator_id,accepted_offer_id,scheduled_at,meet_type_id')
     .eq('creator_id', userId)
     .in('status', [...LINK_STATUSES]);
 
@@ -26,13 +34,22 @@ export async function fetchActiveMeetupWithPeer(
     const hit = offers?.[0]?.plan_id;
     if (hit) {
       const plan = (myPlans ?? []).find((p) => p.id === hit);
-      if (plan) return { id: plan.id, title: plan.title, status: plan.status, counterpartyId: peerId };
+      if (plan)
+        return {
+          id: plan.id,
+          title: plan.title,
+          status: plan.status,
+          counterpartyId: peerId,
+          creator_id: plan.creator_id as string,
+          scheduled_at: (plan.scheduled_at as string | null) ?? null,
+          meet_type_id: (plan.meet_type_id as string | null) ?? null,
+        };
     }
   }
 
   const { data: theirPlans } = await supabase
     .from('plans')
-    .select('id,title,status,creator_id,accepted_offer_id')
+    .select('id,title,status,creator_id,accepted_offer_id,scheduled_at,meet_type_id')
     .eq('creator_id', peerId)
     .in('status', [...LINK_STATUSES]);
 
@@ -48,5 +65,15 @@ export async function fetchActiveMeetupWithPeer(
   const hit2 = myOffers?.[0]?.plan_id;
   if (!hit2) return null;
   const plan = (theirPlans ?? []).find((p) => p.id === hit2);
-  return plan ? { id: plan.id, title: plan.title, status: plan.status, counterpartyId: peerId } : null;
+  return plan
+    ? {
+        id: plan.id,
+        title: plan.title,
+        status: plan.status,
+        counterpartyId: peerId,
+        creator_id: plan.creator_id as string,
+        scheduled_at: (plan.scheduled_at as string | null) ?? null,
+        meet_type_id: (plan.meet_type_id as string | null) ?? null,
+      }
+    : null;
 }

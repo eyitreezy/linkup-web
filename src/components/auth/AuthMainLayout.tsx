@@ -28,6 +28,7 @@ export function AuthMainLayout({ children, initialUser }: Props) {
 
   const storeUser = useAuthStore((s) => s.user);
   const loading = useAuthStore((s) => s.loading);
+  const signingOut = useAuthStore((s) => s.signingOut);
   const setUser = useAuthStore((s) => s.setUser);
   const router = useRouter();
   const pathname = usePathname();
@@ -37,21 +38,31 @@ export function AuthMainLayout({ children, initialUser }: Props) {
     if (!loading) setClientReady(true);
   }, [loading]);
 
-  // Align client store with server snapshot when the client store is still empty.
+  // Hydrate client store from server snapshot only during initial session resolution.
   useEffect(() => {
-    if (initialUser && !storeUser) {
+    if (initialUser && storeUser === null && loading) {
       setUser(initialUser);
     }
-  }, [initialUser, storeUser, setUser]);
+  }, [initialUser, storeUser, loading, setUser]);
 
   // Use server user only until the client finishes its first session read.
   const resolvedUser = clientReady ? storeUser : (storeUser ?? initialUser);
   const isResolving = !clientReady && resolvedUser == null;
 
   useEffect(() => {
-    if (isResolving || resolvedUser) return;
+    if (signingOut || isResolving || resolvedUser) return;
     router.replace(`/login?next=${encodeURIComponent(pathname)}`);
-  }, [isResolving, resolvedUser, pathname, router]);
+  }, [signingOut, isResolving, resolvedUser, pathname, router]);
+
+  if (signingOut) {
+    return (
+      <AppViewport>
+        <SubscriptionProvider>
+          <AppShellRouter>{children}</AppShellRouter>
+        </SubscriptionProvider>
+      </AppViewport>
+    );
+  }
 
   if (isResolving) {
     return (

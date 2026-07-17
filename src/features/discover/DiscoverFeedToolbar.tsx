@@ -17,12 +17,10 @@ export type DiscoverViewMode = 'swipe' | 'grid' | 'list';
 type Props = {
   planCount: number;
   moodCount: number;
-  filtersActive: boolean;
   filter: FeedFilterState;
   mood: DiscoveryMood;
   baseRadiusKm: number;
-  browseRadiusKm?: number;
-  hasWiderRadius?: boolean;
+  sliderMaxKm?: number;
   effectiveTier?: SubscriptionTier;
   advancedFiltersAllowed: boolean;
   profileLoading?: boolean;
@@ -36,12 +34,10 @@ type Props = {
 export function DiscoverFeedToolbar({
   planCount,
   moodCount,
-  filtersActive,
   filter,
   mood,
   baseRadiusKm,
-  browseRadiusKm,
-  hasWiderRadius,
+  sliderMaxKm,
   effectiveTier,
   advancedFiltersAllowed,
   profileLoading,
@@ -51,14 +47,14 @@ export function DiscoverFeedToolbar({
   isMobileLayout,
 }: Props) {
   const [filterOpen, setFilterOpen] = useState(false);
-  const filterActive = useDiscoverFilterActive(filter, mood) || filtersActive;
+  const filterActive = useDiscoverFilterActive(filter, mood);
 
   return (
     <>
       <div className="flex min-w-0 items-center gap-2">
         <p className="min-w-0 flex-1 truncate text-[10px] font-extrabold uppercase tracking-wide text-muted min-[360px]:text-[11px] sm:text-[12px]">
           {planCount} plan{planCount === 1 ? '' : 's'}
-          {filtersActive ? ' · filtered' : ''}
+          {filterActive ? ' · filtered' : ''}
           {moodCount > 0 ? ` · ${moodCount} mood` : ''}
         </p>
 
@@ -125,8 +121,7 @@ export function DiscoverFeedToolbar({
         filter={filter}
         mood={mood}
         baseRadiusKm={baseRadiusKm}
-        browseRadiusKm={browseRadiusKm}
-        hasWiderRadius={hasWiderRadius}
+        sliderMaxKm={sliderMaxKm}
         effectiveTier={effectiveTier}
         advancedFiltersAllowed={advancedFiltersAllowed}
         onApply={onApply}

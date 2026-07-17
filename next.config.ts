@@ -10,6 +10,9 @@ const nextConfig: NextConfig = {
       ? [{ protocol: 'https', hostname: supabaseHost, pathname: '/storage/v1/object/public/**' }]
       : [],
   },
+  experimental: {
+    optimizePackageImports: ['react-icons', 'react-icons/io5', 'framer-motion'],
+  },
 };
 
 export default nextConfig;

@@ -17,7 +17,9 @@ export function planningPartnerContext(
       otherUserId: plan.creator_id,
     };
   }
-  const accepted = offers.find((o) => o.id === plan.accepted_offer_id);
+  const accepted =
+    offers.find((o) => o.id === plan.accepted_offer_id) ??
+    offers.find((o) => o.status === 'accepted');
   if (userId === plan.creator_id) {
     if (accepted) {
       return {
@@ -42,11 +44,17 @@ export function offerStatusChip(status: OfferStatus): { label: string; className
     case 'accepted':
       return { label: 'Accepted', className: 'bg-emerald-500/12 text-emerald-700' };
     case 'pending':
-      return { label: 'Pending', className: 'bg-primary/12 text-primary' };
+      return { label: 'Awaiting response', className: 'bg-amber-500/12 text-amber-800' };
     case 'countered':
       return { label: 'Countered', className: 'bg-secondary/12 text-secondary' };
+    case 'countered_by_host':
+      return { label: 'Host countered', className: 'bg-primary/12 text-primary' };
+    case 'countered_by_guest':
+      return { label: 'Guest countered', className: 'bg-purple-500/12 text-purple-700' };
     case 'declined':
       return { label: 'Declined', className: 'bg-red-500/12 text-red-700' };
+    case 'withdrawn':
+      return { label: 'Withdrawn', className: 'bg-muted/15 text-muted' };
     case 'expired':
       return { label: 'Expired', className: 'bg-muted/20 text-muted' };
     case 'superseded':
@@ -71,6 +79,10 @@ export function formatProposalSnippet(iso: string | null): string | null {
 }
 
 export function planIsAgreed(status: string): boolean {
+  return planIsPastNegotiation(status);
+}
+
+export function planIsPastNegotiation(status: string): boolean {
   return status === 'agreed' || status === 'awaiting_payment' || status === 'active' || status === 'completed';
 }
 

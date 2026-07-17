@@ -1,13 +1,12 @@
 'use client';
 
-import {
-  loadFeedFilterFromProfile,
-  type FeedFilterState,
-} from '@/lib/discovery/feedFilters';
+import { loadFeedFilterFromProfile, type FeedFilterState } from '@/lib/discovery/feedFilters';
+import { isDiscoverFilterConstraintActive } from '@/lib/discovery/parseStoredFeedFilters';
+import { consumePendingMeetTypeFilter } from '@/lib/discovery/pendingMeetTypeFilter';
 import { resolveDiscoverViewerCoords } from '@/lib/discovery/viewerLocation';
 import { usePermission } from '@/hooks/usePermission';
 import { fetchHiddenPlanIds, persistHiddenPlan, removeHiddenPlan } from '@/lib/plans/hiddenPlans';
-import { effectiveDiscoveryRadiusKm } from '@/lib/plans/discoveryRadius';
+import { clampMaxDistanceKm, sliderMaxKmForTier } from '@/lib/plans/discoveryRadius';
 import { tierRank } from '@/lib/subscription/constants';
 import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import type { SubscriptionTier } from '@/lib/subscription/types';
@@ -28,11 +27,16 @@ import {
   type ReactNode,
 } from 'react';
 
+type MeetTypeFilter = { id: string; name: string };
+
 type DiscoverPageContextValue = {
   mood: DiscoveryMood;
   filter: FeedFilterState;
+  meetTypeFilter: MeetTypeFilter | null;
   baseRadiusKm: number;
+  /** Profile default radius — no tier multiplier. */
   browseRadiusKm: number;
+  sliderMaxKm: number;
   hasWiderRadius: boolean;
   effectiveTier: SubscriptionTier;
   viewerLat: number | null;
@@ -49,6 +53,7 @@ type DiscoverPageContextValue = {
   requestDeviceLocation: () => void;
   hasDeviceLocation: boolean;
   applyFilters: (next: FeedFilterState, nextMood: DiscoveryMood) => void;
+  clearMeetTypeFilter: () => void;
 };
 
 const DiscoverPageContext = createContext<DiscoverPageContextValue | null>(null);
@@ -57,11 +62,12 @@ export function DiscoverPageProvider({ children }: { children: ReactNode }) {
   const user = useAuthStore((s) => s.user);
   const [mood, setMood] = useState<DiscoveryMood>('all');
   const [filter, setFilter] = useState<FeedFilterState | null>(null);
+  const [meetTypeFilter, setMeetTypeFilter] = useState<MeetTypeFilter | null>(null);
   const [hiddenPlanIds, setHiddenPlanIds] = useState<Set<string>>(() => new Set());
   const [geoTick, setGeoTick] = useState(0);
 
   const profileQuery = useQuery({
-    queryKey: ['discover-profile', user?.id],
+    queryKey: ['profile-bundle', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
       const client = createClient();
@@ -83,10 +89,8 @@ export function DiscoverPageProvider({ children }: { children: ReactNode }) {
     'discover.wider_radius'
   );
   const effectiveTier = (widerRadiusTier ?? subscriptionState.effectiveTier) as SubscriptionTier;
-  const browseRadiusKm = useMemo(
-    () => effectiveDiscoveryRadiusKm(baseRadiusKm, effectiveTier, hasWiderRadius),
-    [baseRadiusKm, effectiveTier, hasWiderRadius]
-  );
+  const sliderMaxKm = sliderMaxKmForTier(effectiveTier);
+  const browseRadiusKm = baseRadiusKm;
 
   const deviceCoords = useViewerGeolocation(!!user?.id || geoTick > 0, geoTick);
   const viewerCoords = resolveDiscoverViewerCoords(
@@ -98,10 +102,24 @@ export function DiscoverPageProvider({ children }: { children: ReactNode }) {
   const viewerLng = viewerCoords.lng;
 
   useEffect(() => {
+    const pending = consumePendingMeetTypeFilter();
+    if (pending) setMeetTypeFilter(pending);
+  }, []);
+
+  useEffect(() => {
     if (filter == null && profileQuery.data?.profile) {
-      setFilter(loadFeedFilterFromProfile(profileQuery.data.profile, baseRadiusKm));
+      setFilter(loadFeedFilterFromProfile(profileQuery.data.profile, baseRadiusKm, sliderMaxKm));
     }
-  }, [filter, profileQuery.data?.profile, baseRadiusKm]);
+  }, [filter, profileQuery.data?.profile, baseRadiusKm, sliderMaxKm]);
+
+  useEffect(() => {
+    setFilter((current) => {
+      if (!current || current.maxDistanceKm == null) return current;
+      const clamped = clampMaxDistanceKm(current.maxDistanceKm, effectiveTier);
+      if (clamped === current.maxDistanceKm) return current;
+      return { ...current, maxDistanceKm: clamped };
+    });
+  }, [effectiveTier]);
 
   useEffect(() => {
     if (!user?.id || !canUndoSwipe) return;
@@ -148,45 +166,66 @@ export function DiscoverPageProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const activeFilter = useMemo(
-    () => filter ?? loadFeedFilterFromProfile(profileQuery.data?.profile ?? null, browseRadiusKm),
-    [filter, profileQuery.data?.profile, browseRadiusKm]
-  );
+  const activeFilter = useMemo(() => {
+    const loaded =
+      filter ?? loadFeedFilterFromProfile(profileQuery.data?.profile ?? null, baseRadiusKm, sliderMaxKm);
+    const clientFiltersActive =
+      loaded.clientFiltersActive || isDiscoverFilterConstraintActive(loaded);
+    if (loaded.clientFiltersActive === clientFiltersActive) return loaded;
+    return { ...loaded, clientFiltersActive };
+  }, [filter, profileQuery.data?.profile, baseRadiusKm, sliderMaxKm]);
+
+  const clearMeetTypeFilter = useCallback(() => setMeetTypeFilter(null), []);
 
   const applyFilters = useCallback(
     (next: FeedFilterState, nextMood: DiscoveryMood) => {
-      setFilter(next);
+      const maxDistanceKm = clampMaxDistanceKm(next.maxDistanceKm, effectiveTier);
+      const draft = { ...next, maxDistanceKm };
+      const clamped: FeedFilterState = {
+        ...draft,
+        clientFiltersActive:
+          next.clientFiltersActive || isDiscoverFilterConstraintActive(draft),
+      };
+      setFilter(clamped);
       setMood(nextMood);
       if (user?.id) {
         const client = createClient();
+        const persisted = {
+          maxDistanceKm: null,
+          minPriceCents: clamped.minPriceCents,
+          maxPriceCents: clamped.maxPriceCents,
+          verifiedHostsOnly: clamped.verifiedHostsOnly,
+          hostPresence: clamped.hostPresence,
+          clientFiltersActive:
+            clamped.clientFiltersActive ||
+            isDiscoverFilterConstraintActive({
+              ...clamped,
+              maxDistanceKm: null,
+            }),
+        };
         void client
           .from('profiles')
           .update({
             preferences: {
               ...(profileQuery.data?.profile?.preferences ?? {}),
-              feed_filters: {
-                maxDistanceKm: next.maxDistanceKm,
-                minPriceCents: next.minPriceCents,
-                maxPriceCents: next.maxPriceCents,
-                verifiedHostsOnly: next.verifiedHostsOnly,
-                hostPresence: next.hostPresence,
-                clientFiltersActive: next.clientFiltersActive,
-              },
+              feed_filters: persisted,
             },
           })
           .eq('user_id', user.id)
           .then(() => void profileQuery.refetch());
       }
     },
-    [user?.id, profileQuery]
+    [user?.id, profileQuery, effectiveTier]
   );
 
   const value = useMemo(
     () => ({
       mood,
       filter: activeFilter,
+      meetTypeFilter,
       baseRadiusKm,
       browseRadiusKm,
+      sliderMaxKm,
       hasWiderRadius,
       effectiveTier,
       viewerLat,
@@ -203,12 +242,15 @@ export function DiscoverPageProvider({ children }: { children: ReactNode }) {
       requestDeviceLocation,
       hasDeviceLocation: deviceCoords != null,
       applyFilters,
+      clearMeetTypeFilter,
     }),
     [
       mood,
       activeFilter,
+      meetTypeFilter,
       baseRadiusKm,
       browseRadiusKm,
+      sliderMaxKm,
       hasWiderRadius,
       effectiveTier,
       viewerLat,
@@ -225,6 +267,7 @@ export function DiscoverPageProvider({ children }: { children: ReactNode }) {
       undoHiddenPlans,
       requestDeviceLocation,
       applyFilters,
+      clearMeetTypeFilter,
     ]
   );
 

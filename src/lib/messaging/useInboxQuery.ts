@@ -26,8 +26,8 @@ export function useInboxQuery() {
     queryFn: () => loadInbox(userId!),
     enabled: !authLoading && !!userId,
     placeholderData: keepPreviousData,
-    staleTime: 30_000,
-    refetchOnMount: true,
+    staleTime: 60_000,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
 }

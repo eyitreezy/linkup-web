@@ -6,7 +6,7 @@ export const metadata = { title: 'Create account' };
 export default function SignupPage() {
   return (
     <AuthShell
-      title="Join LinkUp"
+      headingVariant="join-logo"
       subtitle="Trusted plans, real people, same experience as the app."
       showModeToggle
     >

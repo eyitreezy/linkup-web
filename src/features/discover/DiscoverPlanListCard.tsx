@@ -7,6 +7,9 @@ import { BoostPill } from '@/components/plans/BoostPill';
 import { MoodPlanCountdown } from '@/components/plans/MoodPlanCountdown';
 import { TierBadge } from '@/components/subscription/TierBadge';
 import { isCreatorSpotlightActive } from '@/lib/plans/creatorSpotlight';
+import { formatNGN } from '@/lib/escrow/escrowFormatters';
+import { isGroupSplitPlan } from '@/lib/plans/groupDynamicSplit';
+import { grossAmountCents } from '@/lib/plans/planFinancialConfig';
 import { derivePresenceUi, type PresenceUi } from '@/lib/presence/hostPresenceStatus';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { moodDiscoverMeta } from '@/lib/plans/moodDiscoverUi';
@@ -17,11 +20,11 @@ import Link from 'next/link';
 import { useMemo } from 'react';
 import { IoChevronForward, IoNavigateOutline, IoShieldCheckmark } from 'react-icons/io5';
 
-function formatPlanPrice(row: PlanFeedRow): string {
+function formatPlanPriceGross(row: PlanFeedRow): string | null {
   if (row.starting_price_cents != null && row.starting_price_cents > 0) {
-    return `₦${(row.starting_price_cents / 100).toLocaleString()}`;
+    return formatNGN(grossAmountCents(row.starting_price_cents));
   }
-  return 'Free to join';
+  return null;
 }
 
 function formatWhen(row: PlanFeedRow): string {
@@ -76,6 +79,14 @@ export function DiscoverPlanListCard({
   const moodMeta = useMemo(() => moodDiscoverMeta(plan), [plan]);
   const trustScore = plan.creator?.ai_trust_score;
   const showTrust = typeof trustScore === 'number' && trustScore >= 0.72;
+
+  const priceGrossLabel = formatPlanPriceGross(plan);
+  const suggestedShareCents =
+    isGroupSplitPlan(plan) && plan.current_suggested_share_cents
+      ? plan.current_suggested_share_cents
+      : null;
+  const suggestedShareGrossLabel =
+    suggestedShareCents != null ? formatNGN(grossAmountCents(suggestedShareCents)) : null;
 
   return (
     <Link
@@ -174,8 +185,19 @@ export function DiscoverPlanListCard({
           </p>
         )}
 
-        <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-2">
-          <span className="shrink-0 text-[13px] font-extrabold text-primary">{formatPlanPrice(plan)}</span>
+        <div className="flex flex-col items-end gap-0.5 border-t border-border/50 pt-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+          <div className="flex w-full flex-col items-start sm:w-auto">
+            {suggestedShareGrossLabel ? (
+              <span className="shrink-0 text-[13px] font-extrabold text-primary">
+                {suggestedShareGrossLabel}
+                <span className="font-semibold text-muted"> / person</span>
+              </span>
+            ) : priceGrossLabel ? (
+              <span className="shrink-0 text-[13px] font-extrabold text-primary">{priceGrossLabel}</span>
+            ) : (
+              <span className="shrink-0 text-[13px] font-extrabold text-primary">Free to join</span>
+            )}
+          </div>
           <span className="min-w-0 truncate text-right text-[11px] font-semibold text-muted">{formatWhen(plan)}</span>
         </div>
       </div>

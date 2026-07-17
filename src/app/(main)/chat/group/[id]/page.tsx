@@ -13,6 +13,12 @@ export default function GroupChatPage() {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
   const [peer, setPeer] = useState<InboxRow | null>(null);
+  const [suggestionPlan, setSuggestionPlan] = useState<{
+    status: string;
+    scheduled_at: string | null;
+    meet_type_id: string | null;
+    creator_id: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,8 +35,31 @@ export default function GroupChatPage() {
       if (cancelled) return;
       if (!conv) {
         setPeer(null);
+        setSuggestionPlan(null);
         setLoading(false);
         return;
+      }
+      const planId = (conv.plan_id as string | null) ?? null;
+      let planContext: {
+        status: string;
+        scheduled_at: string | null;
+        meet_type_id: string | null;
+        creator_id: string;
+      } | null = null;
+      if (planId) {
+        const { data: plan } = await client
+          .from('plans')
+          .select('status, scheduled_at, meet_type_id, creator_id')
+          .eq('id', planId)
+          .maybeSingle();
+        if (plan) {
+          planContext = {
+            status: plan.status as string,
+            scheduled_at: (plan.scheduled_at as string | null) ?? null,
+            meet_type_id: (plan.meet_type_id as string | null) ?? null,
+            creator_id: plan.creator_id as string,
+          };
+        }
       }
       const { count } = await client
         .from('group_chat_members')
@@ -49,8 +78,9 @@ export default function GroupChatPage() {
         isGroupChat: true,
         groupAvatarUrl: (conv.group_avatar_url as string | null) ?? null,
         memberCount: count ?? 0,
-        planId: (conv.plan_id as string | null) ?? null,
+        planId,
       });
+      setSuggestionPlan(planContext);
       setLoading(false);
     })();
     return () => {
@@ -82,6 +112,7 @@ export default function GroupChatPage() {
       <ChatThread
         conversationId={conversationId}
         peer={peer}
+        suggestionPlan={suggestionPlan}
         onBack={() => router.push('/messages')}
       />
     </div>

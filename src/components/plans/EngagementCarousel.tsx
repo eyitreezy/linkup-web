@@ -18,7 +18,11 @@ function CardSkeleton() {
 
 function EngagementCard({ item }: { item: EngagementCarouselItem }) {
   const href =
-    item.navigateTo === 'agreement' ? `/plan/${item.planId}/agreement` : `/plan/${item.planId}`;
+    item.navigateTo === 'agreement'
+      ? item.offerId
+        ? `/plan/${item.planId}/agreement?offerId=${item.offerId}`
+        : `/plan/${item.planId}/agreement`
+      : `/plan/${item.planId}`;
 
   return (
     <Link

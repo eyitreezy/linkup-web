@@ -35,6 +35,7 @@ export type PublishPlanDraft = {
   maxPremiumGuests?: number | null;
   multiCity?: boolean;
   cityIds?: string[];
+  isNegotiable?: boolean;
 };
 
 export function validatePublishDraft(draft: PublishPlanDraft): string | null {
@@ -131,6 +132,10 @@ export async function publishPlan(
     multi_city: draft.isGroupPlan && draft.multiCity,
     city_ids: draft.isGroupPlan && draft.cityIds?.length ? draft.cityIds : null,
     hide_from_discovery: !!draft.hideFromDiscovery,
+    is_negotiable:
+      draft.isPaid && (draft.escrowPattern === 'B' || draft.escrowPattern === 'C')
+        ? draft.isNegotiable !== false
+        : true,
   };
 
   const { data: planIdRaw, error } = await client.rpc('publish_plan', { payload: insertRow });

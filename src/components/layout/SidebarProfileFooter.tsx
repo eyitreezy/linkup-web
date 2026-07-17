@@ -1,10 +1,10 @@
 'use client';
 
-import { AccountMenuSheet } from '@/components/navigation/AccountMenuSheet';
 import { NavItemUnreadIndicator } from '@/components/navigation/NavItemUnreadIndicator';
 import { TabIcon } from '@/components/navigation/TabIcon';
 import { PROFILE_NAV_ITEM } from '@/components/navigation/tabNavConfig';
 import { useNotificationInboxOptional } from '@/contexts/NotificationInboxContext';
+import { signOutAndRedirect } from '@/lib/auth/signOut';
 import { createClient } from '@/lib/supabase/client';
 import { isMainNavItemActive } from '@/lib/navigation/navActive';
 import { fetchUserProfileBundle } from '@/services/profile.service';
@@ -12,14 +12,13 @@ import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/utils/cn';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { IoChevronUp, IoLogOutOutline } from 'react-icons/io5';
 
 export function SidebarProfileFooter() {
   const user = useAuthStore((s) => s.user);
   const pathname = usePathname();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const notificationInbox = useNotificationInboxOptional();
   const unreadCount = notificationInbox?.unreadCount ?? 0;
@@ -46,12 +45,8 @@ export function SidebarProfileFooter() {
 
   async function signOut() {
     setSigningOut(true);
-    const client = createClient();
-    await client.auth.signOut();
-    queryClient.clear();
     setOpen(false);
-    router.push('/login');
-    router.refresh();
+    await signOutAndRedirect({ queryClient });
   }
 
   return (

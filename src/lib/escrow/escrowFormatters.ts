@@ -6,7 +6,8 @@ export function formatNGN(amountCents: number): string {
     style: 'currency',
     currency: 'NGN',
     minimumFractionDigits: 0,
-  }).format(amountCents / 100);
+    maximumFractionDigits: 0,
+  }).format(Math.round(amountCents) / 100);
 }
 
 export function escrowStatusLabel(status: string): string {
@@ -23,7 +24,7 @@ export function escrowStatusLabel(status: string): string {
 }
 
 export function formatEscrowDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return 'Not set';
   return new Date(iso).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',

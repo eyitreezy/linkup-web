@@ -1,5 +1,6 @@
 'use client';
 
+import { PrivacyReconsentBar } from '@/components/PrivacyReconsentBar';
 import { TrialBanner } from '@/components/subscription/TrialBanner';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { ContextPanel } from '@/components/layout/ContextPanel';
@@ -61,6 +62,7 @@ export function AppShell({
 
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:pl-[240px] xl:pl-[260px]">
         <TrialBanner />
+        <PrivacyReconsentBar />
         <div className="flex h-full min-h-0 flex-1 overflow-hidden">
           <main
             ref={mainRef}

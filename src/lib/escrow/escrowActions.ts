@@ -16,7 +16,8 @@ function mergeEscrowMetadata(
 export async function recordEscrowPaymentInitiated(
   client: SupabaseClient,
   escrowId: string,
-  checkoutRef: string
+  checkoutRef: string,
+  initiatedByUserId: string
 ): Promise<{ error: string | null }> {
   const { data, error: readErr } = await client
     .from('escrow_transactions')
@@ -27,8 +28,15 @@ export async function recordEscrowPaymentInitiated(
   const meta = mergeEscrowMetadata(data?.metadata as Record<string, unknown> | null, {
     payment_initiated_at: new Date().toISOString(),
     checkout_reference: checkoutRef,
+    checkout_initiated_by: initiatedByUserId,
   });
-  const { error } = await client.from('escrow_transactions').update({ metadata: meta }).eq('id', escrowId);
+  const { error } = await client
+    .from('escrow_transactions')
+    .update({
+      metadata: meta,
+      payment_tx_ref: checkoutRef,
+    })
+    .eq('id', escrowId);
   return { error: error?.message ?? null };
 }
 
@@ -40,7 +48,16 @@ export async function markEscrowFunded(
   if (escrow.status !== 'pending_funding') {
     return { error: 'Escrow is not waiting for payment.' };
   }
-  const { data: row } = await client.from('escrow_transactions').select('metadata').eq('id', escrow.id).single();
+
+  const { data: row } = await client
+    .from('escrow_transactions')
+    .select('metadata, escrow_pattern')
+    .eq('id', escrow.id)
+    .single();
+  if (row?.escrow_pattern === 'B') {
+    return { error: 'Split escrow must be funded per share via checkout, not demo fund.' };
+  }
+
   const meta = mergeEscrowMetadata(row?.metadata as Record<string, unknown> | null, {
     charge_confirmed_at: new Date().toISOString(),
   });

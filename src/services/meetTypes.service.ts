@@ -1,15 +1,7 @@
 import { inferMeetTypeIcon } from '@/lib/plans/inferMeetTypeIcon';
+import { filterMeetTypesVisibleToUser } from '@/lib/plans/meetTypes';
 import type { DbMeetType } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
-
-function slugBase(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || 'meetup';
-}
 
 export async function fetchActiveMeetTypes(client: SupabaseClient) {
   const { data, error } = await client
@@ -20,6 +12,44 @@ export async function fetchActiveMeetTypes(client: SupabaseClient) {
 
   if (error) return { rows: [] as DbMeetType[], error: error.message };
   return { rows: (data ?? []) as DbMeetType[], error: null };
+}
+
+/** Active catalog types plus the signed-in user's own pending submissions. */
+export async function fetchMeetTypesForUser(client: SupabaseClient, userId: string) {
+  const { data, error } = await client
+    .from('meet_types')
+    .select('*')
+    .or(`is_active.eq.true,and(created_by.eq.${userId},approval_status.eq.pending)`)
+    .order('sort_order', { ascending: true });
+
+  if (error) return { rows: [] as DbMeetType[], error: error.message };
+  return {
+    rows: filterMeetTypesVisibleToUser((data ?? []) as DbMeetType[], userId),
+    error: null,
+  };
+}
+
+/**
+ * Best-effort Resend email via Supabase Edge Function `send-meet-type-email`.
+ * In-app notifications are handled by DB RPCs; this must never block UX.
+ * Set NEXT_PUBLIC_MEET_TYPE_EMAIL_ENABLED=true once the function is deployed.
+ */
+export async function invokeMeetTypeEmail(
+  client: SupabaseClient,
+  body: Record<string, unknown>
+) {
+  if (process.env.NEXT_PUBLIC_MEET_TYPE_EMAIL_ENABLED !== 'true') {
+    return;
+  }
+
+  try {
+    const { error } = await client.functions.invoke('send-meet-type-email', { body });
+    if (error && process.env.NODE_ENV === 'development') {
+      console.debug('[meet-type-email]', error.message);
+    }
+  } catch {
+    // Function not deployed or unreachable — non-fatal.
+  }
 }
 
 export async function countPlansUsingMeetType(client: SupabaseClient, meetTypeId: string) {
@@ -39,30 +69,15 @@ export async function createUserMeetType(
 ) {
   const trimmed = input.name.trim();
   if (!trimmed) return { row: null as DbMeetType | null, error: 'Enter a name for your meet type.' };
+  if (!userId) return { row: null, error: 'Sign in to create a meet type.' };
 
-  const base = slugBase(trimmed);
-  const entropy = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const slug = `u-${base}-${entropy}`;
   const duration = input.defaultDurationMinutes ?? 120;
 
-  const { data, error } = await client
-    .from('meet_types')
-    .insert({
-      name: trimmed,
-      slug,
-      default_duration_minutes: duration,
-      allows_escrow: true,
-      allowed_patterns: ['A', 'B', 'C'],
-      default_pattern: 'A',
-      is_restricted: false,
-      supports_mood: false,
-      icon: inferMeetTypeIcon(trimmed),
-      sort_order: 9000,
-      is_active: true,
-      created_by: userId,
-    })
-    .select('*')
-    .single();
+  const { data, error } = await client.rpc('insert_user_meet_type', {
+    p_name: trimmed,
+    p_default_duration_minutes: duration,
+    p_icon: inferMeetTypeIcon(trimmed),
+  });
 
   if (error) return { row: null, error: error.message };
   return { row: data as DbMeetType, error: null };

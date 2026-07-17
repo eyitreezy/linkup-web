@@ -19,18 +19,25 @@ export async function confirmFreePlan(
   return { error: null };
 }
 
+/**
+ * Paid plan: create pattern-aware escrow via SECURITY DEFINER RPC (RLS-safe).
+ */
 export async function proceedToSecurePayment(
   client: SupabaseClient,
   plan: DbPlan,
   offer: DbPlanOffer
 ): Promise<AgreementActionResult> {
   if (!plan.is_paid) {
-    return { error: 'This plan is free — no escrow step.' };
+    return { error: 'This plan is free. No escrow step.' };
   }
 
-  const amount = plan.agreed_price_cents ?? offer.amount_cents ?? plan.starting_price_cents ?? 0;
-  if (amount <= 0) return { error: 'No payment amount for this plan.' };
-  if (amount < MIN_ESCROW_CENTS) {
+  const amountCents = Math.round(
+    Number(plan.agreed_price_cents ?? offer.amount_cents ?? plan.starting_price_cents ?? 0)
+  );
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    return { error: 'No payment amount for this plan.' };
+  }
+  if (amountCents < MIN_ESCROW_CENTS) {
     return { error: `Minimum escrow is ₦${MIN_ESCROW_CENTS / 100} per policy.` };
   }
 
@@ -41,7 +48,7 @@ export async function proceedToSecurePayment(
   const actorId = authData.user?.id;
   if (!actorId) return { error: 'Not signed in.' };
 
-  if (amount > MAX_ESCROW_TIER1_CENTS) {
+  if (amountCents > MAX_ESCROW_TIER1_CENTS) {
     const perm = await checkPermission(actorId, 'escrow.high_value');
     if (!perm.allowed) {
       return { error: 'high_value_requires_platinum' };
@@ -75,27 +82,61 @@ export async function proceedToSecurePayment(
   const { payerId, payeeId, hostShareCents, guestShareCents } = resolveEscrowParties(
     plan,
     offer.bidder_id,
-    amount
+    amountCents
   );
 
   const hostId = plan.creator_id;
   const guestId = offer.bidder_id;
 
-  const fundingDeadline = plan.is_mood_plan
-    ? new Date(Date.now() + 60 * 60 * 1000).toISOString()
-    : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  // Group split host must use/create host escrow leg, never guest slot escrow.
+  if (plan.is_group_plan && pattern === 'B' && actorId === hostId) {
+    if (plan.host_escrow_id) {
+      return { error: null, escrowId: plan.host_escrow_id };
+    }
+    const { data: existingHostEscrow } = await client
+      .from('escrow_transactions')
+      .select('id')
+      .eq('plan_id', plan.id)
+      .eq('payer_id', hostId)
+      .maybeSingle();
+    if (existingHostEscrow?.id) {
+      return { error: null, escrowId: existingHostEscrow.id as string };
+    }
+    return { error: 'close_group_first' };
+  }
 
-  const { data: existing } = await client
+  const { data: existingEscrow } = await client
     .from('escrow_transactions')
     .select('id')
     .eq('plan_id', plan.id)
     .eq('guest_id', guestId)
     .maybeSingle();
-  if (existing?.id) {
-    const { error: e1 } = await client.from('plans').update({ status: 'awaiting_payment' }).eq('id', plan.id);
-    if (e1) return { error: e1.message };
-    return { error: null, escrowId: existing.id as string };
+  if (existingEscrow?.id) {
+    if (plan.status === 'agreed') {
+      const { error: statusErr } = await client
+        .from('plans')
+        .update({ status: 'awaiting_payment' })
+        .eq('id', plan.id)
+        .eq('status', 'agreed');
+      if (statusErr) return { error: statusErr.message };
+    }
+    return { error: null, escrowId: existingEscrow.id as string };
   }
+
+  if (!plan.is_group_plan) {
+    const { data: existingByPlan } = await client
+      .from('escrow_transactions')
+      .select('id')
+      .eq('plan_id', plan.id)
+      .maybeSingle();
+    if (existingByPlan?.id) {
+      return { error: null, escrowId: existingByPlan.id as string };
+    }
+  }
+
+  const fundingDeadline = plan.is_mood_plan
+    ? new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
   let groupPlanIndex: number | null = null;
   if (plan.is_group_plan) {
@@ -106,31 +147,41 @@ export async function proceedToSecurePayment(
     groupPlanIndex = (count ?? 0) + 1;
   }
 
-  const { data: esc, error: e2 } = await client
-    .from('escrow_transactions')
-    .insert({
-      plan_id: plan.id,
-      payer_id: payerId,
-      payee_id: payeeId,
-      host_id: hostId,
-      guest_id: guestId,
-      offer_id: offer.id,
-      group_plan_index: groupPlanIndex,
-      escrow_pattern: pattern,
-      amount_cents: amount,
-      host_share_cents: hostShareCents,
-      guest_share_cents: guestShareCents,
-      funding_deadline: fundingDeadline,
-      currency: plan.currency,
-      status: 'pending_funding',
-      metadata: pattern === 'B' ? { legs: 'split', phase: 'awaiting_payment' } : {},
-    })
-    .select('id')
-    .single();
-  if (e2) return { error: e2.message };
+  const metadata = pattern === 'B' ? { legs: 'split', phase: 'awaiting_payment' } : {};
 
-  const { error: e3 } = await client.from('plans').update({ status: 'awaiting_payment' }).eq('id', plan.id);
-  if (e3) return { error: e3.message };
+  const { data: escrowId, error: rpcErr } = await client.rpc('create_plan_escrow_transaction', {
+    p_plan_id: plan.id,
+    p_offer_id: offer.id,
+    p_payer_id: payerId,
+    p_payee_id: payeeId,
+    p_host_id: hostId,
+    p_guest_id: guestId,
+    p_amount_cents: amountCents,
+    p_host_share_cents: hostShareCents,
+    p_guest_share_cents: guestShareCents,
+    p_escrow_pattern: pattern,
+    p_currency: plan.currency ?? 'NGN',
+    p_funding_deadline: fundingDeadline,
+    p_group_plan_index: groupPlanIndex,
+    p_metadata: metadata,
+  });
 
-  return { error: null, escrowId: esc.id as string };
+  if (rpcErr) {
+    if (rpcErr.message.includes('both_parties_must_confirm')) {
+      return { error: 'Both parties must confirm the agreement before payment.' };
+    }
+    if (rpcErr.message.includes('verification_required')) {
+      return { error: 'Identity verification is required before secure payment.' };
+    }
+    if (rpcErr.message.includes('not_eligible')) {
+      return { error: 'You are not eligible to start payment for this plan.' };
+    }
+    return { error: rpcErr.message };
+  }
+
+  if (!escrowId) {
+    return { error: 'Could not create escrow for this plan.' };
+  }
+
+  return { error: null, escrowId: escrowId as string };
 }

@@ -10,6 +10,7 @@ import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
 import { HINGE_PROMPTS, INTEREST_TAGS, LANGUAGE_OPTIONS, ONBOARDING_STEP_LABELS, ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
 import { ageFromBirthDate, draftFromProfile } from '@/lib/onboarding/hydrate';
 import { finalizeOnboarding, persistOnboardingResumeStep, saveOnboardingStep } from '@/lib/onboarding/persist';
+import { linkInvitationAfterSignup } from '@/lib/plans/planInvitations';
 import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
 import { profileMediaMeetsMinimums, profileMediaValidationMessage } from '@/lib/profile/media/validation';
 import { createClient } from '@/lib/supabase/client';
@@ -22,7 +23,7 @@ import { cn } from '@/utils/cn';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { IoSparkles } from 'react-icons/io5';
 
 const INTENTS: { id: MeetingIntent; label: string }[] = [
@@ -32,10 +33,11 @@ const INTENTS: { id: MeetingIntent; label: string }[] = [
   { id: 'networking', label: 'Networking' },
 ];
 
-export function OnboardingScreen() {
+export function OnboardingScreen({ invitationToken }: { invitationToken?: string | null }) {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
   const queryClient = useQueryClient();
+  const invitationTokenRef = useRef(invitationToken?.trim() || null);
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<OnboardingDraft>(() => defaultOnboardingDraft());
   const [saving, setSaving] = useState(false);
@@ -100,6 +102,30 @@ export function OnboardingScreen() {
     return null;
   }, [step, draft]);
 
+  useEffect(() => {
+    if (invitationToken?.trim()) {
+      invitationTokenRef.current = invitationToken.trim();
+    }
+  }, [invitationToken]);
+
+  async function routeAfterOnboarding() {
+    const token = invitationTokenRef.current;
+    if (token) {
+      try {
+        const linked = await linkInvitationAfterSignup(token);
+        if (linked.linked && linked.planId && linked.invitationId) {
+          router.replace(`/plan/${linked.planId}/invitation/${linked.invitationId}`);
+          router.refresh();
+          return;
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+    router.push('/discover');
+    router.refresh();
+  }
+
   async function handleContinue() {
     if (!user?.id || !canContinue) return;
     setSaving(true);
@@ -142,8 +168,7 @@ export function OnboardingScreen() {
       return;
     }
     await queryClient.invalidateQueries({ queryKey: ['profile-bundle'] });
-    router.push('/discover');
-    router.refresh();
+    await routeAfterOnboarding();
   }
 
   if (!user) {

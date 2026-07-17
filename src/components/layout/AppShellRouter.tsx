@@ -5,14 +5,26 @@ import { UpgradeGateProvider } from '@/contexts/UpgradeGateContext';
 import { PresenceProvider } from '@/contexts/PresenceContext';
 import { MessagesInboxProvider } from '@/contexts/MessagesInboxContext';
 import { NotificationInboxProvider } from '@/contexts/NotificationInboxContext';
-import { DiscoverForYouRail } from '@/features/discover/DiscoverForYouRail';
 import { DiscoverPageProvider } from '@/features/discover/DiscoverPageContext';
 import { PlanManagementPageProvider } from '@/features/plan-management/PlanManagementPageContext';
-import { PlanManagementSortFilterRail } from '@/features/plan-management/PlanManagementSortFilterRail';
 import { useIsMobileDiscoverLayout } from '@/hooks/use-media-query';
 import { isAdminRoute } from '@/lib/navigation/navActive';
+import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
+
+const DiscoverForYouRail = dynamic(
+  () => import('@/features/discover/DiscoverForYouRail').then((m) => ({ default: m.DiscoverForYouRail })),
+  { loading: () => <div className="animate-pulse space-y-3 p-1" aria-hidden><div className="h-24 rounded-2xl bg-[#EDE8FF]/70" /></div> }
+);
+
+const PlanManagementSortFilterRail = dynamic(
+  () =>
+    import('@/features/plan-management/PlanManagementSortFilterRail').then((m) => ({
+      default: m.PlanManagementSortFilterRail,
+    })),
+  { loading: () => <div className="animate-pulse space-y-3 p-1" aria-hidden><div className="h-24 rounded-2xl bg-[#EDE8FF]/70" /></div> }
+);
 
 export function AppShellRouter({ children }: { children: ReactNode }) {
   const pathname = usePathname();

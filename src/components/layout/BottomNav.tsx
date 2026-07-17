@@ -17,6 +17,7 @@ import { useMessagesInboxOptional } from '@/contexts/MessagesInboxContext';
 import { useNotificationInboxOptional } from '@/contexts/NotificationInboxContext';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
 import { isMainNavItemActive } from '@/lib/navigation/navActive';
+import { shouldPrefetchNavRoute } from '@/lib/navigation/prefetchNav';
 import { cn } from '@/utils/cn';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -40,6 +41,7 @@ function BottomNavTabLink({
   return (
     <Link
       href={item.href}
+      prefetch={shouldPrefetchNavRoute(item.href)}
       onClick={onNavigate}
       className={cn(
         'flex min-w-0 flex-col items-center gap-0.5 px-0.5 py-0.5 transition active:scale-95 min-[360px]:gap-1',

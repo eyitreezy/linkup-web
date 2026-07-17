@@ -1,27 +1,72 @@
 'use client';
 
 import { AuthDivider } from '@/components/auth/AuthDivider';
-import { AuthButton, AuthInput, AuthTrustLine } from '@/components/auth/AuthFormPrimitives';
+import { AuthButton, AuthInput, AuthPasswordInput, AuthTrustLine } from '@/components/auth/AuthFormPrimitives';
 import { GoogleAuthBlock } from '@/features/auth/GoogleAuthBlock';
+import { recordPrivacyConsent } from '@/lib/privacy/recordPrivacyConsent';
 import { createClient } from '@/lib/supabase/client';
 import { env } from '@/lib/env';
+import { cn } from '@/utils/cn';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Suspense, useState } from 'react';
-import { IoMailOpenOutline } from 'react-icons/io5';
+import { IoCheckmark, IoMailOpenOutline } from 'react-icons/io5';
 
 function SignupFields() {
   const router = useRouter();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [privacyConsentChecked, setPrivacyConsentChecked] = useState(false);
+  const [showConsentError, setShowConsentError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
+  const [resendBusy, setResendBusy] = useState(false);
+  const [resendNotice, setResendNotice] = useState<string | null>(null);
+  const [resendError, setResendError] = useState<string | null>(null);
+
+  async function onResendVerification() {
+    setResendError(null);
+    setResendNotice(null);
+    setResendBusy(true);
+    try {
+      const supabase = createClient();
+      const { error: err } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim(),
+        options: { emailRedirectTo: `${env.siteUrl}/auth/callback` },
+      });
+      if (err) {
+        setResendError(err.message);
+        return;
+      }
+      setResendNotice('Verification email sent again. Check your inbox and spam folder.');
+    } catch {
+      setResendError('Could not resend the email. Try again in a moment.');
+    } finally {
+      setResendBusy(false);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setShowConsentError(false);
+    const trimmedName = displayName.trim();
+    const trimmedEmail = email.trim();
+    if (!trimmedName) {
+      setError('Please enter your name.');
+      return;
+    }
+    if (!trimmedEmail) {
+      setError('Please enter your email.');
+      return;
+    }
+    if (!privacyConsentChecked) {
+      setShowConsentError(true);
+      return;
+    }
     if (password.length < 6) {
       setError('Password must be at least 6 characters.');
       return;
@@ -30,16 +75,19 @@ function SignupFields() {
     try {
       const supabase = createClient();
       const { data, error: err } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: trimmedEmail,
         password,
         options: {
           emailRedirectTo: `${env.siteUrl}/auth/callback`,
-          data: { display_name: displayName.trim() || undefined },
+          data: { display_name: trimmedName },
         },
       });
       if (err) {
         setError(err.message);
         return;
+      }
+      if (data.user) {
+        await recordPrivacyConsent(data.user.id, 'signup');
       }
       if (!data.session) {
         setVerificationSent(true);
@@ -65,7 +113,32 @@ function SignupFields() {
           We sent a verification link to <span className="font-extrabold text-foreground max-lg:text-white">{email}</span>.
           Open it on this device to continue.
         </p>
-        <AuthButton type="button" fullWidth className="mt-4" onClick={() => setVerificationSent(false)} variant="ghost">
+        {resendNotice ? (
+          <p className="mt-3 text-[13px] font-semibold leading-relaxed text-emerald-700 max-lg:text-emerald-200">
+            {resendNotice}
+          </p>
+        ) : null}
+        {resendError ? <p className="auth-error mt-3">{resendError}</p> : null}
+        <AuthButton
+          type="button"
+          fullWidth
+          className="mt-4"
+          disabled={resendBusy}
+          onClick={() => void onResendVerification()}
+        >
+          {resendBusy ? 'Sending…' : 'Resend verification email'}
+        </AuthButton>
+        <AuthButton
+          type="button"
+          fullWidth
+          className="mt-2"
+          variant="ghost"
+          onClick={() => {
+            setVerificationSent(false);
+            setResendNotice(null);
+            setResendError(null);
+          }}
+        >
           Edit email
         </AuthButton>
       </div>
@@ -75,7 +148,11 @@ function SignupFields() {
   return (
     <>
       <Suspense fallback={<div className="mb-6 h-[52px] animate-pulse rounded-full bg-white/10" />}>
-        <GoogleAuthBlock mode="signup" />
+        <GoogleAuthBlock
+          mode="signup"
+          privacyConsentChecked={privacyConsentChecked}
+          onPrivacyConsentRequired={() => setShowConsentError(true)}
+        />
       </Suspense>
       <form onSubmit={onSubmit} className="auth-form-stack space-y-3 max-lg:space-y-0">
         <AuthInput
@@ -83,6 +160,7 @@ function SignupFields() {
           autoComplete="name"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
+          required
         />
         <AuthInput
           type="email"
@@ -92,8 +170,7 @@ function SignupFields() {
           onChange={(e) => setEmail(e.target.value)}
           required
         />
-        <AuthInput
-          type="password"
+        <AuthPasswordInput
           autoComplete="new-password"
           placeholder="Password (min. 6 characters)"
           value={password}
@@ -101,6 +178,41 @@ function SignupFields() {
           minLength={6}
           required
         />
+        <div className="flex items-start gap-2.5 pt-1">
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={privacyConsentChecked}
+            aria-label="Agree to Privacy Policy"
+            onClick={() => {
+              setPrivacyConsentChecked((checked) => !checked);
+              setShowConsentError(false);
+            }}
+            className={cn(
+              'mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border transition',
+              privacyConsentChecked
+                ? 'border-primary bg-primary text-white'
+                : 'border-border bg-[#F8F9FC] max-lg:border-white/20 max-lg:bg-white/10'
+            )}
+          >
+            {privacyConsentChecked ? <IoCheckmark size={12} aria-hidden /> : null}
+          </button>
+          <p className="text-[13px] font-semibold leading-snug text-muted max-lg:text-white/80">
+            I agree to the{' '}
+            <Link
+              href="/legal/privacy-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-extrabold text-foreground underline hover:no-underline max-lg:text-white"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Privacy Policy
+            </Link>
+          </p>
+        </div>
+        {showConsentError ? (
+          <p className="auth-error -mt-1">Please accept the Privacy Policy to continue</p>
+        ) : null}
         {error ? <p className="auth-error">{error}</p> : null}
         <AuthButton type="submit" fullWidth disabled={busy}>
           {busy ? 'Creating account…' : 'Create account'}

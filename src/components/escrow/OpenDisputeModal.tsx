@@ -123,7 +123,7 @@ export function OpenDisputeModal({
           <textarea
             className="mt-2 w-full rounded-2xl border border-border bg-white px-4 py-3 text-[14px] font-semibold outline-none ring-primary/20 transition focus:ring-2"
             rows={4}
-            placeholder="Add context — helps us resolve faster."
+            placeholder="Add context. Helps us resolve faster."
             value={detail}
             onChange={(e) => setDetail(e.target.value)}
           />

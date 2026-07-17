@@ -4,23 +4,23 @@ import {
   IoAlbums,
   IoBookmark,
   IoChatbubbles,
+  IoCompass,
   IoHeart,
   IoPerson,
   IoPricetag,
   IoShieldCheckmark,
   IoSettings,
-  IoWallet,
 } from 'react-icons/io5';
 
 export type { TabIconName };
 
 const ICONS = {
   heart: IoHeart,
+  compass: IoCompass,
   chatbubbles: IoChatbubbles,
   bookmark: IoBookmark,
   albums: IoAlbums,
   pricetag: IoPricetag,
-  wallet: IoWallet,
   person: IoPerson,
   shield: IoShieldCheckmark,
   settings: IoSettings,

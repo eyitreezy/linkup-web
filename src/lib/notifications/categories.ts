@@ -7,6 +7,10 @@ export const FILTER_TAB_ORDER: NotificationFilterTab[] = ['all', 'activity', 'pa
 const ACTIVITY: NotificationEventType[] = [
   'offer_new',
   'offer_counter',
+  'offer_received',
+  'offer_countered',
+  'offer_accepted',
+  'offer_declined',
   'mutual_agreement',
   'agreement_confirmed',
   'agreement_update',
@@ -14,6 +18,8 @@ const ACTIVITY: NotificationEventType[] = [
   'payment_reminder',
   'plan_cancelled',
   'message',
+  'meet_type_approved',
+  'meet_type_rejected',
 ];
 
 const PAYMENTS: NotificationEventType[] = [
@@ -45,6 +51,7 @@ const SYSTEM: NotificationEventType[] = [
   'strike_added',
   'user_suspended',
   'user_banned',
+  'meet_type_submitted',
 ];
 
 /** Prefer the row `type` column; fall back to `data.type` for legacy payloads. */

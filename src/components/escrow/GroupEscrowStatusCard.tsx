@@ -3,6 +3,7 @@
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { EscrowStatusBadge } from '@/components/escrow/EscrowStatusBadge';
 import { TierBadge } from '@/components/subscription/TierBadge';
+import { resolveEscrowHref } from '@/lib/plans/planAgreementRoute';
 import { createClient } from '@/lib/supabase/client';
 import type { SubscriptionTier } from '@/lib/subscription/types';
 import type { DbEscrowTransaction } from '@/types/database';
@@ -20,15 +21,23 @@ type GuestRow = {
 
 type Props = {
   planId: string;
+  offerId?: string | null;
   isGroupPlan: boolean;
   isHost: boolean;
 };
 
-function isFunded(status: string): boolean {
-  return status === 'funded' || status === 'active' || status === 'released';
+function isFunded(escrow: DbEscrowTransaction): boolean {
+  return (
+    escrow.status === 'funded' ||
+    escrow.status === 'active' ||
+    escrow.status === 'released' ||
+    !!escrow.funded_at ||
+    !!escrow.host_funded_at ||
+    !!escrow.guest_funded_at
+  );
 }
 
-export function GroupEscrowStatusCard({ planId, isGroupPlan, isHost }: Props) {
+export function GroupEscrowStatusCard({ planId, offerId, isGroupPlan, isHost }: Props) {
   const [rows, setRows] = useState<GuestRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -84,7 +93,7 @@ export function GroupEscrowStatusCard({ planId, isGroupPlan, isHost }: Props) {
 
   if (!isGroupPlan) return null;
 
-  const fundedCount = rows.filter((r) => isFunded(r.escrow.status)).length;
+  const fundedCount = rows.filter((r) => isFunded(r.escrow)).length;
   const total = rows.length;
   const progress = total > 0 ? fundedCount / total : 0;
   const allFunded = total > 0 && fundedCount === total;
@@ -137,11 +146,11 @@ export function GroupEscrowStatusCard({ planId, isGroupPlan, isHost }: Props) {
         ) : (
           <ul className="space-y-2">
             {rows.map(({ escrow, displayName, avatarUrl, tier }) => {
-              const funded = isFunded(escrow.status);
+              const funded = isFunded(escrow);
               return (
                 <li key={escrow.id}>
                   <Link
-                    href={`/escrow/${escrow.id}`}
+                    href={resolveEscrowHref(escrow.id, { planId, offerId })}
                     className={cn(
                       'flex items-center justify-between gap-3 rounded-2xl border p-3 transition hover:border-primary/25',
                       funded
@@ -183,7 +192,7 @@ export function GroupEscrowStatusCard({ planId, isGroupPlan, isHost }: Props) {
         {allFunded ? (
           <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-[13px] font-semibold text-emerald-800">
             <IoCheckmarkCircle size={18} />
-            All guests funded — plan can go active.
+            All guests funded. Plan can go active.
           </div>
         ) : isHost ? (
           <p className="text-[12px] font-semibold text-muted">

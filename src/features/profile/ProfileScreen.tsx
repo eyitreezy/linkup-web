@@ -12,6 +12,7 @@ import { ProfileVerificationCard } from '@/features/profile/ProfileVerificationC
 import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import { ProfileMediaGallery } from '@/components/profile/ProfileMediaGallery';
 import { resolvePrimaryPhotoUrl } from '@/lib/profile/media/resolve';
+import { signOutAndRedirect } from '@/lib/auth/signOut';
 import { createClient } from '@/lib/supabase/client';
 import { fetchProfileVideo } from '@/services/profileMedia.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
@@ -19,7 +20,6 @@ import { useAuthStore } from '@/stores/auth-store';
 import type { UserVerification } from '@/types/database';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import {
   IoAirplaneOutline,
@@ -43,7 +43,6 @@ function isVerified(status: UserVerification | undefined): boolean {
 
 export function ProfileScreen() {
   const user = useAuthStore((s) => s.user);
-  const router = useRouter();
   const queryClient = useQueryClient();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
@@ -65,11 +64,7 @@ export function ProfileScreen() {
 
   async function signOut() {
     setLogoutBusy(true);
-    const client = createClient();
-    await client.auth.signOut();
-    queryClient.clear();
-    router.push('/login');
-    router.refresh();
+    await signOutAndRedirect({ queryClient });
   }
 
   if (!user) {
@@ -247,7 +242,7 @@ export function ProfileScreen() {
       <ConfirmDialog
         open={logoutOpen}
         title="Log out?"
-        message="You will need to sign in again to access your plans and messages."
+        message="Sign in again to access your inbox and plans. Your account stays saved."
         cancelLabel="Stay signed in"
         confirmLabel="Log out"
         confirmVariant="neutral"

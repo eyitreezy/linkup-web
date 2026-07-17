@@ -3,14 +3,18 @@ import { isSupabaseConfigured } from '@/lib/env';
 
 export const dynamic = 'force-dynamic';
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ planId?: string; offerId?: string }>;
+};
 
 export async function generateMetadata() {
   return { title: 'Secure payment' };
 }
 
-export default async function EscrowPage({ params }: Props) {
+export default async function EscrowPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const { planId, offerId } = await searchParams;
 
   if (!isSupabaseConfigured) {
     return (
@@ -18,5 +22,7 @@ export default async function EscrowPage({ params }: Props) {
     );
   }
 
-  return <EscrowDetailScreen escrowId={id} />;
+  return (
+    <EscrowDetailScreen escrowId={id} agreementPlanId={planId} agreementOfferId={offerId} />
+  );
 }

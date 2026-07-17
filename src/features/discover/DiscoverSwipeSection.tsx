@@ -2,11 +2,22 @@
 
 import { useGatedAction } from '@/contexts/UpgradeGateContext';
 import { DiscoverSwipeActionButtons } from '@/features/discover/DiscoverSwipeActionButtons';
-import { DiscoverSwipeDeck, type DiscoverSwipeDeckRef } from '@/features/discover/DiscoverSwipeDeck';
+import type { DiscoverSwipeDeckRef } from '@/features/discover/DiscoverSwipeDeck';
 import type { PresenceUi } from '@/lib/presence/hostPresenceStatus';
 import type { PlanFeedRow } from '@/services/plans.service';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+const DiscoverSwipeDeck = dynamic(
+  () => import('@/features/discover/DiscoverSwipeDeck').then((m) => ({ default: m.DiscoverSwipeDeck })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-[min(72vh,520px)] w-full animate-pulse rounded-2xl bg-[#EDE8FF]/60" aria-hidden />
+    ),
+  }
+);
 
 type Props = {
   plans: PlanFeedRow[];

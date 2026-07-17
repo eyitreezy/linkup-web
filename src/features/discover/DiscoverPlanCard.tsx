@@ -7,6 +7,8 @@ import { BoostPill } from '@/components/plans/BoostPill';
 import { PlanCardHero } from '@/components/plans/PlanCardHero';
 import { TierBadge } from '@/components/subscription/TierBadge';
 import { isCreatorSpotlightActive } from '@/lib/plans/creatorSpotlight';
+import { formatNGN } from '@/lib/escrow/escrowFormatters';
+import { grossAmountCents } from '@/lib/plans/planFinancialConfig';
 import { derivePresenceUi, type PresenceUi } from '@/lib/presence/hostPresenceStatus';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { MOOD_REACH_DISPLAY } from '@/lib/plans/moodPlanTierConfig';
@@ -30,10 +32,8 @@ export function DiscoverPlanCard({
   viewerUserId,
   distanceLabel,
 }: Props) {
-  const price =
-    plan.starting_price_cents != null && plan.starting_price_cents > 0
-      ? `₦${(plan.starting_price_cents / 100).toLocaleString()}`
-      : 'Free';
+  const isPaid = plan.starting_price_cents != null && plan.starting_price_cents > 0;
+  const priceGrossLabel = isPaid ? formatNGN(grossAmountCents(plan.starting_price_cents!)) : 'Free';
   const name = plan.creator?.display_name ?? 'Host';
   const verified = !!plan.creator?.verified_badge;
   const boosted = isPlanBoostActive(plan.boosted_until);
@@ -112,7 +112,7 @@ export function DiscoverPlanCard({
           <HostPresenceChip presence={presenceUi} />
           {boosted ? <BoostPill /> : null}
         </div>
-        <p className="mt-3 text-[14px] font-extrabold text-primary">{price}</p>
+        <p className="mt-3 text-[14px] font-extrabold text-primary">{priceGrossLabel}</p>
       </div>
     </Link>
   );

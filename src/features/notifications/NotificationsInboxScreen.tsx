@@ -19,6 +19,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from '@/services/notifications.service';
+import { useAdminAccess } from '@/hooks/useAdminAccess';
 import { useAuthStore } from '@/stores/auth-store';
 import type { DbNotification } from '@/types/database';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -43,6 +44,7 @@ function sortNotifications(list: DbNotification[]): DbNotification[] {
 
 export function NotificationsInboxScreen() {
   const user = useAuthStore((s) => s.user);
+  const { isAdmin, isLoading: adminLoading } = useAdminAccess();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<NotificationFilterTab>('all');
@@ -51,12 +53,12 @@ export function NotificationsInboxScreen() {
   const unreadFromList = inbox?.unreadCount;
 
   const { data, isLoading, refetch, isFetching } = useQuery({
-    queryKey: [NOTIFICATIONS_QUERY_KEY, user?.id],
+    queryKey: [NOTIFICATIONS_QUERY_KEY, user?.id, isAdmin],
     queryFn: async () => {
       if (!user?.id) return { rows: [] as DbNotification[], error: null };
-      return fetchUserNotifications(user.id);
+      return fetchUserNotifications(user.id, isAdmin);
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && !adminLoading,
     refetchInterval: 30_000,
   });
 

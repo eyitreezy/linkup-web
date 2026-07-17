@@ -1,5 +1,6 @@
 'use client';
 
+import { SmartSuggestionsBar } from '@/components/chat/SmartSuggestionsBar';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { usePresence } from '@/contexts/PresenceContext';
 import { ChatAppearanceSheet } from '@/features/messages/ChatAppearanceSheet';
@@ -7,6 +8,7 @@ import { ChatMessageBubble } from '@/features/messages/ChatMessageBubble';
 import { ChatReportDialog } from '@/features/messages/ChatReportDialog';
 import { ChatSafetySheet } from '@/features/messages/ChatSafetySheet';
 import { ChatComposer } from '@/features/messages/ChatComposer';
+import { GroupMentionPicker } from '@/features/messages/GroupMentionPicker';
 import { EditMessageDialog } from '@/features/messages/EditMessageDialog';
 import { ForwardMessageDialog } from '@/features/messages/ForwardMessageDialog';
 import { MessageActionsSheet } from '@/features/messages/MessageActionsSheet';
@@ -15,6 +17,7 @@ import { ChatSearchBar } from '@/features/messages/ChatSearchBar';
 import { GroupAvatarCell } from '@/features/messages/GroupAvatarCell';
 import { PinnedMessageBanner } from '@/features/messages/PinnedMessageBanner';
 import { ChatTypingIndicator } from '@/features/messages/ChatTypingIndicator';
+import { getSmartSuggestions } from '@/lib/chat/smartSuggestions';
 import {
   buildReplyQuoteFromTarget,
   resolveReplyQuote,
@@ -24,8 +27,16 @@ import { getPinnedMessageId, setPinnedMessageId } from '@/lib/messaging/chatPins
 import { buildMessageActions } from '@/lib/messaging/buildMessageActions';
 import { deleteMessageForEveryone } from '@/lib/messaging/deleteMessage';
 import { editMessage } from '@/lib/messaging/editMessage';
+import {
+  encodeGroupMentions,
+  filterMentionMembers,
+  formatGroupMentionsForDisplay,
+  getActiveMentionQuery,
+  insertMentionLabel,
+  type GroupMentionMember,
+} from '@/lib/messaging/groupMentions';
 import { findLastOwnSentMessageId } from '@/lib/messaging/messageEditRules';
-import { messageActionMediaMeta, messageCopyText } from '@/lib/messaging/messageActions';
+import { messageActionMediaMeta } from '@/lib/messaging/messageActions';
 import {
   fetchHiddenMessageIdsForConversation,
   filterMessagesHiddenForUser,
@@ -95,23 +106,35 @@ import {
   IoSparkles,
 } from 'react-icons/io5';
 
+type ChatSuggestionPlan = {
+  status: string;
+  scheduled_at: string | null;
+  meet_type_id: string | null;
+  creator_id: string;
+};
+
 type Props = {
   conversationId: string;
   peer: InboxRow;
   /** Mobile: back to inbox (matches app chat header). */
   onBack?: () => void;
+  /** Group chat plan context for smart suggestion chips. */
+  suggestionPlan?: ChatSuggestionPlan | null;
 };
 
-export function ChatThread({ conversationId, peer, onBack }: Props) {
+export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Props) {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
   const isMobile = useIsMobileShellLayout();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const composeInputRef = useRef<HTMLTextAreaElement>(null);
   const messageRefs = useRef(new Map<string, HTMLDivElement>());
   const queryClient = useQueryClient();
   const { signalTyping, clearTyping } = usePresence();
 
   const [text, setText] = useState('');
+  const [composeSelection, setComposeSelection] = useState({ start: 0, end: 0 });
+  const [mentionPickerSuppressed, setMentionPickerSuppressed] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [peerPresence, setPeerPresence] = useState<DbUserPresence | null>(null);
@@ -247,6 +270,40 @@ export function ChatThread({ conversationId, peer, onBack }: Props) {
     return map;
   }, [groupMembers]);
 
+  const mentionMembers = useMemo<GroupMentionMember[]>(
+    () =>
+      groupMembers.map((m) => ({
+        userId: m.user_id,
+        displayName: m.user?.display_name?.trim() || 'Member',
+      })),
+    [groupMembers]
+  );
+
+  const mentionNameByUserId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of mentionMembers) map.set(m.userId, m.displayName);
+    return map;
+  }, [mentionMembers]);
+
+  const mentionAvatarByUserId = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const m of groupMembers) map.set(m.user_id, m.user?.avatar_url ?? null);
+    return map;
+  }, [groupMembers]);
+
+  const activeMention = useMemo(
+    () => (isGroupChat ? getActiveMentionQuery(text, composeSelection.end) : null),
+    [isGroupChat, text, composeSelection.end]
+  );
+
+  const mentionPickerMembers = useMemo(
+    () =>
+      filterMentionMembers(mentionMembers, activeMention?.query ?? '', {
+        excludeUserId: user?.id,
+      }),
+    [mentionMembers, activeMention?.query, user?.id]
+  );
+
   useEffect(() => {
     if (!conversationId || !peer.otherId || isGroupChat) {
       setPeerReadCursor(null);
@@ -309,6 +366,38 @@ export function ChatThread({ conversationId, peer, onBack }: Props) {
     () => filterMessagesHiddenForUser(messages ?? [], hiddenForMeIds),
     [messages, hiddenForMeIds]
   );
+
+  const planForSuggestions = useMemo((): ChatSuggestionPlan | null => {
+    if (isGroupChat) return suggestionPlan ?? null;
+    if (!linkedMeetup) return null;
+    return {
+      status: linkedMeetup.status,
+      scheduled_at: linkedMeetup.scheduled_at,
+      meet_type_id: linkedMeetup.meet_type_id,
+      creator_id: linkedMeetup.creator_id,
+    };
+  }, [isGroupChat, suggestionPlan, linkedMeetup]);
+
+  const smartSuggestions = useMemo(() => {
+    if (!user?.id || !planForSuggestions) return [];
+
+    const countableMessages = visibleMessages.filter((m) => m.sender_id !== null);
+    const lastMessage = countableMessages[countableMessages.length - 1];
+
+    return getSmartSuggestions({
+      plan: {
+        status: planForSuggestions.status,
+        scheduled_at: planForSuggestions.scheduled_at,
+        meet_type_id: planForSuggestions.meet_type_id,
+      },
+      isHost: planForSuggestions.creator_id === user.id,
+      isGroupChat,
+      messageCount: countableMessages.length,
+      lastMessageIsFromOther:
+        countableMessages.length > 0 && lastMessage?.sender_id !== user.id,
+      composeValue: text,
+    });
+  }, [user?.id, planForSuggestions, isGroupChat, visibleMessages, text]);
 
   const lastOwnSentMessageId = useMemo(
     () => (user?.id ? findLastOwnSentMessageId(visibleMessages, user.id) : null),
@@ -386,8 +475,14 @@ export function ChatThread({ conversationId, peer, onBack }: Props) {
     if (!pinnedMessageId || !user?.id || hiddenForMeIds.has(pinnedMessageId)) return null;
     const msg = messagesById.get(pinnedMessageId);
     if (!msg) return null;
-    return buildReplyQuoteFromTarget(msg, peer.name, user.id);
-  }, [pinnedMessageId, messagesById, peer.name, user?.id, hiddenForMeIds]);
+    const quote = buildReplyQuoteFromTarget(msg, peer.name, user.id);
+    return {
+      ...quote,
+      preview: isGroupChat
+        ? formatGroupMentionsForDisplay(quote.preview, mentionNameByUserId)
+        : quote.preview,
+    };
+  }, [pinnedMessageId, messagesById, peer.name, user?.id, hiddenForMeIds, isGroupChat, mentionNameByUserId]);
 
   function scrollToMessage(messageId: string) {
     const el = messageRefs.current.get(messageId);
@@ -408,8 +503,11 @@ export function ChatThread({ conversationId, peer, onBack }: Props) {
   function buildActionItems(m: ChatMessageRow) {
     if (!user?.id) return [];
     const { hasMedia, mediaKind } = messageActionMediaMeta(m);
-    const copyText = messageCopyText(m, { hasMedia, mediaKind });
-    const rawText = messageDisplayText(m)?.trim() ?? '';
+    const rawStored = messageDisplayText(m)?.trim() ?? '';
+    const rawText = isGroupChat
+      ? formatGroupMentionsForDisplay(rawStored, mentionNameByUserId)
+      : rawStored;
+    const copyText = rawText || (hasMedia ? (mediaKind === 'video' ? 'Video' : 'Photo') : '');
 
     return buildMessageActions({
       message: m,
@@ -423,7 +521,13 @@ export function ChatThread({ conversationId, peer, onBack }: Props) {
       isGroupChat,
       handlers: {
         onReply: () => {
-          setPendingReply(buildReplyQuoteFromTarget(m, peer.name, user.id));
+          const quote = buildReplyQuoteFromTarget(m, peer.name, user.id);
+          setPendingReply({
+            ...quote,
+            preview: isGroupChat
+              ? formatGroupMentionsForDisplay(quote.preview, mentionNameByUserId)
+              : quote.preview,
+          });
         },
         onCopy: () => {
           void navigator.clipboard.writeText(copyText).then(() => {
@@ -500,7 +604,8 @@ export function ChatThread({ conversationId, peer, onBack }: Props) {
 
   async function saveEditedMessage() {
     if (!editModal || !user?.id) return;
-    const body = editModal.draft.trim();
+    const draft = editModal.draft.trim();
+    const body = isGroupChat ? encodeGroupMentions(draft, mentionMembers) : draft;
     if (!body) {
       setEditError('Add some text or cancel.');
       return;
@@ -591,7 +696,8 @@ export function ChatThread({ conversationId, peer, onBack }: Props) {
     setSending(true);
     const client = createClient();
     const replyId = pendingReply?.messageId ?? null;
-    const { error: err } = await sendTextMessage(client, conversationId, user.id, text, replyId);
+    const outbound = isGroupChat ? encodeGroupMentions(text, mentionMembers) : text;
+    const { error: err } = await sendTextMessage(client, conversationId, user.id, outbound, replyId);
     setSending(false);
     clearTyping();
     if (err) {
@@ -599,6 +705,7 @@ export function ChatThread({ conversationId, peer, onBack }: Props) {
       return;
     }
     setText('');
+    setComposeSelection({ start: 0, end: 0 });
     setPendingReply(null);
     void queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
     invalidateInboxQueries(queryClient, user?.id);
@@ -641,6 +748,35 @@ export function ChatThread({ conversationId, peer, onBack }: Props) {
       return;
     }
     if (line) setText((t) => (t.trim() ? `${t.trim()}\n` : '') + line);
+  }
+
+  function handleComposerChange(value: string) {
+    setText(value);
+    if (conversationId && value.trim().length > 0) signalTyping(conversationId);
+    if (value.length < text.length) return;
+    if (value.includes('@')) setMentionPickerSuppressed(false);
+  }
+
+  function handleComposerSelection(start: number, end: number) {
+    setComposeSelection({ start, end });
+  }
+
+  function handleSelectMention(member: GroupMentionMember) {
+    if (!activeMention) return;
+    const { text: next, selection } = insertMentionLabel(
+      text,
+      activeMention.start,
+      composeSelection.end,
+      member
+    );
+    setMentionPickerSuppressed(true);
+    setText(next);
+    setComposeSelection({ start: selection, end: selection });
+    window.requestAnimationFrame(() => {
+      if (!composeInputRef.current) return;
+      composeInputRef.current.focus();
+      composeInputRef.current.setSelectionRange(selection, selection);
+    });
   }
 
   return (
@@ -862,6 +998,7 @@ export function ChatThread({ conversationId, peer, onBack }: Props) {
                   senderLabel={senderLabel}
                   isAdmin={member?.is_admin}
                   highlighted={highlightedId === m.id}
+                  mentionNameByUserId={isGroupChat ? mentionNameByUserId : undefined}
                   onOpenActions={isSystem ? undefined : () => openActionsFor(m)}
                   onQuotePress={() => {
                     if (quote?.messageId) scrollToMessage(quote.messageId);
@@ -903,21 +1040,38 @@ export function ChatThread({ conversationId, peer, onBack }: Props) {
             {copyToast}
           </p>
         ) : null}
+        <SmartSuggestionsBar
+          suggestions={smartSuggestions}
+          onSelect={(suggestion) => {
+            setText(suggestion);
+            composeInputRef.current?.focus();
+          }}
+        />
         <ChatComposer
           preset={chatPreset}
           onOffer={onQuickSendOffer}
           onPlace={onSuggestPlace}
           placeBusy={placeBusy}
           value={text}
-          onChange={(v) => {
-            setText(v);
-            if (conversationId && v.trim().length > 0) signalTyping(conversationId);
-          }}
+          onChange={handleComposerChange}
           onSend={() => void handleSend()}
           onAttach={(file) => void handleAttach(file)}
           sending={sending}
           disabled={!user?.id}
           threadLook={messageInputLook}
+          composeInputRef={composeInputRef}
+          placeholder={isGroupChat ? 'Message… (@ to mention)' : 'Message…'}
+          onSelectionChange={handleComposerSelection}
+          mentionPicker={
+            isGroupChat ? (
+              <GroupMentionPicker
+                visible={!!activeMention && !mentionPickerSuppressed}
+                members={mentionPickerMembers}
+                avatarByUserId={mentionAvatarByUserId}
+                onSelect={handleSelectMention}
+              />
+            ) : null
+          }
           replyTo={
             pendingReply
               ? { senderLabel: pendingReply.senderLabel, preview: pendingReply.preview }

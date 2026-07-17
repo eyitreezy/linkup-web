@@ -9,19 +9,23 @@ import { DiscoverPlanCard } from '@/features/discover/DiscoverPlanCard';
 import { DiscoverPlanListCard } from '@/features/discover/DiscoverPlanListCard';
 import { DiscoverLocationPrompt } from '@/features/discover/DiscoverLocationPrompt';
 import { DiscoverSwipeSection } from '@/features/discover/DiscoverSwipeSection';
+import { MeetTypeDiscoverPill } from '@/features/discover/MeetTypeDiscoverPill';
 import { MoodPlanDiscoverPill } from '@/features/discover/MoodPlanDiscoverPill';
 import { MoodTimelineCarousel } from '@/features/discover/MoodTimelineCarousel';
 import { useDiscoverPage } from '@/features/discover/DiscoverPageContext';
 import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
+import { useDiscoverPlansRealtime } from '@/hooks/useDiscoverPlansRealtime';
 import { useHasMounted } from '@/hooks/use-has-mounted';
 import { useIsMobileDiscoverLayout } from '@/hooks/use-media-query';
 import {
   applyDiscoverFilters,
+  hasDiscoverPriceFilter,
   loadFeedFilterFromProfile,
   moodTimelinePlans,
   standardDiscoverPlans,
 } from '@/lib/discovery/feedFilters';
 import { planDistanceFromViewer } from '@/lib/discovery/feedFilters';
+import { formatPlanDistanceLabel, planHasMeetupCoords } from '@/lib/plans/planDistanceLabel';
 import { derivePresenceUi } from '@/lib/presence/hostPresenceStatus';
 import { createClient } from '@/lib/supabase/client';
 import { fetchPresenceMap } from '@/services/presence.service';
@@ -45,21 +49,24 @@ import {
 const VIEW_STORAGE_KEY = 'linkup_discover_view_mode';
 
 function distanceLabelFor(
-  plan: { latitude: number | null; longitude: number | null },
+  plan: Pick<PlanFeedRow, 'meetup_latitude' | 'meetup_longitude' | 'latitude' | 'longitude'>,
   viewerLat: number | null,
-  viewerLng: number | null
+  viewerLng: number | null,
+  style: 'pill' | 'line' = 'pill'
 ): string {
-  if (
-    viewerLat == null ||
-    viewerLng == null ||
-    plan.latitude == null ||
-    plan.longitude == null
-  ) {
-    return 'Nearby';
+  const viewerHasLocation = viewerLat != null && viewerLng != null;
+  const planHasLocation = planHasMeetupCoords(plan);
+  let distanceKm: number | null = null;
+  if (viewerHasLocation && planHasLocation) {
+    const d = planDistanceFromViewer(plan, viewerLat, viewerLng);
+    distanceKm = Number.isFinite(d) ? d : null;
   }
-  const d = planDistanceFromViewer(plan, viewerLat, viewerLng);
-  if (!Number.isFinite(d)) return 'Nearby';
-  return d < 1 ? 'Near you' : `${d.toFixed(1)} km`;
+  return formatPlanDistanceLabel({
+    distanceKm,
+    viewerHasLocation,
+    planHasLocation,
+    style,
+  });
 }
 
 function loadStoredView(isMobile: boolean): DiscoverViewMode {
@@ -86,9 +93,9 @@ export function DiscoverFeed() {
   const {
     mood,
     filter: activeFilter,
+    meetTypeFilter,
     baseRadiusKm,
-    browseRadiusKm,
-    hasWiderRadius,
+    sliderMaxKm,
     effectiveTier,
     viewerLat,
     viewerLng,
@@ -102,11 +109,28 @@ export function DiscoverFeed() {
     requestDeviceLocation,
     hasDeviceLocation,
     applyFilters,
+    clearMeetTypeFilter,
     profileLoading,
   } = useDiscoverPage();
   const { subscriptionState } = useSubscriptionContext();
   const queryClient = useQueryClient();
-  const discoverQueryKey = useMemo(() => ['discover', user?.id] as const, [user?.id]);
+  const priceQueryFilter = useMemo(
+    () => ({
+      minPriceCents: activeFilter.minPriceCents,
+      maxPriceCents: activeFilter.maxPriceCents,
+    }),
+    [activeFilter.minPriceCents, activeFilter.maxPriceCents]
+  );
+  const discoverQueryKey = useMemo(
+    () =>
+      [
+        'discover',
+        user?.id,
+        priceQueryFilter.minPriceCents ?? 'min',
+        priceQueryFilter.maxPriceCents ?? 'max',
+      ] as const,
+    [user?.id, priceQueryFilter.minPriceCents, priceQueryFilter.maxPriceCents]
+  );
   const [view, setView] = useState<DiscoverViewMode>('list');
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -130,6 +154,12 @@ export function DiscoverFeed() {
     }
   };
 
+  useEffect(() => {
+    setPage(0);
+    setHasMore(true);
+    fetchGenRef.current += 1;
+  }, [activeFilter.minPriceCents, activeFilter.maxPriceCents]);
+
   const fetchDiscoverPage = useCallback(
     async (pageIndex: number) => {
       const client = createClient();
@@ -138,11 +168,12 @@ export function DiscoverFeed() {
       const { data: rows, error: err } = await fetchDiscoverPlansPage(client, from, to, {
         viewerUserId: user?.id ?? null,
         skipClientRank: true,
+        priceFilter: hasDiscoverPriceFilter(priceQueryFilter) ? priceQueryFilter : null,
       });
       if (err) throw new Error(err.message);
       return rows;
     },
-    [user?.id]
+    [user?.id, priceQueryFilter]
   );
 
   const {
@@ -166,9 +197,10 @@ export function DiscoverFeed() {
     },
     enabled: mounted,
     staleTime: 30_000,
-    refetchInterval: 90_000,
     refetchOnWindowFocus: false,
   });
+
+  useDiscoverPlansRealtime(user?.id, discoverQueryKey);
 
   const showInitialLoading = isPending && feedRows.length === 0;
 
@@ -219,42 +251,6 @@ export function DiscoverFeed() {
     return () => observer.disconnect();
   }, [hasMore, isFetching, showInitialLoading, loadMore]);
 
-  useEffect(() => {
-    if (!user?.id) return;
-    const client = createClient();
-    const channel = client
-      .channel(`discover-plans-status:${user.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'plans' },
-        (payload) => {
-          const updated = payload.new as {
-            id?: string;
-            status?: string;
-            is_suppressed?: boolean;
-            archived_at?: string | null;
-          };
-          if (!updated?.id) return;
-          const remove =
-            updated.is_suppressed === true ||
-            (updated.archived_at != null && updated.archived_at !== '') ||
-            (updated.status != null &&
-              ['agreed', 'active', 'completed', 'cancelled'].includes(updated.status));
-          if (remove) {
-            queryClient.setQueryData<PlanFeedRow[]>(discoverQueryKey, (prev) =>
-              (prev ?? []).filter((p) => p.id !== updated.id)
-            );
-          } else {
-            void queryClient.invalidateQueries({ queryKey: discoverQueryKey });
-          }
-        }
-      )
-      .subscribe();
-    return () => {
-      void client.removeChannel(channel);
-    };
-  }, [user?.id, queryClient, discoverQueryKey]);
-
   const preFiltered = useMemo(() => {
     return applyDiscoverFilters(feedRows, {
       mood,
@@ -263,7 +259,6 @@ export function DiscoverFeed() {
       viewerLat,
       viewerLng,
       baseRadiusKm,
-      browseRadiusKm,
       viewerProfile,
       effectiveTier: subscriptionState.effectiveTier,
       hiddenPlanIds,
@@ -276,20 +271,24 @@ export function DiscoverFeed() {
     viewerLat,
     viewerLng,
     baseRadiusKm,
-    browseRadiusKm,
     viewerProfile,
     subscriptionState.effectiveTier,
     hiddenPlanIds,
   ]);
 
+  const meetTypeScoped = useMemo(() => {
+    if (!meetTypeFilter) return preFiltered;
+    return preFiltered.filter((p) => p.meet_type_id === meetTypeFilter.id);
+  }, [preFiltered, meetTypeFilter]);
+
   const creatorIds = useMemo(() => {
     const ids = new Set<string>();
-    for (const r of preFiltered) {
+    for (const r of meetTypeScoped) {
       if (user?.id && r.creator_id === user.id) continue;
       ids.add(r.creator_id);
     }
     return [...ids];
-  }, [preFiltered, user?.id]);
+  }, [meetTypeScoped, user?.id]);
 
   const presenceKey = creatorIds.join('|');
 
@@ -301,39 +300,49 @@ export function DiscoverFeed() {
   });
 
   const filteredWithPresence = useMemo(() => {
-    if (activeFilter.hostPresence === 'all') return preFiltered;
-    return applyDiscoverFilters(preFiltered, {
+    if (activeFilter.hostPresence === 'all') return meetTypeScoped;
+    return applyDiscoverFilters(meetTypeScoped, {
       mood,
       filter: activeFilter,
       viewerId: user?.id,
       viewerLat,
       viewerLng,
       baseRadiusKm,
-      browseRadiusKm,
       viewerProfile,
       presenceByUser,
       effectiveTier: subscriptionState.effectiveTier,
       hiddenPlanIds,
     });
   }, [
-    preFiltered,
+    meetTypeScoped,
     activeFilter,
     mood,
     user?.id,
     viewerLat,
     viewerLng,
     baseRadiusKm,
-    browseRadiusKm,
     viewerProfile,
     presenceByUser,
     subscriptionState.effectiveTier,
     hiddenPlanIds,
   ]);
 
-  const moodRows = useMemo(() => moodTimelinePlans(filteredWithPresence), [filteredWithPresence]);
+  const moodRows = useMemo(
+    () => moodTimelinePlans(filteredWithPresence, viewerLat, viewerLng),
+    [filteredWithPresence, viewerLat, viewerLng]
+  );
   const standardRows = useMemo(() => standardDiscoverPlans(filteredWithPresence), [filteredWithPresence]);
 
-  const filterKey = `${mood}-${activeFilter.clientFiltersActive}-${activeFilter.maxDistanceKm}`;
+  const filterKey = [
+    mood,
+    activeFilter.maxDistanceKm ?? 'any',
+    activeFilter.minPriceCents ?? 'min',
+    activeFilter.maxPriceCents ?? 'max',
+    activeFilter.verifiedHostsOnly ? 'verified' : 'all-hosts',
+    activeFilter.hostPresence,
+    activeFilter.clientFiltersActive ? 'on' : 'off',
+    meetTypeFilter?.id ?? 'all',
+  ].join('-');
 
   const presenceFor = (creatorId: string, creator: PlanFeedRow['creator']) =>
     derivePresenceUi(
@@ -386,7 +395,11 @@ export function DiscoverFeed() {
           emoji="🔍"
           title="Nothing matches right now"
           titleAccent="matches"
-          description="Widen your radius, clear price filters, or switch mood — fresh plans sync from the same feed as the LinkUp app."
+          description={
+            hasDiscoverPriceFilter(activeFilter)
+              ? 'No plans fall in this price range. Widen your min/max price or clear price filters to see more meetups.'
+              : 'Widen your radius, clear filters, or switch mood. Fresh plans sync from the same feed as the LinkUp app.'
+          }
           tips={[
             {
               icon: IoFunnelOutline,
@@ -400,15 +413,17 @@ export function DiscoverFeed() {
             },
             {
               icon: IoHeartOutline,
-              text: 'Host a meetup — mood moments show up near you when hosts are free now',
+              text: 'Host a meetup. Mood moments show up near you when hosts are free now',
               iconBgClassName: 'bg-emerald-500/10',
               iconClassName: 'text-emerald-600',
             },
           ]}
           action={{
             label: 'Reset filters',
-            onClick: () =>
-              applyFilters(loadFeedFilterFromProfile(viewerProfile, baseRadiusKm), 'all'),
+            onClick: () => {
+              clearMeetTypeFilter();
+              applyFilters(loadFeedFilterFromProfile(viewerProfile, baseRadiusKm), 'all');
+            },
           }}
           secondaryAction={{ label: 'Create a plan', href: '/plan/create', variant: 'secondary' }}
         />
@@ -503,6 +518,14 @@ export function DiscoverFeed() {
         className={cn(isMobileLayout ? 'shrink-0' : undefined)}
       />
 
+      {meetTypeFilter ? (
+        <MeetTypeDiscoverPill
+          name={meetTypeFilter.name}
+          onClear={clearMeetTypeFilter}
+          className={cn(isMobileLayout ? 'shrink-0' : undefined)}
+        />
+      ) : null}
+
       <MoodTimelineCarousel
         plans={moodRows}
         viewerUserId={user?.id}
@@ -520,12 +543,10 @@ export function DiscoverFeed() {
             <DiscoverFeedToolbar
               planCount={filteredWithPresence.length}
               moodCount={moodRows.length}
-              filtersActive={activeFilter.clientFiltersActive}
               filter={activeFilter}
               mood={mood}
               baseRadiusKm={baseRadiusKm}
-              browseRadiusKm={browseRadiusKm}
-              hasWiderRadius={hasWiderRadius}
+              sliderMaxKm={sliderMaxKm}
               effectiveTier={effectiveTier}
               advancedFiltersAllowed={advancedFiltersAllowed}
               profileLoading={profileLoading}
@@ -550,12 +571,10 @@ export function DiscoverFeed() {
           <DiscoverFeedToolbar
             planCount={filteredWithPresence.length}
             moodCount={moodRows.length}
-            filtersActive={activeFilter.clientFiltersActive}
             filter={activeFilter}
             mood={mood}
             baseRadiusKm={baseRadiusKm}
-            browseRadiusKm={browseRadiusKm}
-            hasWiderRadius={hasWiderRadius}
+            sliderMaxKm={sliderMaxKm}
             effectiveTier={effectiveTier}
             advancedFiltersAllowed={advancedFiltersAllowed}
             profileLoading={profileLoading}

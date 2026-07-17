@@ -1,7 +1,13 @@
 'use client';
 
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppStatusDialog } from '@/components/ui/AppStatusDialog';
+import { ActionButtonsSkeleton } from '@/components/plans/ActionButtonsSkeleton';
+import { PlanOffersListSkeleton } from '@/components/plans/PlanOffersListSkeleton';
+import { InviteGuestsModal } from '@/components/plans/InviteGuestsModal';
+import { RequestToJoinButton } from '@/components/plans/RequestToJoinButton';
 import { PlanGroupGuestsPanel } from '@/components/plans/PlanGroupGuestsPanel';
+import { ProfileAvatar } from '@/components/profile/ProfileAvatar';
 import { PlanInterestedStrip } from '@/components/plans/PlanInterestedStrip';
 import { TierBadge } from '@/components/subscription/TierBadge';
 import { BoostPill } from '@/components/plans/BoostPill';
@@ -15,15 +21,27 @@ import {
   formatOfferAmount,
   formatProposalSnippet,
   offerStatusChip,
-  planIsAgreed,
   planningPartnerContext,
 } from '@/features/plans/planDetailUtils';
-import { createGroupChat } from '@/lib/messaging/createGroupChat';
+import { resolvePlanAgreementHref } from '@/lib/plans/planAgreementRoute';
+import { downloadPlanCalendarIcs, planCanAddToCalendar } from '@/lib/plans/addPlanToCalendar';
+import { isPlanDetailActionReady } from '@/lib/plans/planDetailActionReady';
+import { insertPlanCompletionAck } from '@/lib/plans/planCompletionAck';
+import { usePlanViewerContext, type PlanViewerContext } from '@/lib/plans/usePlanViewerContext';
+import { planNegotiateHref } from '@/lib/plans/negotiateRoute';
+import { usePlanOffersRealtime } from '@/hooks/useOffersRealtime';
 import { openDirectChatPath } from '@/lib/messaging/openDirectChat';
+import { createGroupChat } from '@/lib/messaging/createGroupChat';
+import { openPlanMeetupChatPath } from '@/lib/messaging/openPlanMeetupChat';
+import { planDistanceFromViewer } from '@/lib/discovery/feedFilters';
+import { offerLiveAmount } from '@/lib/plans/negotiationState';
+import { resolveDiscoverViewerCoords } from '@/lib/discovery/viewerLocation';
+import { planMeetupCoords } from '@/lib/plans/planMeetupCoords';
 import { daysUntilIso, isPlanActiveWindowExpiringSoon } from '@/lib/plans/planActiveWindow';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
-import { formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
+import { formatPlanAppFee, formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
+import { countPendingInvitations, getPlanAvailableSlots } from '@/lib/plans/planInvitations';
 import { usePermission } from '@/hooks/usePermission';
 import { extendMoodPlan } from '@/lib/plans/moodPlanCooldown';
 import { useGatedAction } from '@/contexts/UpgradeGateContext';
@@ -31,7 +49,6 @@ import type { BoostQuotaMeta } from '@/lib/subscription/boostQuota';
 import { requiresVerificationGate } from '@/lib/verification/access';
 import { createClient } from '@/lib/supabase/client';
 import { fetchPlanDetailBundle, type PlanDetailBundle } from '@/services/planDetail.service';
-import type { PlanFeedRow } from '@/services/plans.service';
 import { useTogglePlanSaved } from '@/features/saved/useTogglePlanSaved';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { useAuthStore } from '@/stores/auth-store';
@@ -44,9 +61,13 @@ import {
   IoCalendarOutline,
   IoChatbubbleEllipsesOutline,
   IoDocumentTextOutline,
+  IoEyeOutline,
   IoLocationOutline,
   IoPricetagOutline,
+  IoShieldCheckmarkOutline,
   IoLockClosed,
+  IoPeople,
+  IoPersonAddOutline,
   IoTimeOutline,
 } from 'react-icons/io5';
 
@@ -57,22 +78,43 @@ const actionPrimary =
   'flex min-h-[44px] w-full items-center justify-center rounded-full linkup-gradient-primary px-5 py-2.5 text-[14px] font-extrabold text-white shadow-sm transition hover:opacity-95 disabled:opacity-50';
 const actionSecondary =
   'flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-primary/25 bg-white px-5 py-2.5 text-[14px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/50 disabled:opacity-50';
+/** Compact pills — matches PlanGroupGuestsPanel escrow button sizing. */
+const actionCompactPrimary =
+  'inline-flex h-9 w-[8.5rem] items-center justify-center gap-1 rounded-full linkup-gradient-primary px-2.5 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95 active:scale-[0.98] disabled:opacity-50';
+const actionCompactSecondary =
+  'inline-flex h-9 w-[8.5rem] items-center justify-center gap-1 rounded-full border border-primary/25 bg-white px-2.5 text-[12px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/50 disabled:opacity-50';
 
 type Props = {
   planId: string;
-  initialPlan?: PlanFeedRow | null;
+  currentUserId: string | null;
+  initialBundle: PlanDetailBundle;
 };
 
-export function PlanDetailScreen({ planId, initialPlan }: Props) {
+export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props) {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  /** Server-resolved id is correct on first paint before the auth store hydrates. */
+  const viewerUserId = user?.id ?? currentUserId ?? undefined;
   const [gateOpen, setGateOpen] = useState(false);
   const [chatBusy, setChatBusy] = useState(false);
   const [groupChatBusy, setGroupChatBusy] = useState(false);
   const [groupChatConvId, setGroupChatConvId] = useState<string | null>(null);
   const [extendBusy, setExtendBusy] = useState(false);
   const [extendMsg, setExtendMsg] = useState<string | null>(null);
-  const toggleSaved = useTogglePlanSaved(user?.id);
+  const [interestCount, setInterestCount] = useState(0);
+  const [calendarBusy, setCalendarBusy] = useState(false);
+  const [attendanceBusy, setAttendanceBusy] = useState(false);
+  const [statusDialog, setStatusDialog] = useState<{
+    title: string;
+    message: string;
+    variant?: 'success' | 'error' | 'info';
+  } | null>(null);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [availableSlots, setAvailableSlots] = useState(initialBundle.availableSlots);
+  const [pendingInvitationCount, setPendingInvitationCount] = useState(
+    initialBundle.pendingInvitationCount
+  );
+  const toggleSaved = useTogglePlanSaved(viewerUserId);
   const {
     allowed: canBoost24,
     metadata: boost24Meta,
@@ -84,76 +126,216 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
     refresh: refreshBoost72,
   } = usePermission('boost.72hr', { checkQuota: true });
   const { allowed: canExtendMood } = usePermission('mood_plan.extend');
+  const { allowed: travelModeAllowed } = usePermission('discover.travel_mode');
 
   const profileQuery = useQuery({
-    queryKey: ['profile-bundle', user?.id],
+    queryKey: ['profile-bundle', viewerUserId],
     queryFn: async () => {
-      if (!user?.id) return null;
+      if (!viewerUserId) return null;
       const client = createClient();
-      const bundle = await fetchUserProfileBundle(client, user.id);
+      const bundle = await fetchUserProfileBundle(client, viewerUserId);
       if (bundle.error) throw new Error(bundle.error);
       return bundle;
     },
-    enabled: !!user?.id,
+    enabled: !!viewerUserId,
   });
 
   const detailQuery = useQuery({
-    queryKey: ['plan-detail', planId, user?.id],
+    queryKey: ['plan-detail', planId, viewerUserId ?? ''],
     queryFn: async () => {
       const client = createClient();
-      const { data, error } = await fetchPlanDetailBundle(client, planId, user?.id ?? null);
+      const { data, error } = await fetchPlanDetailBundle(client, planId, viewerUserId ?? null);
       if (error) throw new Error(error);
       if (!data) throw new Error('Plan not found');
       return data;
     },
-    initialData: initialPlan
-      ? ({
-          plan: initialPlan,
-          offers: [],
-          profilesById: {},
-          saved: false,
-          completionSelfAcked: false,
-        } satisfies PlanDetailBundle)
-      : undefined,
+    initialData: initialBundle,
     staleTime: 15_000,
   });
 
   const bundle = detailQuery.data;
   const plan = bundle?.plan;
+  usePlanOffersRealtime(planId);
   const dbUser = profileQuery.data?.dbUser ?? null;
   const runGated = useGatedAction();
 
   const partnerCtx = useMemo(() => {
     if (!plan || !bundle) return null;
-    return planningPartnerContext(plan, user?.id, bundle.offers, bundle.profilesById);
-  }, [plan, user?.id, bundle]);
+    return planningPartnerContext(plan, viewerUserId, bundle.offers, bundle.profilesById);
+  }, [plan, viewerUserId, bundle]);
 
-  const isCreator = !!user?.id && plan?.creator_id === user.id;
+  const isCreator = !!viewerUserId && plan?.creator_id === viewerUserId;
+  const isGroupPlan = !!plan?.is_group_plan;
+  const showInvite =
+    isCreator &&
+    isGroupPlan &&
+    (availableSlots > 0 || pendingInvitationCount > 0);
   const moodClosed = plan ? isPlanMoodWindowClosed(plan) : false;
-  const agreed = plan ? planIsAgreed(plan.status) : false;
   const boosted = plan ? isPlanBoostActive(plan.boosted_until) : false;
 
-  const viewerIsMatch = useMemo(() => {
-    if (!plan || !user?.id || !plan.accepted_offer_id) return false;
-    if (plan.creator_id === user.id) return true;
-    const accepted = bundle?.offers.find((o) => o.id === plan.accepted_offer_id);
-    return accepted?.bidder_id === user.id;
-  }, [plan, user?.id, bundle?.offers]);
+  const ctx = usePlanViewerContext(plan ?? null, viewerUserId, bundle?.offers ?? [], {
+    moodClosed,
+    completionSelfAcked: bundle?.completionSelfAcked ?? false,
+    myJoinRequest: bundle?.myJoinRequest ?? null,
+  });
+  const actionContextReady = isPlanDetailActionReady(bundle);
+  const actionContextRefreshing = detailQuery.isFetching && actionContextReady;
+
+  const acceptedGuestOffers = useMemo(
+    () => (bundle?.offers ?? []).filter((o) => o.status === 'accepted'),
+    [bundle?.offers]
+  );
+  const guestsPanelRefreshKey = useMemo(
+    () =>
+      [
+        plan?.accepted_guest_count,
+        plan?.max_guests,
+        plan?.updated_at,
+        ...acceptedGuestOffers.map(
+          (o) => `${o.id}:${o.status}:${o.current_amount_cents ?? o.amount_cents}:${o.bidder_id}`
+        ),
+        detailQuery.dataUpdatedAt,
+      ].join('|'),
+    [acceptedGuestOffers, detailQuery.dataUpdatedAt, plan?.accepted_guest_count, plan?.max_guests, plan?.updated_at]
+  );
+
+  useEffect(() => {
+    setAvailableSlots(bundle?.availableSlots ?? 0);
+    setPendingInvitationCount(bundle?.pendingInvitationCount ?? 0);
+  }, [bundle?.availableSlots, bundle?.pendingInvitationCount]);
+
+  function refreshInvitationSlots() {
+    if (!plan?.id || !isCreator || !isGroupPlan) return;
+    void getPlanAvailableSlots(plan.id).then(setAvailableSlots);
+    void countPendingInvitations(plan.id).then(setPendingInvitationCount);
+  }
+
+  useEffect(() => {
+    if (!plan?.id || !isCreator) {
+      setInterestCount(0);
+      return;
+    }
+    const client = createClient();
+    void client
+      .from('plan_engagements')
+      .select('*', { count: 'exact', head: true })
+      .eq('plan_id', plan.id)
+      .in('kind', ['view', 'save'])
+      .then(({ count }) => setInterestCount(count ?? 0));
+  }, [plan?.id, isCreator, bundle?.offers.length]);
+
+  function handleAddToCalendar() {
+    if (!plan) return;
+    if (!planCanAddToCalendar(plan)) {
+      setStatusDialog({
+        title: 'No date yet',
+        message: 'Once this plan has a scheduled time, you can add it to your calendar.',
+        variant: 'info',
+      });
+      return;
+    }
+    setCalendarBusy(true);
+    const result = downloadPlanCalendarIcs(plan, planId);
+    setCalendarBusy(false);
+    if (result.ok) {
+      setStatusDialog({
+        title: 'Calendar',
+        message: 'Your calendar file was downloaded. Open it to add the event.',
+        variant: 'success',
+      });
+    } else {
+      setStatusDialog({ title: 'Calendar', message: result.message, variant: 'error' });
+    }
+  }
+
+  async function handleConfirmAttendance() {
+    if (!viewerUserId || !plan) return;
+    setAttendanceBusy(true);
+    const client = createClient();
+    const { error } = await insertPlanCompletionAck(client, plan.id, viewerUserId);
+    setAttendanceBusy(false);
+    if (error) {
+      setStatusDialog({ title: 'Could not save', message: error, variant: 'error' });
+      return;
+    }
+    void detailQuery.refetch();
+    setStatusDialog({
+      title: 'Thanks',
+      message:
+        'When both people confirm, contact sharing outside LinkUp is allowed for this plan.',
+      variant: 'success',
+    });
+  }
+
+  function handleViewInterest() {
+    const count = interestCount;
+    setStatusDialog({
+      title: 'Interest',
+      message:
+        count > 0
+          ? `${count} ${count === 1 ? 'person has' : 'people have'} viewed or saved this plan. Upgrade to Gold to see who.`
+          : 'No one has viewed or saved this plan yet. Share it to grow interest.',
+      variant: 'info',
+    });
+  }
+
+  function goViewOffer() {
+    if (!ctx?.myOffer) return;
+    router.push(planNegotiateHref(planId, { offerId: ctx.myOffer.id }));
+  }
 
   function goNegotiate() {
     if (!isCreator && requiresVerificationGate(dbUser?.verification_status)) {
       setGateOpen(true);
       return;
     }
+    if (ctx?.showViewOffer) {
+      goViewOffer();
+      return;
+    }
+    if (
+      ctx?.showViewAgreement &&
+      plan &&
+      (ctx.isMatchedGuest || !ctx.showManageOffers)
+    ) {
+      goAgreement();
+      return;
+    }
     router.push(`/plan/${planId}/negotiate`);
   }
 
+  function goAgreement(offerId?: string) {
+    if (!plan) return;
+    const resolvedOfferId =
+      offerId ??
+      ctx?.userAcceptedOffer?.id ??
+      (ctx?.myOffer?.status === 'accepted' ? ctx.myOffer.id : undefined) ??
+      plan.accepted_offer_id ??
+      bundle?.offers.find((o) => o.status === 'accepted')?.id;
+    router.push(
+      resolvePlanAgreementHref(plan, {
+        offerId: resolvedOfferId,
+        userId: viewerUserId,
+        offers: bundle?.offers,
+      })
+    );
+  }
+
+  async function openHostMessage() {
+    if (!viewerUserId || !plan) return;
+    if (plan.is_group_plan) {
+      await handleOpenGroupChat();
+      return;
+    }
+    await openCounterpartyChat();
+  }
+
   function toggleSave() {
-    if (!user?.id || !plan) return;
+    if (!viewerUserId || !plan) return;
     void runGated('plans.bookmark', () => {
       const next = !bundle?.saved;
       toggleSaved.mutate(
-        { planId: plan.id, userId: user.id, saved: next, plan },
+        { planId: plan.id, userId: viewerUserId, saved: next, plan },
         {
           onError: (err) => {
             window.alert(err instanceof Error ? err.message : 'Could not update save');
@@ -164,10 +346,10 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
   }
 
   async function handleExtendMood() {
-    if (!user?.id || !plan) return;
+    if (!viewerUserId || !plan) return;
     setExtendBusy(true);
     setExtendMsg(null);
-    const result = await extendMoodPlan(plan.id, user.id);
+    const result = await extendMoodPlan(plan.id, viewerUserId);
     setExtendBusy(false);
     if (result.extended && result.new_expires_at) {
       setExtendMsg(`Plan extended until ${new Date(result.new_expires_at).toLocaleString('en-GB')}`);
@@ -192,14 +374,14 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
   }, [plan?.id, plan?.is_group_plan]);
 
   async function handleOpenGroupChat() {
-    if (!user?.id || !plan || groupChatBusy) return;
+    if (!viewerUserId || !plan || groupChatBusy) return;
     setGroupChatBusy(true);
     try {
       if (groupChatConvId) {
         router.push(`/chat/group/${groupChatConvId}`);
         return;
       }
-      if (plan.creator_id !== user.id) {
+      if (plan.creator_id !== viewerUserId) {
         window.alert('The host has not opened the group chat yet.');
         return;
       }
@@ -209,7 +391,7 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
       const client = createClient();
       const convId = await createGroupChat(client, {
         planId: plan.id,
-        hostId: user.id,
+        hostId: viewerUserId,
         groupName: plan.title,
         initialMemberIds: guestIds,
       });
@@ -223,17 +405,30 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
   }
 
   async function openCounterpartyChat() {
-    if (!user?.id || !plan) return;
-    const accepted = bundle?.offers.find((o) => o.id === plan.accepted_offer_id);
-    if (!accepted) {
-      window.alert('Could not find the accepted offer. Try refreshing.');
-      return;
-    }
-    const other = plan.creator_id === user.id ? accepted.bidder_id : plan.creator_id;
+    if (!viewerUserId || !plan) return;
     setChatBusy(true);
     try {
       const client = createClient();
-      const path = await openDirectChatPath(client, user.id, other);
+      const path = await openPlanMeetupChatPath(client, {
+        plan,
+        userId: viewerUserId,
+        isCreator,
+        offers: bundle?.offers ?? [],
+      });
+      router.push(path);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Could not open chat');
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
+  async function openDirectGuestChat(guestUserId: string) {
+    if (!viewerUserId) return;
+    setChatBusy(true);
+    try {
+      const client = createClient();
+      const path = await openDirectChatPath(client, viewerUserId, guestUserId);
       router.push(path);
     } catch (e) {
       window.alert(e instanceof Error ? e.message : 'Could not open chat');
@@ -266,10 +461,49 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
 
   const when = formatPlanWhen(plan);
   const price = formatPlanPrice(plan) ?? 'Open to offers';
+  const appFee = formatPlanAppFee(plan);
+  const viewerCoords = resolveDiscoverViewerCoords(
+    profileQuery.data?.profile ?? null,
+    travelModeAllowed,
+    null
+  );
+  let distanceAwayKm: number | null = null;
+  if (viewerCoords.lat != null && viewerCoords.lng != null && planMeetupCoords(plan)) {
+    const d = planDistanceFromViewer(plan, viewerCoords.lat, viewerCoords.lng);
+    distanceAwayKm = Number.isFinite(d) ? Math.round(d) : null;
+  }
+  const meetupPin = planMeetupCoords(plan);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-16">
       <VerificationGateDialog open={gateOpen} onClose={() => setGateOpen(false)} />
+      <AppStatusDialog
+        open={statusDialog !== null}
+        title={statusDialog?.title ?? ''}
+        message={statusDialog?.message ?? ''}
+        variant={statusDialog?.variant ?? 'success'}
+        onClose={() => setStatusDialog(null)}
+      />
+      {plan && showInvite ? (
+        <InviteGuestsModal
+          planId={planId}
+          planDetails={{
+            name: plan.title?.trim() || 'Meetup',
+            hostName:
+              profileQuery.data?.profile?.display_name?.trim() ||
+              bundle?.profilesById[plan.creator_id]?.display_name?.trim() ||
+              'Host',
+            meetType: plan.meet_types?.name,
+            planDate: formatPlanWhen(plan),
+            planLocation: plan.location_label ?? undefined,
+            shareAmountCents: plan.current_suggested_share_cents ?? undefined,
+          }}
+          availableSlots={availableSlots}
+          open={inviteModalOpen}
+          onOpenChange={setInviteModalOpen}
+          onSlotsChanged={refreshInvitationSlots}
+        />
+      ) : null}
 
       <PlanFlowHeader
         kicker="Meetup details"
@@ -281,7 +515,7 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
 
       {moodClosed ? (
         <div className="rounded-2xl border border-amber-200/80 bg-amber-50 px-4 py-3 text-[13px] font-semibold text-amber-900">
-          This mood moment has ended — you can still view details, but new offers are closed.
+          This mood moment has ended. You can still view details, but new offers are closed.
         </div>
       ) : null}
 
@@ -306,11 +540,22 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
             <p className="text-[14px] font-semibold leading-relaxed text-muted">{plan.description}</p>
           ) : null}
 
-          <dl className="grid gap-3 sm:grid-cols-3">
+          <dl className="grid gap-3 sm:grid-cols-2">
             <MetaItem icon={IoCalendarOutline} label="When" value={when} />
             <MetaItem icon={IoLocationOutline} label="Where" value={plan.location_label ?? 'TBD'} />
             <MetaItem icon={IoPricetagOutline} label="Price" value={price} />
+            {appFee ? (
+              <MetaItem
+                icon={IoShieldCheckmarkOutline}
+                label="App fee"
+                value={appFee}
+                iconTone="fee"
+              />
+            ) : null}
           </dl>
+          {distanceAwayKm != null ? (
+            <p className="text-[13px] font-semibold text-muted">{distanceAwayKm} km away</p>
+          ) : null}
         </div>
       </section>
 
@@ -323,7 +568,7 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
         </p>
         {partnerCtx?.mode === 'hosting' ? (
           <p className="mt-4 rounded-xl border border-dashed border-primary/25 bg-white/70 px-4 py-3 text-[13px] font-semibold text-muted">
-            You&apos;re hosting — interested guests send offers, then you can match and chat.
+            You&apos;re hosting. Interested guests send offers, then you can match and chat.
           </p>
         ) : partnerCtx?.mode === 'person' ? (
           <PlanningTogetherHostCard
@@ -373,7 +618,14 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
         </div>
       ) : null}
 
-      <PlanGroupGuestsPanel plan={plan} hostUserId={plan.creator_id} currentUserId={user?.id} />
+      <PlanGroupGuestsPanel
+        plan={plan}
+        hostUserId={plan.creator_id}
+        currentUserId={viewerUserId}
+        seedAcceptedOffers={acceptedGuestOffers}
+        offersReady={!!bundle}
+        refreshKey={guestsPanelRefreshKey}
+      />
 
       {plan.is_group_plan && ['active', 'agreed'].includes(plan.status) ? (
         <button
@@ -387,11 +639,11 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
         </button>
       ) : null}
 
-      {isCreator && user?.id ? (
-        <PlanInterestedStrip planId={plan.id} hostUserId={plan.creator_id} currentUserId={user.id} />
+      {isCreator && viewerUserId ? (
+        <PlanInterestedStrip planId={plan.id} hostUserId={plan.creator_id} currentUserId={viewerUserId} />
       ) : null}
 
-      {isCreator && user?.id && plan.active_expires_at && !plan.is_mood_plan ? (
+      {isCreator && viewerUserId && plan.active_expires_at && !plan.is_mood_plan ? (
         <div
           className={cn(
             'flex items-center gap-1.5 text-[12px] font-semibold',
@@ -413,8 +665,19 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
         </div>
       ) : null}
 
-      {isCreator && user?.id ? (
+      {!actionContextReady ? (
+        <ActionButtonsSkeleton />
+      ) : (
+        <div
+          className={cn(
+            'space-y-3 transition-opacity duration-200',
+            actionContextRefreshing && 'opacity-70'
+          )}
+          aria-busy={actionContextRefreshing}
+        >
+      {isCreator && viewerUserId && (ctx?.showBoost || ctx?.showInterest || ctx?.showManageOffers || ctx?.showManageRequests || showInvite) ? (
         <div className={planActionGrid}>
+          {ctx?.showBoost ? (
           <PlanBoostControls
             planId={plan.id}
             creatorId={plan.creator_id}
@@ -426,29 +689,147 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
             canBoost72={canBoost72}
             boost24Meta={boost24Meta as BoostQuotaMeta | undefined}
             boost72Meta={boost72Meta as BoostQuotaMeta | undefined}
+            planVisibility={plan.visibility}
+            boostRadiusKm={plan.boost_radius_km}
             onBoosted={() => void detailQuery.refetch()}
             onRefreshPermissions={() => {
               void refreshBoost24();
               void refreshBoost72();
             }}
           />
-          <button type="button" className={actionPrimary} onClick={goNegotiate}>
-            Manage offers
-          </button>
+          ) : null}
+          {ctx?.showInterest ? (
+            <button type="button" className={actionSecondary} onClick={handleViewInterest}>
+              <span className="inline-flex items-center gap-2">
+                <IoEyeOutline size={18} />
+                {interestCount > 0 ? interestCount : 'Interest'}
+              </span>
+            </button>
+          ) : null}
+          {showInvite ? (
+            <button type="button" className={actionSecondary} onClick={() => setInviteModalOpen(true)}>
+              <span className="inline-flex items-center gap-2">
+                <IoPersonAddOutline size={18} />
+                Invite
+              </span>
+            </button>
+          ) : null}
+          {ctx?.showManageRequests ? (
+            <Link href={`/plan/${planId}/requests`} className={actionPrimary}>
+              <span className="inline-flex items-center gap-2">
+                <IoPeople size={18} />
+                Manage requests
+              </span>
+            </Link>
+          ) : ctx?.showManageOffers ? (
+            <button type="button" className={actionPrimary} onClick={goNegotiate}>
+              Manage offers
+            </button>
+          ) : null}
         </div>
-      ) : (
+      ) : ctx && !isCreator ? (
         <ActionRail
-          agreed={agreed}
+          ctx={ctx}
+          planId={planId}
+          suggestedAmountCents={plan.current_suggested_share_cents}
+          currency={plan.currency}
           moodClosed={moodClosed}
-          viewerIsMatch={viewerIsMatch}
           saved={!!bundle?.saved}
           saveBusy={toggleSaved.isPending}
           chatBusy={chatBusy}
+          calendarBusy={calendarBusy}
+          canCalendar={planCanAddToCalendar(plan)}
           onSave={() => void toggleSave()}
           onNegotiate={goNegotiate}
-          onAgreement={() => router.push(`/plan/${planId}/agreement`)}
+          onViewOffer={goViewOffer}
+          onAgreement={goAgreement}
           onChat={() => void openCounterpartyChat()}
+          onCalendar={handleAddToCalendar}
+          onJoinRequestSuccess={() => void detailQuery.refetch()}
         />
+      ) : null}
+
+      {ctx?.showConfirmAttendance ? (
+        <button
+          type="button"
+          disabled={attendanceBusy}
+          onClick={() => void handleConfirmAttendance()}
+          className="flex w-full min-h-[44px] items-center justify-center rounded-full border border-primary/25 bg-white px-5 py-2.5 text-[14px] font-extrabold text-primary disabled:opacity-50"
+        >
+          {attendanceBusy ? 'Saving…' : 'Confirm attendance for safety unlock'}
+        </button>
+      ) : null}
+
+      {isCreator && ctx?.showGroupGuestAgreements ? (
+        <section className="linkup-card space-y-3 p-4">
+          <h3 className="font-display text-base font-extrabold text-foreground">Accepted guests</h3>
+          <ul className="space-y-2">
+            {ctx.acceptedGuests.map((guest) => {
+              const prof = bundle?.profilesById[guest.userId];
+              const name = prof?.display_name?.trim() || 'Guest';
+              return (
+                <li
+                  key={guest.offerId}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-[#FAFAFF]/80 px-3 py-2.5"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <ProfileAvatar profile={prof} displayName={name} size={36} />
+                    <span className="min-w-0 truncate font-extrabold text-foreground">{name}</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      className={actionCompactPrimary}
+                      onClick={() => goAgreement(guest.offerId)}
+                    >
+                      <IoDocumentTextOutline size={14} aria-hidden />
+                      View agreement
+                    </button>
+                    <button
+                      type="button"
+                      className={actionCompactSecondary}
+                      onClick={() => void openDirectGuestChat(guest.userId)}
+                    >
+                      <IoChatbubbleEllipsesOutline size={14} aria-hidden />
+                      Message
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
+      {isCreator && ctx?.showViewAgreement && ctx.showMessage && !ctx.showGroupGuestAgreements ? (
+        <div className={planActionGrid}>
+          <button type="button" className={actionSecondary} onClick={() => goAgreement()}>
+            <span className="inline-flex items-center gap-2">
+              <IoDocumentTextOutline size={18} />
+              View agreement
+            </span>
+          </button>
+          <button type="button" className={actionPrimary} onClick={() => void openCounterpartyChat()} disabled={chatBusy}>
+            <span className="inline-flex items-center gap-2">
+              <IoChatbubbleEllipsesOutline size={18} />
+              Message
+            </span>
+          </button>
+        </div>
+      ) : null}
+
+      {isCreator && ctx?.showMessage && ctx.showGroupGuestAgreements ? (
+        <button
+          type="button"
+          onClick={() => void openHostMessage()}
+          disabled={groupChatBusy}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-[14px] font-extrabold text-foreground transition hover:bg-[#F8F7FF] disabled:opacity-50 sm:w-auto"
+        >
+          <IoChatbubbleEllipsesOutline size={18} />
+          {groupChatBusy ? 'Opening…' : 'Message group'}
+        </button>
+      ) : null}
+        </div>
       )}
 
       <section className="linkup-card overflow-hidden">
@@ -467,8 +848,8 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
               : 'Latest activity from people interested in this plan.'}
           </p>
         </div>
-        {detailQuery.isFetching && !bundle?.offers.length ? (
-          <p className="px-5 py-8 text-center text-[13px] font-semibold text-muted">Loading offers…</p>
+        {!actionContextReady ? (
+          <PlanOffersListSkeleton />
         ) : !bundle?.offers.length ? (
           <div className="px-4 py-6">
             <AppEmptyState
@@ -477,12 +858,38 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
               title="No offers yet"
               description={
                 isCreator
-                  ? 'Share your plan — interested guests send suggestions from Discover or negotiate.'
-                  : 'Be the first to say hello — send an offer with your timing and budget.'
+                  ? 'Share your plan. Interested guests send suggestions from Discover or negotiate.'
+                  : 'Be the first to say hello. Send an offer with your timing and budget.'
               }
               action={{
-                label: isCreator ? 'Manage offers' : 'Make offer',
-                onClick: goNegotiate,
+                label: isCreator
+                  ? ctx?.showManageRequests
+                    ? 'Manage requests'
+                    : ctx?.showManageOffers
+                      ? 'Manage offers'
+                      : ctx?.showViewAgreement
+                        ? 'View agreement'
+                        : 'Manage offers'
+                  : ctx?.showViewAgreement
+                    ? 'View agreement'
+                    : ctx?.showViewRequest
+                      ? 'View request'
+                      : ctx?.showRequestToJoin
+                        ? 'Request to join'
+                        : ctx?.showViewOffer
+                          ? 'View offer'
+                          : 'Make offer',
+                onClick: () => {
+                  if (isCreator && ctx?.showManageRequests) {
+                    router.push(`/plan/${planId}/requests`);
+                    return;
+                  }
+                  if (!isCreator && ctx?.showViewRequest) {
+                    router.push(`/plan/${planId}/requests/my`);
+                    return;
+                  }
+                  goNegotiate();
+                },
               }}
               className="border-0 bg-[#FAFAFF]/80 shadow-none"
             />
@@ -505,7 +912,7 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
                         {bidder?.display_name?.trim() || 'Guest'}
                       </p>
                       <p className="text-[13px] font-semibold text-primary">
-                        {formatOfferAmount(offer.amount_cents)}
+                        {formatOfferAmount(offerLiveAmount(offer))}
                       </p>
                       {whenSnippet ? (
                         <p className="text-[12px] font-semibold text-muted">Proposed · {whenSnippet}</p>
@@ -531,8 +938,8 @@ export function PlanDetailScreen({ planId, initialPlan }: Props) {
       </section>
 
       <PlanLocationMap
-        latitude={plan.latitude}
-        longitude={plan.longitude}
+        latitude={meetupPin?.lat ?? null}
+        longitude={meetupPin?.lng ?? null}
         locationLabel={plan.location_label}
       />
     </div>
@@ -543,14 +950,21 @@ function MetaItem({
   icon: Icon,
   label,
   value,
+  iconTone = 'primary',
 }: {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   label: string;
   value: string;
+  iconTone?: 'primary' | 'fee';
 }) {
   return (
     <div className="flex gap-3 rounded-xl border border-border/40 bg-[#FAFAFF]/80 px-3 py-2.5">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      <span
+        className={cn(
+          'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+          iconTone === 'fee' ? 'bg-[#059669]/10 text-[#059669]' : 'bg-primary/10 text-primary'
+        )}
+      >
         <Icon size={18} />
       </span>
       <div className="min-w-0">
@@ -562,68 +976,139 @@ function MetaItem({
 }
 
 function ActionRail({
-  agreed,
+  ctx,
+  planId,
+  suggestedAmountCents,
+  currency,
   moodClosed,
-  viewerIsMatch,
   saved,
   saveBusy,
   chatBusy,
+  calendarBusy,
+  canCalendar,
   onSave,
   onNegotiate,
+  onViewOffer,
   onAgreement,
   onChat,
+  onCalendar,
+  onJoinRequestSuccess,
 }: {
-  agreed: boolean;
+  ctx: PlanViewerContext;
+  planId: string;
+  suggestedAmountCents?: number | null;
+  currency?: string;
   moodClosed: boolean;
-  viewerIsMatch: boolean;
   saved: boolean;
   saveBusy: boolean;
   chatBusy: boolean;
+  calendarBusy: boolean;
+  canCalendar: boolean;
   onSave: () => void;
   onNegotiate: () => void;
+  onViewOffer: () => void;
   onAgreement: () => void;
   onChat: () => void;
+  onCalendar: () => void;
+  onJoinRequestSuccess?: () => void;
 }) {
-  if (agreed && viewerIsMatch) {
-    return (
-      <div className={planActionGrid}>
-        <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
-          {saved ? 'Saved' : 'Save plan'}
-        </button>
-        <button type="button" className={actionSecondary} onClick={onAgreement}>
-          <span className="inline-flex items-center gap-2">
-            <IoDocumentTextOutline size={18} />
-            View agreement
-          </span>
-        </button>
-        <button type="button" className={actionPrimary} onClick={onChat} disabled={chatBusy}>
-          <span className="inline-flex items-center gap-2">
-            <IoChatbubbleEllipsesOutline size={18} />
-            Message
-          </span>
-        </button>
-      </div>
-    );
-  }
-
-  if (agreed) {
-    return (
-      <div className={planActionGrid}>
-        <button type="button" className={actionPrimary} onClick={onAgreement}>
-          View agreement
-        </button>
-      </div>
-    );
-  }
+  const guestCalendarSaveRow = !!(ctx.showCalendar && ctx.showSave);
 
   return (
-    <div className={planActionGrid}>
-      <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
-        {saved ? 'Saved' : 'Save plan'}
-      </button>
-      <button type="button" className={actionPrimary} onClick={onNegotiate} disabled={moodClosed}>
-        Make offer
-      </button>
-    </div>
+    <>
+      {ctx.showSave && ctx.showMakeOffer ? (
+        <div className={planActionGrid}>
+          <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
+            {saved ? 'Saved' : 'Save plan'}
+          </button>
+          <button type="button" className={actionPrimary} onClick={onNegotiate} disabled={moodClosed}>
+            Make offer
+          </button>
+        </div>
+      ) : null}
+
+      {ctx.showSave && ctx.showRequestToJoin ? (
+        <div className={planActionGrid}>
+          <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
+            {saved ? 'Saved' : 'Save plan'}
+          </button>
+          <RequestToJoinButton
+            planId={planId}
+            suggestedAmountCents={suggestedAmountCents}
+            currency={currency ?? 'NGN'}
+            onSuccess={onJoinRequestSuccess}
+          />
+        </div>
+      ) : null}
+
+      {ctx.showSave && ctx.showViewOffer ? (
+        <div className={planActionGrid}>
+          <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
+            {saved ? 'Saved' : 'Save plan'}
+          </button>
+          <button type="button" className={actionPrimary} onClick={onViewOffer}>
+            View offer
+          </button>
+        </div>
+      ) : null}
+
+      {ctx.showSave && ctx.showViewRequest ? (
+        <div className={planActionGrid}>
+          <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
+            {saved ? 'Saved' : 'Save plan'}
+          </button>
+          <Link href={`/plan/${planId}/requests/my`} className={actionSecondary}>
+            <span className="inline-flex items-center gap-2">
+              <IoTimeOutline size={18} />
+              View request
+            </span>
+          </Link>
+        </div>
+      ) : null}
+
+      {guestCalendarSaveRow ? (
+        <div className={planActionGrid}>
+          <button
+            type="button"
+            className={actionPrimary}
+            onClick={onCalendar}
+            disabled={calendarBusy || !canCalendar}
+          >
+            <span className="inline-flex items-center gap-2">
+              <IoCalendarOutline size={18} />
+              {calendarBusy ? 'Adding…' : canCalendar ? 'Add to calendar' : 'Set a time first'}
+            </span>
+          </button>
+          <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
+            {saved ? 'Saved' : 'Save plan'}
+          </button>
+        </div>
+      ) : null}
+
+      {ctx.showSave && !ctx.showMakeOffer && !ctx.showViewOffer && !ctx.showRequestToJoin && !ctx.showViewRequest && !guestCalendarSaveRow ? (
+        <div className={planActionGrid}>
+          <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
+            {saved ? 'Saved' : 'Save plan'}
+          </button>
+        </div>
+      ) : null}
+
+      {ctx.showViewAgreement && ctx.showMessage ? (
+        <div className={planActionGrid}>
+          <button type="button" className={actionSecondary} onClick={onAgreement}>
+            <span className="inline-flex items-center gap-2">
+              <IoDocumentTextOutline size={18} />
+              View agreement
+            </span>
+          </button>
+          <button type="button" className={actionPrimary} onClick={onChat} disabled={chatBusy}>
+            <span className="inline-flex items-center gap-2">
+              <IoChatbubbleEllipsesOutline size={18} />
+              Message
+            </span>
+          </button>
+        </div>
+      ) : null}
+    </>
   );
 }

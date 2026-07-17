@@ -1,5 +1,10 @@
 import { fetchConnectedCreatorIds } from '@/lib/plans/discoverConnections';
 import { rankDiscoveryPlans } from '@/lib/plans/feedRanking';
+import {
+  discoverPriceFilterBounds,
+  hasDiscoverPriceFilter,
+  type DiscoverPriceFilter,
+} from '@/lib/discovery/discoverPriceFilter';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SubscriptionTier } from '@/lib/subscription/types';
 import type { DbMeetType, DbPlan, DbProfile, SubscriptionTierDb } from '@/types/database';
@@ -82,7 +87,8 @@ const PAGE_SIZE = 48;
 async function discoverPlansQuery(
   client: SupabaseClient,
   viewerUserId: string | null,
-  range?: { from: number; to: number }
+  range?: { from: number; to: number },
+  priceFilter?: DiscoverPriceFilter | null
 ) {
   const nowIso = new Date().toISOString();
   const nowQuoted = `"${nowIso}"`;
@@ -111,7 +117,7 @@ async function discoverPlansQuery(
     .select('*, meet_types(*)')
     .eq('is_suppressed', false)
     .is('archived_at', null)
-    .in('status', ['negotiating', 'active'])
+    .in('status', ['negotiating', 'awaiting_payment'])
     .or(moodOr)
     .or(notExpiredOr)
     .or(activeWindowOr);
@@ -124,6 +130,16 @@ async function discoverPlansQuery(
     q = q.or(visParts.join(','));
   } else {
     q = q.in('visibility', ['public', 'radius']);
+  }
+
+  if (priceFilter && hasDiscoverPriceFilter(priceFilter)) {
+    const { minPriceCents, maxPriceCents } = discoverPriceFilterBounds(priceFilter);
+    if (minPriceCents != null) {
+      q = q.gte('starting_price_cents', minPriceCents);
+    }
+    if (maxPriceCents != null) {
+      q = q.lte('starting_price_cents', maxPriceCents);
+    }
   }
 
   q = q
@@ -142,7 +158,12 @@ async function discoverPlansQuery(
  */
 export async function fetchDiscoverPlans(
   client: SupabaseClient,
-  opts?: { limit?: number; viewerLat?: number | null; viewerLng?: number | null }
+  opts?: {
+    limit?: number;
+    viewerLat?: number | null;
+    viewerLng?: number | null;
+    priceFilter?: DiscoverPriceFilter | null;
+  }
 ) {
   const {
     data: { user },
@@ -150,7 +171,12 @@ export async function fetchDiscoverPlans(
   const viewerUserId = user?.id ?? null;
   const limit = opts?.limit ?? PAGE_SIZE;
 
-  const { data, error } = await discoverPlansQuery(client, viewerUserId);
+  const { data, error } = await discoverPlansQuery(
+    client,
+    viewerUserId,
+    undefined,
+    opts?.priceFilter
+  );
 
   if (error) return { data: [] as PlanFeedRow[], error };
 
@@ -179,6 +205,7 @@ export async function fetchDiscoverPlansPage(
     skipClientRank?: boolean;
     viewerLat?: number | null;
     viewerLng?: number | null;
+    priceFilter?: DiscoverPriceFilter | null;
   }
 ) {
   let viewerUserId: string | null;
@@ -191,7 +218,12 @@ export async function fetchDiscoverPlansPage(
     viewerUserId = user?.id ?? null;
   }
 
-  const { data, error } = await discoverPlansQuery(client, viewerUserId, { from, to });
+  const { data, error } = await discoverPlansQuery(
+    client,
+    viewerUserId,
+    { from, to },
+    opts?.priceFilter
+  );
 
   if (error) return { data: [] as PlanFeedRow[], error };
 

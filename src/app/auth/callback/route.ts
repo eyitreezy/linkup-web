@@ -1,5 +1,10 @@
 import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
 import { env, isSupabaseConfigured } from '@/lib/env';
+import {
+  hasPendingSignupPrivacyConsentCookie,
+  PENDING_SIGNUP_PRIVACY_CONSENT_COOKIE,
+} from '@/lib/privacy/pendingSignupConsentStorage';
+import { recordPrivacyConsentServer } from '@/lib/privacy/recordPrivacyConsentServer';
 import { NextRequest, NextResponse } from 'next/server';
 
 function safeNextPath(raw: string | null): string {
@@ -56,6 +61,17 @@ export async function GET(request: NextRequest) {
       console.error('[auth/callback] exchangeCodeForSession:', error.message);
     }
     return loginErrorRedirect(origin, error.message);
+  }
+
+  const pendingSignupConsent = hasPendingSignupPrivacyConsentCookie(request.headers.get('cookie'));
+  if (pendingSignupConsent) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      await recordPrivacyConsentServer(supabase, user.id, 'signup');
+    }
+    response.cookies.set(PENDING_SIGNUP_PRIVACY_CONSENT_COOKIE, '', { path: '/', maxAge: 0 });
   }
 
   return response;

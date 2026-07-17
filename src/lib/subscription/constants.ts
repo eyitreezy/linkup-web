@@ -68,6 +68,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   'privacy.profile_view': 'Profile View Privacy',
   'privacy.masked_activity': 'Masked Activity',
   'privacy.plan_creation': 'Plan Creation Privacy',
+  'visibility.tier_audience': 'Tier-targeted visibility',
   'concierge.support': 'Platinum Concierge Support',
 };
 

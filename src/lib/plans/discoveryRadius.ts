@@ -1,22 +1,25 @@
 import type { SubscriptionTier } from '@/lib/subscription/types';
 
-/** Tier multiplier on profile `radius_km` when `discover.wider_radius` is allowed. */
-export const RADIUS_MULTIPLIER: Record<SubscriptionTier, number> = {
-  FREE: 1,
-  SILVER: 1.5,
-  GOLD: 2,
-  PLATINUM: 3,
+/** Tier-gated ceiling for the discover max-distance filter slider. */
+export const SLIDER_MAX_KM: Record<SubscriptionTier, number> = {
+  FREE: 50,
+  SILVER: 50,
+  GOLD: 100,
+  PLATINUM: 150,
 };
 
-export function radiusMultiplierForTier(tier: SubscriptionTier): number {
-  return RADIUS_MULTIPLIER[tier] ?? 1;
+export function sliderMaxKmForTier(tier: SubscriptionTier): number {
+  return SLIDER_MAX_KM[tier] ?? 50;
 }
 
-export function effectiveDiscoveryRadiusKm(
-  baseRadiusKm: number,
-  tier: SubscriptionTier,
-  hasWiderRadius: boolean
-): number {
-  if (!hasWiderRadius) return baseRadiusKm;
-  return Math.round(baseRadiusKm * radiusMultiplierForTier(tier));
+/** Upsell target for `discover.wider_radius` — FREE/SILVER → GOLD, GOLD → PLATINUM. */
+export function nextTierForWiderRadius(tier: SubscriptionTier): SubscriptionTier {
+  if (tier === 'GOLD') return 'PLATINUM';
+  return 'GOLD';
+}
+
+export function clampMaxDistanceKm(value: number | null | undefined, tier: SubscriptionTier): number | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  const max = sliderMaxKmForTier(tier);
+  return Math.min(Math.max(1, Math.round(value)), max);
 }

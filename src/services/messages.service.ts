@@ -1,4 +1,5 @@
 import { getLastReadMap } from '@/lib/messaging/inboxCache';
+import { formatGroupMentionsForDisplay } from '@/lib/messaging/groupMentions';
 import {
   messageDisplayText,
   previewForLastMessage,
@@ -196,6 +197,7 @@ export async function fetchInbox(
 
   const groupMemberCounts = new Map<string, number>();
   const groupMemberPreviews = new Map<string, InboxMemberPreview[]>();
+  const groupMentionNameByConv = new Map<string, Map<string, string>>();
   if (groupConvs.length > 0) {
     const gIds = groupConvs.map((c) => c.id as string);
     const { data: gMembers } = await client
@@ -214,6 +216,12 @@ export async function fetchInbox(
     for (const gid of gIds) {
       const rows = (gMembers ?? []).filter((m) => m.conversation_id === gid);
       groupMemberCounts.set(gid, rows.length);
+      const nameMap = new Map<string, string>();
+      for (const m of rows) {
+        const p = gProfMap.get(m.user_id as string);
+        nameMap.set(m.user_id as string, (p?.display_name as string) ?? 'Member');
+      }
+      groupMentionNameByConv.set(gid, nameMap);
       groupMemberPreviews.set(
         gid,
         rows.slice(0, 4).map((m) => {
@@ -247,7 +255,7 @@ export async function fetchInbox(
     const prof = isGroup ? null : profByUser.get(otherId);
     const last = lastByConv.get(c.id as string);
     const mk = last ? mediaKindByMsg.get(last.id as string) ?? null : null;
-    const preview =
+    let preview =
       last && deletedForMeIds.has(last.id as string)
         ? 'Message deleted'
         : previewForLastMessage(
@@ -255,6 +263,10 @@ export async function fetchInbox(
             mk,
             (last?.deleted_at as string) ?? null
           );
+    if (isGroup && last && !deletedForMeIds.has(last.id as string)) {
+      const nameMap = groupMentionNameByConv.get(c.id as string);
+      if (nameMap) preview = formatGroupMentionsForDisplay(preview, nameMap);
+    }
     const timeIso = (last?.created_at as string) ?? (c.created_at as string);
     const readAt = readMap[c.id as string];
     const unread =

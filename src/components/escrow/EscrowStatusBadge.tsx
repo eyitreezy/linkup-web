@@ -12,7 +12,13 @@ const STATUS_CLASS: Record<string, string> = {
   cancelled: 'bg-gray-100 text-gray-500',
 };
 
-export function EscrowStatusBadge({ status }: { status: EscrowStatus | string }) {
+export function EscrowStatusBadge({
+  status,
+  label,
+}: {
+  status: EscrowStatus | string;
+  label?: string;
+}) {
   return (
     <span
       className={cn(
@@ -20,7 +26,7 @@ export function EscrowStatusBadge({ status }: { status: EscrowStatus | string })
         STATUS_CLASS[status] ?? 'bg-muted/10 text-muted'
       )}
     >
-      {escrowStatusLabel(status)}
+      {label ?? escrowStatusLabel(status)}
     </span>
   );
 }

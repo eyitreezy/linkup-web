@@ -2,54 +2,81 @@
 
 import { ProfileAvatar } from '@/components/profile/ProfileAvatar';
 import { TierBadge } from '@/components/subscription/TierBadge';
+import { subscribeEscrowRealtime } from '@/lib/escrow/subscribeEscrowRealtime';
+import { subscribePostgresRealtime } from '@/lib/realtime/subscribePostgresRealtime';
+import {
+  findGuestEscrowForBidder,
+  guestEscrowStatusLabel,
+  isGuestEscrowFunded,
+} from '@/lib/plans/groupGuestEscrowDisplay';
+import { resolveGroupGuestSlotCounts } from '@/lib/plans/groupGuestSlotCounts';
 import { createClient } from '@/lib/supabase/client';
-import type {
-  DbPlan,
-  DbPlanOffer,
-  DbProfile,
-  EscrowStatus,
-  SubscriptionTierDb,
-} from '@/types/database';
+import type { DbPlan, DbPlanOffer, DbProfile, SubscriptionTierDb } from '@/types/database';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { IoCheckmarkCircle, IoShieldCheckmarkOutline, IoTimeOutline } from 'react-icons/io5';
 
 type GuestRow = {
   offer: DbPlanOffer;
   profile: Pick<DbProfile, 'display_name' | 'avatar_url' | 'primary_photo_url' | 'photo_urls'> | null;
   subscription_tier: SubscriptionTierDb;
-  escrow_status: EscrowStatus | null;
   escrow_id: string | null;
+  funded: boolean;
+  statusLabel: string;
 };
 
 type Props = {
   plan: DbPlan;
   hostUserId: string;
   currentUserId?: string;
+  /** When parent already loaded offers, skip the initial offers query. */
+  seedAcceptedOffers?: DbPlanOffer[];
+  offersReady?: boolean;
+  /** Bumps when parent realtime refreshes offers / plan (escrow, accepts). */
+  refreshKey?: string;
 };
 
-export function PlanGroupGuestsPanel({ plan, hostUserId, currentUserId }: Props) {
+export function PlanGroupGuestsPanel({
+  plan,
+  hostUserId,
+  currentUserId,
+  seedAcceptedOffers,
+  offersReady = false,
+  refreshKey,
+}: Props) {
   const [rows, setRows] = useState<GuestRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
 
   const load = useCallback(async () => {
     if (!plan.is_group_plan) {
       setLoading(false);
       return;
     }
-    const client = createClient();
-    const { data: offers } = await client
-      .from('plan_offers')
-      .select('*')
-      .eq('plan_id', plan.id)
-      .eq('status', 'accepted');
 
-    const accepted = (offers ?? []) as DbPlanOffer[];
+    if (rowsRef.current.length === 0) setLoading(true);
+
+    let accepted: DbPlanOffer[];
+    if (seedAcceptedOffers && offersReady) {
+      accepted = seedAcceptedOffers;
+    } else {
+      const client = createClient();
+      const { data: offers } = await client
+        .from('plan_offers')
+        .select('*')
+        .eq('plan_id', plan.id)
+        .eq('status', 'accepted');
+      accepted = (offers ?? []) as DbPlanOffer[];
+    }
+
     if (accepted.length === 0) {
       setRows([]);
       setLoading(false);
       return;
     }
 
+    const client = createClient();
     const bidderIds = accepted.map((o) => o.bidder_id);
     const [{ data: profiles }, { data: users }, { data: escrows }] = await Promise.all([
       client
@@ -57,17 +84,23 @@ export function PlanGroupGuestsPanel({ plan, hostUserId, currentUserId }: Props)
         .select('user_id, display_name, avatar_url, primary_photo_url, photo_urls')
         .in('user_id', bidderIds),
       client.from('users').select('id, subscription_tier').in('id', bidderIds),
-      client.from('escrow_transactions').select('id, plan_id, payer_id, status').eq('plan_id', plan.id),
+      client
+        .from('escrow_transactions')
+        .select('id, plan_id, host_id, payer_id, guest_id, status, escrow_pattern, host_funded_at, guest_funded_at')
+        .eq('plan_id', plan.id)
+        .not('guest_id', 'is', null),
     ]);
 
     const profMap = new Map((profiles ?? []).map((p) => [p.user_id as string, p]));
     const userMap = new Map((users ?? []).map((u) => [u.id as string, u]));
+    const escrowList = escrows ?? [];
 
     setRows(
       accepted.map((offer) => {
         const prof = profMap.get(offer.bidder_id);
         const u = userMap.get(offer.bidder_id);
-        const esc = (escrows ?? []).find((e) => e.payer_id === offer.bidder_id);
+        const esc = findGuestEscrowForBidder(escrowList, offer.bidder_id);
+        const funded = isGuestEscrowFunded(esc ?? null, offer.bidder_id);
         return {
           offer,
           profile: prof
@@ -79,40 +112,85 @@ export function PlanGroupGuestsPanel({ plan, hostUserId, currentUserId }: Props)
               }
             : null,
           subscription_tier: (u?.subscription_tier as SubscriptionTierDb) ?? 'FREE',
-          escrow_status: (esc?.status as EscrowStatus) ?? null,
           escrow_id: (esc?.id as string) ?? null,
+          funded,
+          statusLabel: guestEscrowStatusLabel(esc ?? null, offer.bidder_id, !!plan.is_paid),
         };
       })
     );
     setLoading(false);
-  }, [plan.id, plan.is_group_plan]);
+  }, [
+    plan.id,
+    plan.is_group_plan,
+    plan.is_paid,
+    plan.accepted_guest_count,
+    plan.max_guests,
+    plan.max_free_guests,
+    offersReady,
+    refreshKey,
+    seedAcceptedOffers?.length,
+    seedAcceptedOffers?.map((o) => `${o.id}:${o.status}:${o.current_amount_cents ?? o.amount_cents}`).join(','),
+  ]);
+
+  const loadRef = useRef(load);
+  loadRef.current = load;
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!plan.is_group_plan) return;
+    return subscribeEscrowRealtime({
+      planId: plan.id,
+      onRefresh: () => {
+        void loadRef.current();
+      },
+    });
+  }, [plan.id, plan.is_group_plan]);
+
+  useEffect(() => {
+    if (!plan.is_group_plan) return;
+    return subscribePostgresRealtime(
+      () => {
+        void loadRef.current();
+      },
+      { table: 'plan_offers', filter: `plan_id=eq.${plan.id}` },
+      { channelPrefix: 'plan-guests-rt' }
+    );
+  }, [plan.id, plan.is_group_plan]);
+
   if (!plan.is_group_plan || currentUserId !== hostUserId) return null;
 
-  const maxGuests = plan.max_guests ?? plan.max_free_guests ?? 5;
-  const freeCap = plan.max_free_guests ?? 5;
-  const freeUsed = rows.filter((r) => r.subscription_tier === 'FREE').length;
+  const { maxGuests, freeCap, acceptedCount, freeUsed, premiumUsed } = resolveGroupGuestSlotCounts(
+    plan,
+    rows,
+    seedAcceptedOffers?.length ?? 0
+  );
 
   return (
     <section className="linkup-card overflow-hidden">
       <div className="border-b border-border/60 px-5 py-4">
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-display text-lg font-extrabold text-foreground">
-            Guests ({rows.length} / {maxGuests} accepted)
+            Guests ({acceptedCount} / {maxGuests} accepted)
           </h3>
           <Link
             href={`/plan/${plan.id}/negotiate`}
-            className="text-[12px] font-extrabold text-primary underline"
+            className="text-[12px] font-extrabold text-primary underline transition hover:text-primary/80"
           >
             View all offers →
           </Link>
         </div>
         <p className="mt-1 text-[12px] font-semibold text-muted">
-          {freeUsed} of {freeCap} free guest slots used
+          {acceptedCount} of {maxGuests} guest slots used
+          {freeCap > 0 ? (
+            <>
+              {' '}
+              · {freeUsed} of {freeCap} free-tier
+              {premiumUsed > 0 ? ` · ${premiumUsed} premium` : ''}
+            </>
+          ) : null}
         </p>
       </div>
       {loading ? (
@@ -140,17 +218,28 @@ export function PlanGroupGuestsPanel({ plan, hostUserId, currentUserId }: Props)
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                {guest.escrow_status ? (
-                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold capitalize text-primary">
-                    {guest.escrow_status.replace(/_/g, ' ')}
-                  </span>
-                ) : null}
+                <span
+                  className={`inline-flex max-w-[6rem] items-center gap-1 rounded-full px-2 py-1 text-[11px] font-extrabold ${
+                    guest.funded
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-primary/10 text-primary'
+                  }`}
+                >
+                  {guest.funded ? (
+                    <IoCheckmarkCircle size={13} className="shrink-0" />
+                  ) : (
+                    <IoTimeOutline size={13} className="shrink-0" />
+                  )}
+                  <span className="truncate">{guest.statusLabel}</span>
+                </span>
                 {guest.escrow_id ? (
                   <Link
-                    href={`/escrow/${guest.escrow_id}`}
-                    className="text-[11px] font-extrabold text-muted underline hover:text-primary"
+                    href={`/escrow/${guest.escrow_id}?planId=${plan.id}`}
+                    className="inline-flex min-w-[4.75rem] items-center justify-center gap-1 rounded-full linkup-gradient-primary px-2.5 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95 active:scale-[0.98]"
+                    aria-label={`Open ${guest.profile?.display_name ?? 'guest'} escrow`}
                   >
-                    Escrow →
+                    <IoShieldCheckmarkOutline size={14} aria-hidden />
+                    Escrow
                   </Link>
                 ) : null}
               </div>

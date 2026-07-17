@@ -5,8 +5,11 @@ import {
   IoCard,
   IoCheckmarkCircle,
   IoCloseCircle,
+  IoGridOutline,
   IoInformationCircle,
   IoSparkles,
+  IoSwapHorizontal,
+  IoPricetag,
   IoTimeOutline,
   IoWarning,
 } from 'react-icons/io5';
@@ -14,6 +17,14 @@ import {
 /** Icon for notification list rows — extend as new event types ship. */
 export function notificationIcon(type: string): IconType {
   switch (type) {
+    case 'offer_received':
+      return IoPricetag;
+    case 'offer_countered':
+      return IoSwapHorizontal;
+    case 'offer_accepted':
+      return IoCheckmarkCircle;
+    case 'offer_declined':
+      return IoCloseCircle;
     case 'credit_issued':
     case 'trial_started':
       return IoSparkles;
@@ -21,6 +32,12 @@ export function notificationIcon(type: string): IconType {
     case 'trial_expiring':
     case 'trial_expired':
       return IoTimeOutline;
+    case 'meet_type_submitted':
+      return IoGridOutline;
+    case 'meet_type_approved':
+      return IoCheckmarkCircle;
+    case 'meet_type_rejected':
+      return IoCloseCircle;
     default:
       return IoSparkles;
   }

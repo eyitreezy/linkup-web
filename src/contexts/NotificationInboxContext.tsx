@@ -7,6 +7,7 @@ import {
 import { invalidateNotificationQueries } from '@/lib/notifications/invalidate';
 import { createClient } from '@/lib/supabase/client';
 import { countUnreadNotifications } from '@/services/notifications.service';
+import { useAdminAccess } from '@/hooks/useAdminAccess';
 import { useAuthStore } from '@/stores/auth-store';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -28,15 +29,16 @@ const NotificationInboxCtx = createContext<NotificationInboxContextValue | undef
 
 export function NotificationInboxProvider({ children }: { children: ReactNode }) {
   const user = useAuthStore((s) => s.user);
+  const { isAdmin, isLoading: adminLoading } = useAdminAccess();
   const queryClient = useQueryClient();
 
   const { data: unreadCount = 0, isLoading, refetch } = useQuery({
-    queryKey: [NOTIFICATIONS_UNREAD_QUERY_KEY, user?.id],
+    queryKey: [NOTIFICATIONS_UNREAD_QUERY_KEY, user?.id, isAdmin],
     queryFn: async () => {
       if (!user?.id) return 0;
-      return countUnreadNotifications(user.id);
+      return countUnreadNotifications(user.id, isAdmin);
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && !adminLoading,
     refetchInterval: 60_000,
   });
 

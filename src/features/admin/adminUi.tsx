@@ -10,26 +10,31 @@ export function AdminSectionHeader({
   title,
   subtitle,
   icon,
+  action,
 }: {
   title: string;
   subtitle?: string;
   icon?: ReactNode;
+  action?: ReactNode;
 }) {
   return (
-    <div className="mb-3 flex min-w-0 gap-1.5 min-[360px]:mb-4 min-[360px]:gap-2 min-[400px]:gap-3">
-      {icon ? (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-gradient-to-br from-[#EDE8FF] to-white text-primary shadow-sm min-[360px]:h-10 min-[360px]:w-10 min-[360px]:rounded-2xl min-[400px]:h-11 min-[400px]:w-11">
-          {icon}
-        </div>
-      ) : null}
-      <div className="min-w-0">
-        <h2 className="font-display text-base font-extrabold leading-snug tracking-tight text-foreground min-[360px]:text-lg min-[400px]:text-xl">
-          {title}
-        </h2>
-        {subtitle ? (
-          <p className="mt-0.5 text-[12px] font-semibold leading-snug text-muted min-[360px]:mt-1 min-[360px]:text-[13px]">{subtitle}</p>
+    <div className="mb-3 flex min-w-0 flex-col gap-3 min-[360px]:mb-4 min-[400px]:flex-row min-[400px]:items-center min-[400px]:justify-between min-[400px]:gap-4">
+      <div className="flex min-w-0 flex-1 items-start gap-1.5 min-[360px]:gap-2 min-[400px]:gap-3">
+        {icon ? (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-gradient-to-br from-[#EDE8FF] to-white text-primary shadow-sm min-[360px]:h-10 min-[360px]:w-10 min-[360px]:rounded-2xl min-[400px]:h-11 min-[400px]:w-11">
+            {icon}
+          </div>
         ) : null}
+        <div className="min-w-0">
+          <h2 className="font-display text-base font-extrabold leading-snug tracking-tight text-foreground min-[360px]:text-lg min-[400px]:text-xl">
+            {title}
+          </h2>
+          {subtitle ? (
+            <p className="mt-0.5 text-[12px] font-semibold leading-snug text-muted min-[360px]:mt-1 min-[360px]:text-[13px]">{subtitle}</p>
+          ) : null}
+        </div>
       </div>
+      {action ? <div className="shrink-0 min-[400px]:self-center">{action}</div> : null}
     </div>
   );
 }

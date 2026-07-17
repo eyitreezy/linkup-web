@@ -94,7 +94,15 @@ export function useEscrowFunding() {
         } else {
           return { ok: false, error: 'No pending share for you on this escrow.' };
         }
-      } else if (userId !== escrow.payer_id) {
+      } else if (escrow.escrow_pattern === 'A' && userId !== escrow.host_id) {
+        return { ok: false, error: 'Only the host can fund this escrow.' };
+      } else if (escrow.escrow_pattern === 'C' && userId !== escrow.guest_id) {
+        return { ok: false, error: 'Only the guest can fund this escrow.' };
+      } else if (
+        escrow.escrow_pattern !== 'A' &&
+        escrow.escrow_pattern !== 'C' &&
+        userId !== escrow.payer_id
+      ) {
         return { ok: false, error: 'Only the payer can fund this escrow.' };
       }
 
@@ -104,6 +112,7 @@ export function useEscrowFunding() {
           escrowId: escrow.id,
           planId: escrow.plan_id,
           escrowLeg,
+          initiatedByUserId: userId,
         });
         if (!result.ok) {
           return { ok: false, error: result.error ?? 'Checkout failed' };

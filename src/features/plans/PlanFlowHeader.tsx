@@ -10,6 +10,8 @@ type Props = {
   subtitle?: string;
   backHref?: string;
   backLabel?: string;
+  /** When set, back is a button (e.g. close an inline sub-step) instead of navigation. */
+  onBackClick?: () => void;
   right?: React.ReactNode;
   className?: string;
 };
@@ -20,19 +22,25 @@ export function PlanFlowHeader({
   subtitle,
   backHref = '/discover',
   backLabel = 'Back',
+  onBackClick,
   right,
   className,
 }: Props) {
+  const backClassName =
+    'flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/20 bg-white/90 text-foreground shadow-sm transition hover:bg-[#EDE8FF]/60';
+
   return (
     <div className={cn('space-y-4', className)}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link
-          href={backHref}
-          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/20 bg-white/90 text-foreground shadow-sm transition hover:bg-[#EDE8FF]/60"
-          aria-label={backLabel}
-        >
-          <IoArrowBack size={22} />
-        </Link>
+        {onBackClick ? (
+          <button type="button" onClick={onBackClick} className={backClassName} aria-label={backLabel}>
+            <IoArrowBack size={22} />
+          </button>
+        ) : (
+          <Link href={backHref} className={backClassName} aria-label={backLabel}>
+            <IoArrowBack size={22} />
+          </Link>
+        )}
         {right}
       </div>
       <header className="flex gap-4">

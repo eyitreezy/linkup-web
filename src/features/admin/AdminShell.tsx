@@ -6,7 +6,9 @@ import type { ReactNode } from 'react';
 import {
   IoAlbumsOutline,
   IoChatbubblesOutline,
+  IoDocumentTextOutline,
   IoFlashOutline,
+  IoGridOutline,
   IoFlagOutline,
   IoIdCardOutline,
   IoPeopleOutline,
@@ -43,6 +45,8 @@ export const ADMIN_TAB_ICONS: Record<AdminTabId, ReactNode> = {
   support: <IoChatbubblesOutline size={18} />,
   users: <IoPeopleOutline size={18} />,
   plans: <IoAlbumsOutline size={18} />,
+  privacy_policy: <IoDocumentTextOutline size={18} />,
+  meet_types: <IoGridOutline size={18} />,
 };
 
 export function AdminShell({

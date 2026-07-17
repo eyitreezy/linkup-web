@@ -12,6 +12,7 @@ import {
   setPrimaryPhoto,
 } from '@/lib/profile/media/draft';
 import { ProfileVideoPreview } from '@/components/profile/ProfileVideoPreview';
+import { ProfilePhotoPreviewOverlay } from '@/components/profile/ProfilePhotoPreviewOverlay';
 import {
   activePhotoCount,
   hasProfileVideo,
@@ -45,6 +46,8 @@ export function ProfileMediaManager({
   const localVideoUrlRef = useRef<string | null>(null);
 
   const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [videoBusy, setVideoBusy] = useState(false);
   const [primaryBusy, setPrimaryBusy] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
@@ -130,6 +133,14 @@ export function ProfileMediaManager({
 
   const thumbnailPreview = media.video?.thumbnailUrl ?? null;
   const playbackUrl = localVideoPreviewUrl ?? media.video?.url ?? null;
+  const photoPreviewUris = media.photos.map((photo) => photoPreviewUrl(photo) ?? '');
+
+  function openPhotoPreview(photoClientId: string) {
+    const idx = media.photos.findIndex((p) => p.clientId === photoClientId);
+    if (idx < 0 || !photoPreviewUris[idx]) return;
+    setPreviewIndex(idx);
+    setPreviewOpen(true);
+  }
 
   return (
     <div className={cn('space-y-5', className)}>
@@ -165,7 +176,8 @@ export function ProfileMediaManager({
           </p>
         </div>
         <p className="mt-1 text-[12px] font-semibold leading-relaxed text-muted">
-          Tap a photo to manage it. Set a primary photo — it appears first across Discover, plans, and messages.
+          Tap a photo to manage it, double-click to preview full size. Set a primary photo — it appears first across
+          Discover, plans, and messages.
         </p>
 
         <div className="mt-3 grid grid-cols-3 gap-2 min-[400px]:grid-cols-4 min-[400px]:gap-3">
@@ -177,6 +189,10 @@ export function ProfileMediaManager({
                 <button
                   type="button"
                   onClick={() => setActivePhotoId(isActive ? null : photo.clientId)}
+                  onDoubleClick={(e) => {
+                    e.preventDefault();
+                    if (preview) openPhotoPreview(photo.clientId);
+                  }}
                   className={cn(
                     'group relative aspect-[3/4] w-full overflow-hidden rounded-2xl border-2 bg-[#EDE8FF]/40 transition',
                     photo.isPrimary ? 'border-secondary shadow-md ring-2 ring-secondary/25' : 'border-border',
@@ -327,6 +343,14 @@ export function ProfileMediaManager({
           Media looks great — primary photo and video are set.
         </p>
       ) : null}
+
+      <ProfilePhotoPreviewOverlay
+        open={previewOpen}
+        uris={photoPreviewUris}
+        index={previewIndex}
+        onIndexChange={setPreviewIndex}
+        onClose={() => setPreviewOpen(false)}
+      />
     </div>
   );
 }
