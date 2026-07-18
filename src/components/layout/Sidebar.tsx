@@ -6,7 +6,6 @@ import { TabIcon } from '@/components/navigation/TabIcon';
 import { ADMIN_NAV_ITEM, MOBILE_TAB_NAV } from '@/components/navigation/tabNavConfig';
 import { useMessagesInboxOptional } from '@/contexts/MessagesInboxContext';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
-import { APP_SPLASH_BACKGROUND } from '@/lib/brand';
 import { isMainNavItemActive } from '@/lib/navigation/navActive';
 import { shouldPrefetchNavRoute } from '@/lib/navigation/prefetchNav';
 import { cn } from '@/utils/cn';
@@ -25,16 +24,10 @@ export function Sidebar() {
     <aside
       className={cn(
         'fixed left-0 top-0 z-30 hidden h-screen w-[240px] flex-col isolate',
-        'border-r border-border px-4 py-6 lg:flex xl:w-[260px]'
+        'border-r border-border bg-white px-4 py-6 lg:flex xl:w-[260px]'
       )}
-      style={{ backgroundColor: APP_SPLASH_BACKGROUND }}
     >
-      <Link
-        href="/discover"
-        className="relative isolate mb-8 block shrink-0 px-3"
-        style={{ backgroundColor: APP_SPLASH_BACKGROUND }}
-        aria-label="LinkUp home"
-      >
+      <Link href="/discover" className="relative isolate mb-8 block shrink-0 bg-white px-3" aria-label="LinkUp home">
         <LinkUpLogo width={118} />
       </Link>
       <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">

@@ -1,6 +1,5 @@
 'use client';
 
-import { APP_SPLASH_BACKGROUND } from '@/lib/brand';
 import type { ReactNode } from 'react';
 
 type Props = {
@@ -11,10 +10,7 @@ type Props = {
 /** Right rail — pinned on desktop; filter content scrolls inside the rail. */
 export function ContextPanel({ title = 'Sort and filter', children }: Props) {
   return (
-    <aside
-      className="hidden h-full max-h-full min-h-0 w-[300px] shrink-0 flex-col overflow-hidden border-l border-border xl:flex"
-      style={{ backgroundColor: APP_SPLASH_BACKGROUND }}
-    >
+    <aside className="hidden h-full max-h-full min-h-0 w-[300px] shrink-0 flex-col overflow-hidden border-l border-border bg-white xl:flex">
       <h2 className="shrink-0 px-6 pt-6 font-display text-[15px] font-extrabold tracking-tight text-foreground">
         {title}
       </h2>
