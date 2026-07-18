@@ -9,7 +9,7 @@ export function AppSplashScreen() {
     <SplashBackground>
       <div className="relative z-10 flex h-full flex-1 flex-col items-center justify-center px-8 pb-24 pt-16">
         <div className="splash-rise" style={{ animationDelay: '0ms' }}>
-          <SplashBrandLockup logoWidth={320} />
+          <SplashBrandLockup lockupWidth={320} />
         </div>
       </div>
     </SplashBackground>

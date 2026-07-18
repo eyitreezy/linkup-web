@@ -12,6 +12,7 @@ type EscrowPayFields = Pick<
   DbEscrowTransaction,
   | 'id'
   | 'escrow_pattern'
+  | 'payer_id'
   | 'host_id'
   | 'guest_id'
   | 'host_share_cents'

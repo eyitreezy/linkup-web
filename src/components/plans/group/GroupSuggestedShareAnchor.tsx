@@ -13,6 +13,9 @@ type Props = {
     | 'current_suggested_share_cents'
     | 'total_amount_cents'
     | 'starting_price_cents'
+    | 'agreed_price_cents'
+    | 'budget_min_cents'
+    | 'budget_max_cents'
     | 'max_guests'
     | 'accepted_guest_count'
   >;

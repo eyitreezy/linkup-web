@@ -202,8 +202,8 @@ export type ResolveGroupHostShareOptions = {
   acceptedOffers?: AcceptedOfferAmount[];
   hostEscrowRow?: Pick<
     DbEscrowTransaction,
-    'id' | 'host_share_cents' | 'amount_cents'
-  > & { guest_id?: string | null } | null;
+    'id' | 'host_share_cents' | 'amount_cents' | 'guest_id'
+  > & { guest_share_cents?: number | null } | null;
 };
 
 function storedHostBudgetCents(
@@ -213,7 +213,9 @@ function storedHostBudgetCents(
 }
 
 function storedHostGrossCents(
-  escrow: Pick<DbEscrowTransaction, 'host_share_cents' | 'guest_share_cents' | 'amount_cents'>
+  escrow: Pick<DbEscrowTransaction, 'host_share_cents' | 'amount_cents'> & {
+    guest_share_cents?: number | null;
+  }
 ): number {
   const budget = storedHostBudgetCents(escrow);
   const guestBudget = Math.max(0, escrow.guest_share_cents ?? 0);
@@ -238,7 +240,9 @@ export type GroupSplitPlanSnapshot = Pick<
 
 export function resolveGroupHostShareCents(
   plan: GroupSplitPlanSnapshot,
-  escrow: Pick<DbEscrowTransaction, 'id' | 'host_share_cents' | 'amount_cents' | 'guest_id'>,
+  escrow: Pick<DbEscrowTransaction, 'id' | 'host_share_cents' | 'amount_cents' | 'guest_id'> & {
+    guest_share_cents?: number | null;
+  },
   guestEscrows: GuestEscrowLeg[] = [],
   options: ResolveGroupHostShareOptions = {}
 ): GroupHostShareResolution {
