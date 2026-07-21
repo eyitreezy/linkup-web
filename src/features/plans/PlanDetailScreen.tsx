@@ -41,6 +41,7 @@ import { planMeetupCoords } from '@/lib/plans/planMeetupCoords';
 import { daysUntilIso, isPlanActiveWindowExpiringSoon } from '@/lib/plans/planActiveWindow';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
+import { planShareCity, planSharePriceLabel } from '@/lib/plans/planSharePreview';
 import { formatPlanAppFee, formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { countPendingInvitations, getPlanAvailableSlots } from '@/lib/plans/planInvitations';
 import { usePermission } from '@/hooks/usePermission';
@@ -513,7 +514,18 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
           planId={planId}
           planTitle={plan.title}
           meetTypeName={plan.meet_types?.name ?? 'Meetup'}
-          city={plan.location_label?.split(',')[0]?.trim() ?? ''}
+          city={planShareCity(plan.location_label)}
+          meetDateLabel={
+            plan.scheduled_at
+              ? new Date(plan.scheduled_at).toLocaleDateString('en-NG', {
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short',
+                })
+              : null
+          }
+          priceLabel={planSharePriceLabel(plan)}
+          hostDisplayName={bundle?.profilesById[plan.creator_id]?.display_name ?? null}
           open={shareModalOpen}
           onOpenChange={setShareModalOpen}
           currentUserId={viewerUserId ?? null}

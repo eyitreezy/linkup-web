@@ -1,5 +1,6 @@
 'use client';
 
+import { PlanShareCardPreview } from '@/components/plans/PlanShareCardPreview';
 import { APP_NAME } from '@/lib/brand';
 import { planSharePreviewUrl } from '@/lib/plans/planSharePreview';
 import { createClient } from '@/lib/supabase/client';
@@ -14,6 +15,9 @@ interface PlanShareModalProps {
   planTitle: string;
   meetTypeName: string;
   city: string;
+  meetDateLabel: string | null;
+  priceLabel: string | null;
+  hostDisplayName: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentUserId?: string | null;
@@ -24,6 +28,9 @@ export function PlanShareModal({
   planTitle,
   meetTypeName,
   city,
+  meetDateLabel,
+  priceLabel,
+  hostDisplayName,
   open,
   onOpenChange,
   currentUserId,
@@ -31,6 +38,7 @@ export function PlanShareModal({
   const [copied, setCopied] = useState(false);
   const previewUrl = planSharePreviewUrl(planId, env.appUrl);
   const shareText = `Join ${meetTypeName} in ${city} on ${APP_NAME}, a verified meetup platform`;
+  const cardTitle = planTitle?.trim() || `${meetTypeName} in ${city}`;
 
   const recordShare = async (channel: PlanShareChannel) => {
     try {
@@ -95,12 +103,13 @@ export function PlanShareModal({
         </h2>
 
         <div className="mt-3 overflow-hidden rounded-2xl border border-border/60">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`/api/plan/${planId}/card`}
-            alt="Plan preview card"
-            className="w-full"
-            loading="lazy"
+          <PlanShareCardPreview
+            meetTypeName={meetTypeName}
+            title={cardTitle}
+            city={city}
+            meetDateLabel={meetDateLabel}
+            priceLabel={priceLabel}
+            hostDisplayName={hostDisplayName}
           />
         </div>
 
