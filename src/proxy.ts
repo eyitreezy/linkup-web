@@ -8,6 +8,14 @@ function isAuthPath(pathname: string) {
   return AUTH_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+function isPlanPreviewPath(pathname: string) {
+  return /^\/plan\/[^/]+\/preview\/?$/.test(pathname);
+}
+
+function isPlanCardApiPath(pathname: string) {
+  return /^\/api\/plan\/[^/]+\/card\/?$/.test(pathname);
+}
+
 function isProtectedAppPath(pathname: string) {
   const prefixes = [
     '/discover',
@@ -60,6 +68,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (isPlanCardApiPath(pathname)) {
+    return NextResponse.next();
+  }
+
   if (!isSupabaseConfigured) {
     return NextResponse.next();
   }
@@ -84,6 +96,17 @@ export async function proxy(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  if (isPlanPreviewPath(pathname)) {
+    if (user) {
+      const segments = pathname.split('/').filter(Boolean);
+      const planId = segments[1];
+      if (planId) {
+        return NextResponse.redirect(new URL(`/plan/${planId}`, request.url));
+      }
+    }
+    return response;
+  }
 
   if (isProtectedAppPath(pathname) && !user) {
     const url = request.nextUrl.clone();

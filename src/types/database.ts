@@ -276,6 +276,8 @@ export interface DbPlan {
   host_escrow_id?: string | null;
   /** When false on paid split/guest-funded plans, guests request to join at formula price. Default true. */
   is_negotiable?: boolean;
+  /** Total share link opens recorded via plan_shares. */
+  share_count?: number;
   max_free_guests?: number | null;
   max_premium_guests?: number | null;
   multi_city?: boolean | null;
@@ -365,6 +367,16 @@ export interface DbPlanEngagement {
   plan_id: string;
   user_id: string;
   kind: 'view' | 'save';
+  created_at: string;
+}
+
+export type PlanShareChannel = 'whatsapp' | 'copy_link' | 'native' | 'twitter' | 'instagram';
+
+export interface DbPlanShare {
+  id: string;
+  plan_id: string;
+  shared_by_user_id: string | null;
+  channel: PlanShareChannel;
   created_at: string;
 }
 

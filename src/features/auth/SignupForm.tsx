@@ -8,12 +8,14 @@ import { createClient } from '@/lib/supabase/client';
 import { env } from '@/lib/env';
 import { cn } from '@/utils/cn';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { IoCheckmark, IoMailOpenOutline } from 'react-icons/io5';
 
 function SignupFields() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get('next') ?? '/discover';
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -78,7 +80,7 @@ function SignupFields() {
         email: trimmedEmail,
         password,
         options: {
-          emailRedirectTo: `${env.siteUrl}/auth/callback`,
+          emailRedirectTo: `${env.siteUrl}/auth/callback?next=${encodeURIComponent(next.startsWith('/') && !next.startsWith('//') ? next : '/discover')}`,
           data: { display_name: trimmedName },
         },
       });
@@ -93,7 +95,7 @@ function SignupFields() {
         setVerificationSent(true);
         return;
       }
-      router.push('/discover');
+      router.push(next.startsWith('/') && !next.startsWith('//') ? next : '/discover');
       router.refresh();
     } catch {
       setError('Could not create account. Try again.');
@@ -219,7 +221,7 @@ function SignupFields() {
         </AuthButton>
         <p className="text-center text-[14px] font-semibold text-muted lg:block max-lg:hidden">
           Already have an account?{' '}
-          <Link href="/login" className="font-extrabold text-primary hover:underline">
+          <Link href={`/login?next=${encodeURIComponent(next)}`} className="font-extrabold text-primary hover:underline">
             Log in
           </Link>
         </p>

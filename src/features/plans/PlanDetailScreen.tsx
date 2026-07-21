@@ -5,6 +5,7 @@ import { AppStatusDialog } from '@/components/ui/AppStatusDialog';
 import { ActionButtonsSkeleton } from '@/components/plans/ActionButtonsSkeleton';
 import { PlanOffersListSkeleton } from '@/components/plans/PlanOffersListSkeleton';
 import { InviteGuestsModal } from '@/components/plans/InviteGuestsModal';
+import { PlanShareModal } from '@/components/plans/PlanShareModal';
 import { RequestToJoinButton } from '@/components/plans/RequestToJoinButton';
 import { PlanGroupGuestsPanel } from '@/components/plans/PlanGroupGuestsPanel';
 import { ProfileAvatar } from '@/components/profile/ProfileAvatar';
@@ -68,6 +69,7 @@ import {
   IoLockClosed,
   IoPeople,
   IoPersonAddOutline,
+  IoShareOutline,
   IoTimeOutline,
 } from 'react-icons/io5';
 
@@ -110,6 +112,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     variant?: 'success' | 'error' | 'info';
   } | null>(null);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [availableSlots, setAvailableSlots] = useState(initialBundle.availableSlots);
   const [pendingInvitationCount, setPendingInvitationCount] = useState(
     initialBundle.pendingInvitationCount
@@ -505,12 +508,36 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         />
       ) : null}
 
+      {plan ? (
+        <PlanShareModal
+          planId={planId}
+          planTitle={plan.title}
+          meetTypeName={plan.meet_types?.name ?? 'Meetup'}
+          city={plan.location_label?.split(',')[0]?.trim() ?? ''}
+          open={shareModalOpen}
+          onOpenChange={setShareModalOpen}
+          currentUserId={viewerUserId ?? null}
+        />
+      ) : null}
+
       <PlanFlowHeader
         kicker="Meetup details"
         title={plan.title}
         subtitle={plan.location_label ?? undefined}
         backHref="/discover"
         backLabel="Back to Discover"
+        right={
+          !isCreator ? (
+            <button
+              type="button"
+              onClick={() => setShareModalOpen(true)}
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/20 bg-white/90 text-foreground shadow-sm transition hover:bg-[#EDE8FF]/60"
+              aria-label="Share this plan"
+            >
+              <IoShareOutline size={22} />
+            </button>
+          ) : null
+        }
       />
 
       {moodClosed ? (
@@ -675,7 +702,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
           )}
           aria-busy={actionContextRefreshing}
         >
-      {isCreator && viewerUserId && (ctx?.showBoost || ctx?.showInterest || ctx?.showManageOffers || ctx?.showManageRequests || showInvite) ? (
+      {isCreator && viewerUserId ? (
         <div className={planActionGrid}>
           {ctx?.showBoost ? (
           <PlanBoostControls
@@ -726,6 +753,12 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
               Manage offers
             </button>
           ) : null}
+          <button type="button" className={actionSecondary} onClick={() => setShareModalOpen(true)}>
+            <span className="inline-flex items-center gap-2">
+              <IoShareOutline size={18} />
+              Share
+            </span>
+          </button>
         </div>
       ) : ctx && !isCreator ? (
         <ActionRail
