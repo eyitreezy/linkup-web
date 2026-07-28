@@ -8,6 +8,11 @@ import { InviteGuestsModal } from '@/components/plans/InviteGuestsModal';
 import { PlanShareModal } from '@/components/plans/PlanShareModal';
 import { RequestToJoinButton } from '@/components/plans/RequestToJoinButton';
 import { PlanGroupGuestsPanel } from '@/components/plans/PlanGroupGuestsPanel';
+import { GroupMeetupCompletionSection } from '@/components/plans/group/GroupMeetupCompletionSection';
+import { GroupPlanMemberCountBadge } from '@/components/plans/group/GroupPlanMemberCountBadge';
+import { GroupPlanOptOutSection } from '@/components/plans/group/GroupPlanOptOutSection';
+import { GroupHostCancellationModal } from '@/components/plans/GroupHostCancellationModal';
+import { GroupPlanPolicyGate } from '@/components/plans/GroupPlanPolicyGate';
 import { ProfileAvatar } from '@/components/profile/ProfileAvatar';
 import { PlanInterestedStrip } from '@/components/plans/PlanInterestedStrip';
 import { TierBadge } from '@/components/subscription/TierBadge';
@@ -101,6 +106,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
   const [gateOpen, setGateOpen] = useState(false);
   const [chatBusy, setChatBusy] = useState(false);
   const [groupChatBusy, setGroupChatBusy] = useState(false);
+  const [hostCancelOpen, setHostCancelOpen] = useState(false);
   const [groupChatConvId, setGroupChatConvId] = useState<string | null>(null);
   const [extendBusy, setExtendBusy] = useState(false);
   const [extendMsg, setExtendMsg] = useState<string | null>(null);
@@ -189,6 +195,10 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     () => (bundle?.offers ?? []).filter((o) => o.status === 'accepted'),
     [bundle?.offers]
   );
+  const isAcceptedGuest =
+    !!viewerUserId &&
+    isGroupPlan &&
+    acceptedGuestOffers.some((o) => o.bidder_id === viewerUserId);
   const guestsPanelRefreshKey = useMemo(
     () =>
       [
@@ -479,6 +489,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
   const meetupPin = planMeetupCoords(plan);
 
   return (
+    <GroupPlanPolicyGate active={isGroupPlan}>
     <div className="mx-auto max-w-3xl space-y-6 pb-16">
       <VerificationGateDialog open={gateOpen} onClose={() => setGateOpen(false)} />
       <AppStatusDialog
@@ -568,6 +579,13 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
                 <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-extrabold text-blue-700 ring-1 ring-blue-200">
                   Group
                 </span>
+              ) : null}
+              {plan.is_group_plan ? (
+                <GroupPlanMemberCountBadge
+                  planId={plan.id}
+                  initialCount={plan.accepted_guest_count ?? 0}
+                  minimumCount={plan.minimum_member_count ?? 5}
+                />
               ) : null}
               {boosted ? <BoostPill /> : null}
               <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-extrabold capitalize text-primary">
@@ -665,6 +683,42 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         offersReady={!!bundle}
         refreshKey={guestsPanelRefreshKey}
       />
+
+      {isAcceptedGuest && plan.is_group_plan ? (
+        <GroupPlanOptOutSection
+          planId={plan.id}
+          scheduledAt={plan.scheduled_at}
+          isGuest={isAcceptedGuest}
+        />
+      ) : null}
+
+      {isCreator && plan.is_group_plan && ['active', 'agreed', 'awaiting_payment'].includes(plan.status) ? (
+        <button
+          type="button"
+          onClick={() => setHostCancelOpen(true)}
+          className="flex w-full items-center justify-center rounded-xl border-2 border-[#EF4444]/40 px-4 py-2.5 text-[14px] font-extrabold text-[#EF4444] transition hover:bg-red-50 sm:w-auto"
+        >
+          Cancel Group Plan
+        </button>
+      ) : null}
+
+      {hostCancelOpen ? (
+        <GroupHostCancellationModal
+          planId={plan.id}
+          onDismiss={() => setHostCancelOpen(false)}
+          onCancelled={() => {
+            setHostCancelOpen(false);
+            router.push('/discover');
+          }}
+        />
+      ) : null}
+
+      {isCreator && plan.is_group_plan && plan.completion_status === 'awaiting_confirm' ? (
+        <GroupMeetupCompletionSection
+          planId={plan.id}
+          onConfirmed={() => void detailQuery.refetch()}
+        />
+      ) : null}
 
       {plan.is_group_plan && ['active', 'agreed'].includes(plan.status) ? (
         <button
@@ -988,6 +1042,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         locationLabel={plan.location_label}
       />
     </div>
+    </GroupPlanPolicyGate>
   );
 }
 

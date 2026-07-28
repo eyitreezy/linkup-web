@@ -132,8 +132,82 @@ export function navigateFromNotification(
     push('/wallet');
     return;
   }
+  if (
+    t === 'meetup_confirm_requested' &&
+    data?.planId &&
+    typeof data.planId === 'string'
+  ) {
+    push(`/plan/${data.planId}/confirm`);
+    return;
+  }
+  if (t === 'partner_arrived' && data?.planId) {
+    push(`/plan/${data.planId}`);
+    return;
+  }
+  if (
+    (t === 'meetup_confirm_request' ||
+      t === 'meetup_confirm_12h' ||
+      t === 'meetup_confirm_23h' ||
+      t === 'meetup_confirm_t0') &&
+    data?.planId
+  ) {
+    push(`/plan/${data.planId}/confirm`);
+    return;
+  }
+  if (
+    t === 'exigency_auto_triggered' ||
+    t === 'exigency_submitted' ||
+    t === 'exigency_outcome_applied'
+  ) {
+    push('/wallet');
+    return;
+  }
+  if (t === 'new_exigency_report') {
+    push(adminHref('plan_disputes'));
+    return;
+  }
+  if (
+    t === 'meetup_auto_confirmed' ||
+    t === 'disbursement_reminder' ||
+    t === 'disbursement_reminder_urgent' ||
+    t === 'disbursement_final_warning' ||
+    t === 'disbursement_escalated' ||
+    t === 'withdrawal_initiated' ||
+    t === 'withdrawal_completed' ||
+    t === 'withdrawal_failed'
+  ) {
+    push('/wallet');
+    return;
+  }
   if (t === 'plan_invitation_received' && data?.planId && data?.invitationId) {
     push(`/plan/${data.planId}/invitation/${data.invitationId}`);
+    return;
+  }
+  if (t === 'live_location_started' && data?.planId) {
+    push(`/plan/${data.planId}`);
+    return;
+  }
+  if (
+    t === 'group_countdown_7day' ||
+    t === 'group_countdown_48h' ||
+    t === 'group_countdown_24h' ||
+    t === 'group_countdown_6h' ||
+    t === 'group_countdown_1h' ||
+    t === 'group_meetup_started'
+  ) {
+    if (data?.planId) push(`/plan/${data.planId}`);
+    return;
+  }
+  if (t === 'group_minimum_not_met' && data?.planId) {
+    push(`/plan/${data.planId}/minimum-action`);
+    return;
+  }
+  if (t === 'group_plan_cancelled_minimum' || t === 'group_plan_host_cancelled') {
+    push('/wallet');
+    return;
+  }
+  if (t === 'group_member_opted_out' && data?.planId) {
+    push(`/plan/${data.planId}`);
     return;
   }
   if (

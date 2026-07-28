@@ -30,6 +30,7 @@ import {
 import { AdminPrivacyPolicyPanel } from '@/components/admin/AdminPrivacyPolicyPanel';
 import { AdminMeetTypesPanel } from '@/components/admin/AdminMeetTypesPanel';
 import { EscrowDisputeResolutionPanel } from '@/components/admin/EscrowDisputeResolutionPanel';
+import { AdminExigencySection } from '@/components/admin/AdminExigencySection';
 import { AdminSupportTicketModal } from '@/components/admin/AdminSupportTicketModal';
 import { SlaDeadlineBadge } from '@/components/admin/SlaDeadlineBadge';
 import { ToggleRow } from '@/components/settings/ToggleRow';
@@ -564,6 +565,10 @@ export function AdminDisputesPanel({
 
       <div className="my-8 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
 
+      <AdminExigencySection onReload={onReload} />
+
+      <div className="my-8 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+
       <AdminSectionHeader
         title="Escrow disputes"
         subtitle="Legacy escrow queue — payment holds and release disputes."
@@ -627,6 +632,20 @@ export function AdminDisputesPanel({
             </p>
             {planDetail.reporter_note ? (
               <p className="rounded-xl bg-[#F5F6FA] p-3 text-[14px] font-semibold">{planDetail.reporter_note}</p>
+            ) : null}
+            {planDetail.chat_log_access ? (
+              <div className="rounded-xl border border-border/60 bg-[#F5F6FA] p-3 text-[13px] font-semibold">
+                <p className="font-extrabold text-foreground">Chat log access</p>
+                <p className="mt-1 capitalize text-muted">
+                  {planDetail.chat_log_access === 'full'
+                    ? 'Both parties consented. Full chat log may be reviewed.'
+                    : planDetail.chat_log_access === 'partial'
+                      ? 'One party consented. Partial chat log access only.'
+                      : planDetail.chat_log_access === 'none'
+                        ? 'Chat log access declined by both parties.'
+                        : 'Awaiting consent from both parties.'}
+                </p>
+              </div>
             ) : null}
             <label className="text-[11px] font-extrabold uppercase text-muted">Internal notes</label>
             <textarea

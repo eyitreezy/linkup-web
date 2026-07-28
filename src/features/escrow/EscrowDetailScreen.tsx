@@ -21,6 +21,9 @@ import { EscrowTimeline } from '@/components/escrow/EscrowTimeline';
 import { FundingDeadlineUrgencyBanner } from '@/components/escrow/FundingDeadlineUrgencyBanner';
 import { OpenDisputeModal } from '@/components/escrow/OpenDisputeModal';
 import { VerificationGateDialog } from '@/components/plans/VerificationGateDialog';
+import { SafetyCaveatInterstitial } from '@/components/plans/SafetyCaveatInterstitial';
+import { EscrowPolicySignOffModal } from '@/components/plans/EscrowPolicySignOffModal';
+import { hasEscrowPolicySignoff, needsSafetyCaveatGate } from '@/lib/groupPlan/annexureB';
 import { useEscrowConfirmation } from '@/hooks/useEscrowConfirmation';
 import { useEscrowFunding } from '@/hooks/useEscrowFunding';
 import { useEscrowRealtime } from '@/hooks/useEscrowRealtime';
@@ -137,6 +140,9 @@ function EscrowDetailContent({
   const [disputeSubmitted, setDisputeSubmitted] = useState(false);
   const [slaDeadline, setSlaDeadline] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [safetyCaveatOpen, setSafetyCaveatOpen] = useState(false);
+  const [escrowPolicyOpen, setEscrowPolicyOpen] = useState(false);
+  const [pendingFundAfterPolicy, setPendingFundAfterPolicy] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['escrow', escrowId],
@@ -198,6 +204,40 @@ function EscrowDetailContent({
       void client.removeChannel(channel);
     };
   }, [client, escrow?.plan_id, escrowId, queryClient]);
+
+  useEffect(() => {
+    const row = data?.escrow;
+    const planId = row?.plan_id;
+    if (!row || !planId || !user?.id) return;
+    if (!isEscrowFullyFundedForMeet(row)) return;
+    const counterpartyId =
+      user.id === row.host_id ? row.guest_id : user.id === row.guest_id ? row.host_id : null;
+    void needsSafetyCaveatGate(planId, user.id, counterpartyId).then((needs) => {
+      if (needs) setSafetyCaveatOpen(true);
+    });
+  }, [data?.escrow, user?.id]);
+
+  async function requestFundFlow() {
+    if (!escrow?.plan_id) {
+      setFundConfirmOpen(true);
+      return;
+    }
+    const signed = await hasEscrowPolicySignoff(escrow.plan_id);
+    if (!signed) {
+      setPendingFundAfterPolicy(true);
+      setEscrowPolicyOpen(true);
+      return;
+    }
+    setFundConfirmOpen(true);
+  }
+
+  async function continueAfterEscrowPolicy() {
+    setEscrowPolicyOpen(false);
+    if (pendingFundAfterPolicy) {
+      setPendingFundAfterPolicy(false);
+      setFundConfirmOpen(true);
+    }
+  }
 
   useEffect(() => {
     if (!escrow || !user?.id) return;
@@ -698,6 +738,19 @@ function EscrowDetailContent({
   return (
     <div className={`mx-auto max-w-3xl space-y-4 sm:space-y-5 ${footerActive ? ESCROW_FOOTER_CLEARANCE : 'pb-8'}`}>
       <VerificationGateDialog open={gateOpen} onClose={() => setGateOpen(false)} />
+      {safetyCaveatOpen && escrow?.plan_id ? (
+        <SafetyCaveatInterstitial
+          planId={escrow.plan_id}
+          onAcknowledged={() => setSafetyCaveatOpen(false)}
+        />
+      ) : null}
+      {escrowPolicyOpen && escrow?.plan_id ? (
+        <EscrowPolicySignOffModal
+          planId={escrow.plan_id}
+          escrowPattern={escrow.escrow_pattern}
+          onSigned={() => void continueAfterEscrowPolicy()}
+        />
+      ) : null}
       <EscrowConfirmModal
         open={fundConfirmOpen}
         title="Ready to pay?"
@@ -1178,7 +1231,7 @@ function EscrowDetailContent({
         showFund={showFund}
         fundTitle={fundBusy ? 'Please wait…' : fundCtaTitle}
         fundSubtitle={fundCtaSubtitle}
-        onFundPress={() => setFundConfirmOpen(true)}
+        onFundPress={() => void requestFundFlow()}
         fundDisabled={fundBusy || confirmingPayment}
         fundLoading={fundBusy}
         paymentPendingConfirmation={paymentPendingConfirmation}

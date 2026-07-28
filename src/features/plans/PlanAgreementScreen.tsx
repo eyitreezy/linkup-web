@@ -20,6 +20,7 @@ import { GroupSplitAgreementSection } from '@/components/plans/group/GroupSplitA
 import { HighValueEscrowModal } from '@/components/escrow/HighValueEscrowModal';
 import { PlanEscrowPaymentCard } from '@/components/escrow/PlanEscrowPaymentCard';
 import { CancellationSummaryCard } from '@/components/plans/CancellationSummaryCard';
+import { EscrowPolicySignOffModal } from '@/components/plans/EscrowPolicySignOffModal';
 import { VerificationGateDialog } from '@/components/plans/VerificationGateDialog';
 import { ConfirmDialog } from '@/features/plan-management/ConfirmDialog';
 import { PlanFlowHeader } from '@/features/plans/PlanFlowHeader';
@@ -39,6 +40,7 @@ import {
 } from '@/lib/plans/cancellationPolicy';
 import { bothAgreementPartiesConfirmed } from '@/lib/plans/agreementConfirmations';
 import { closeGroupAndCreateHostEscrow } from '@/lib/plans/closeGroupEscrow';
+import { hasEscrowPolicySignoff } from '@/lib/groupPlan/annexureB';
 import { isGroupSplitPlan } from '@/lib/plans/groupDynamicSplit';
 import {
   deriveEscrowPhase,
@@ -106,6 +108,8 @@ export function PlanAgreementScreen({ planId, offerId }: Props) {
     message: string;
     variant: 'error' | 'info';
   } | null>(null);
+  const [escrowPolicyOpen, setEscrowPolicyOpen] = useState(false);
+  const [pendingCheckout, setPendingCheckout] = useState(false);
 
   function showAgreementAlert(message: string) {
     const meta = agreementAlertMeta(message);
@@ -426,7 +430,21 @@ export function PlanAgreementScreen({ planId, offerId }: Props) {
       showAgreementAlert('Both parties must review and confirm the agreement before secure payment.');
       return;
     }
+    const escrowSigned = await hasEscrowPolicySignoff(plan.id);
+    if (!escrowSigned) {
+      setPendingCheckout(true);
+      setEscrowPolicyOpen(true);
+      return;
+    }
     await runProceedPayment();
+  }
+
+  async function continueAfterEscrowPolicy() {
+    setEscrowPolicyOpen(false);
+    if (pendingCheckout) {
+      setPendingCheckout(false);
+      await runProceedPayment();
+    }
   }
 
   async function handleCancel({ noShow }: { noShow: boolean }) {
@@ -735,6 +753,13 @@ export function PlanAgreementScreen({ planId, offerId }: Props) {
   return (
     <>
       <VerificationGateDialog open={gateOpen} onClose={() => setGateOpen(false)} />
+      {escrowPolicyOpen && plan ? (
+        <EscrowPolicySignOffModal
+          planId={plan.id}
+          escrowPattern={plan.escrow_pattern}
+          onSigned={() => void continueAfterEscrowPolicy()}
+        />
+      ) : null}
       <AppStatusDialog
         open={statusAlert !== null}
         title={statusAlert?.title ?? ''}
@@ -844,7 +869,11 @@ export function PlanAgreementScreen({ planId, offerId }: Props) {
       {outcomeOpen && outcomeCardProps ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-border bg-white p-5 shadow-xl">
-            <CancellationSummaryCard outcome={outcomeCardProps} />
+            <CancellationSummaryCard
+              outcome={outcomeCardProps}
+              planType={plan?.is_group_plan ? 'group' : plan?.is_mood_plan ? 'mood' : 'standard'}
+              escrowPattern={plan?.escrow_pattern ?? 'A'}
+            />
             <button
               type="button"
               onClick={dismissOutcome}
@@ -982,7 +1011,10 @@ export function PlanAgreementScreen({ planId, offerId }: Props) {
             />
           ) : null}
 
-          <CancellationSummaryCard />
+          <CancellationSummaryCard
+            planType={plan?.is_group_plan ? 'group' : plan?.is_mood_plan ? 'mood' : 'standard'}
+            escrowPattern={plan?.escrow_pattern ?? 'A'}
+          />
 
           {mutualToast ? (
             <p className="rounded-xl border border-[#10B981]/30 bg-[#10B981]/10 px-4 py-3 text-[14px] font-semibold text-[#059669]">

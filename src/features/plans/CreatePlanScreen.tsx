@@ -2,6 +2,7 @@
 
 import { PlanBudgetFeeNotifier } from '@/components/plans/PlanBudgetFeeNotifier';
 import { GroupPlanSettingsSection } from '@/components/plans/create/GroupPlanSettingsSection';
+import { GroupPlanPolicyGate } from '@/components/plans/GroupPlanPolicyGate';
 import {
   MeetTypeSelectorSection,
   applyMeetTypeDefaults,
@@ -325,6 +326,7 @@ export function CreatePlanScreen() {
   }
 
   return (
+    <GroupPlanPolicyGate active={isGroupPlan}>
     <div className="space-y-8 pb-10">
       <div className="flex items-center gap-4">
         <Link
@@ -739,5 +741,6 @@ export function CreatePlanScreen() {
         Uses the same <span className="font-extrabold text-primary">publish_plan</span> RPC as the mobile app.
       </p>
     </div>
+    </GroupPlanPolicyGate>
   );
 }

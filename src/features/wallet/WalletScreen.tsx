@@ -3,13 +3,22 @@
 import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { GoodwillCreditRow } from '@/components/wallet/GoodwillCreditRow';
+import { WalletWithdrawDialog } from '@/components/wallet/WalletWithdrawDialog';
 import { formatNGN } from '@/lib/escrow/escrowFormatters';
+import { fetchSavedPaymentAccount } from '@/lib/escrow/virtualAccountPayment';
 import { useWalletRealtime } from '@/hooks/useWalletRealtime';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
-import type { DbGoodwillCredit, DbWalletLedgerRow } from '@/types/database';
+import type {
+  DbGoodwillCredit,
+  DbUnclaimedFunds,
+  DbUserPaymentAccount,
+  DbWalletDisbursementQueue,
+  DbWalletLedgerRow,
+} from '@/types/database';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useState, useEffect } from 'react';
 import {
   IoHeartCircle,
   IoPulse,
@@ -30,6 +39,8 @@ function sourcePretty(source: string): string {
 
 export function WalletScreen() {
   const user = useAuthStore((s) => s.user);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [savedAccount, setSavedAccount] = useState<DbUserPaymentAccount | null>(null);
 
   useWalletRealtime(user?.id);
 
@@ -41,11 +52,14 @@ export function WalletScreen() {
           ledger: [] as DbWalletLedgerRow[],
           goodwill: [] as DbGoodwillCredit[],
           goodwillHistory: [] as DbGoodwillCredit[],
+          disbursementQueue: [] as DbWalletDisbursementQueue[],
+          unclaimedFunds: [] as DbUnclaimedFunds[],
+          paymentAccount: null as DbUserPaymentAccount | null,
         };
       }
       const client = createClient();
       const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-      const [l, g, history] = await Promise.all([
+      const [l, g, history, queue, unclaimed, paymentAccount] = await Promise.all([
         client
           .from('wallet_ledger')
           .select('*')
@@ -66,6 +80,18 @@ export function WalletScreen() {
           .gte('created_at', ninetyDaysAgo)
           .order('created_at', { ascending: false })
           .limit(40),
+        client
+          .from('wallet_disbursement_queue')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('status', 'pending')
+          .order('disburse_after', { ascending: true }),
+        client
+          .from('unclaimed_funds')
+          .select('*')
+          .eq('user_id', user.id)
+          .in('status', ['pending_account', 'admin_review']),
+        fetchSavedPaymentAccount(user.id),
       ]);
       if (l.error) throw new Error(l.error.message);
       if (g.error) throw new Error(g.error.message);
@@ -74,6 +100,9 @@ export function WalletScreen() {
         ledger: (l.data ?? []) as DbWalletLedgerRow[],
         goodwill: (g.data ?? []) as DbGoodwillCredit[],
         goodwillHistory: (history.data ?? []) as DbGoodwillCredit[],
+        disbursementQueue: (queue.data ?? []) as DbWalletDisbursementQueue[],
+        unclaimedFunds: (unclaimed.data ?? []) as DbUnclaimedFunds[],
+        paymentAccount,
       };
     },
     enabled: !!user?.id,
@@ -82,6 +111,13 @@ export function WalletScreen() {
   const ledger = data?.ledger ?? [];
   const goodwill = data?.goodwill ?? [];
   const goodwillHistory = data?.goodwillHistory ?? [];
+  const disbursementQueue = data?.disbursementQueue ?? [];
+  const unclaimedFunds = data?.unclaimedFunds ?? [];
+  const paymentAccount = savedAccount ?? data?.paymentAccount ?? null;
+
+  useEffect(() => {
+    if (data?.paymentAccount) setSavedAccount(data.paymentAccount);
+  }, [data?.paymentAccount]);
 
   let balanceCents = 0;
   for (const row of ledger) {
@@ -164,7 +200,67 @@ export function WalletScreen() {
                 <IoShieldCheckmark size={16} />
                 Protected · same stack as escrow
               </div>
+              {balanceCents > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setWithdrawOpen(true)}
+                  className="mt-4 flex min-h-[44px] w-full items-center justify-center rounded-full bg-white px-5 text-[14px] font-extrabold text-primary transition hover:bg-white/95"
+                >
+                  Withdraw to bank
+                </button>
+              ) : null}
           </div>
+
+          {balanceCents > 0 && !paymentAccount ? (
+            <div className="linkup-card border border-primary/15 bg-[#EDE8FF]/40 p-4">
+              <p className="text-[14px] font-semibold text-foreground">
+                Add your bank account to receive your meetup funds.
+              </p>
+              <Link
+                href="/settings/refund-account"
+                className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-full linkup-gradient-primary px-5 text-[14px] font-extrabold text-white transition hover:opacity-95"
+              >
+                Add bank account
+              </Link>
+            </div>
+          ) : null}
+
+          {unclaimedFunds.length > 0 ? (
+            <div className="rounded-2xl border border-amber-200/80 bg-amber-50 px-4 py-3 text-[14px] font-semibold text-amber-900">
+              You have unclaimed funds. Add your bank account or contact support.{' '}
+              <Link href="/settings/refund-account" className="font-extrabold text-primary underline">
+                Add bank account
+              </Link>
+            </div>
+          ) : null}
+
+          {disbursementQueue.length > 0 ? (
+            <div className="space-y-2">
+              {disbursementQueue.map((item) => {
+                const daysLeft = Math.max(
+                  0,
+                  Math.ceil(
+                    (new Date(item.disburse_after).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+                  )
+                );
+                return (
+                  <div key={item.id} className="linkup-card p-4">
+                    <p className="text-[12px] font-extrabold uppercase tracking-wide text-muted">
+                      Meetup funds pending
+                    </p>
+                    <p className="mt-1 text-[20px] font-extrabold text-foreground">
+                      {formatNGN(item.amount_cents)}
+                    </p>
+                    <p className="mt-1 text-[13px] font-semibold text-muted">
+                      {paymentAccount
+                        ? `Auto-disburse in ${daysLeft} days or withdraw now from your balance`
+                        : 'Add a bank account to receive these funds'}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
 
           <div className="linkup-card border border-[#FCD34D]/45 bg-gradient-to-br from-[#FFF9E6] to-[#FFE8F0] p-4 min-[360px]:p-6">
             <div className="flex items-center gap-2">
@@ -227,18 +323,6 @@ export function WalletScreen() {
               </div>
             )}
           </section>
-
-          <div className="linkup-card flex gap-4 p-5">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#EDE8FF] text-primary">
-              <IoTimeOutline size={22} />
-            </div>
-            <div>
-              <h3 className="font-extrabold text-foreground">Withdrawals</h3>
-              <p className="mt-1 text-[14px] font-semibold text-muted">
-                Not enabled in this MVP. When we turn them on, requests will show up here for review.
-              </p>
-            </div>
-          </div>
 
           <div className="flex items-center gap-2">
             <IoPulse size={18} className="text-secondary" />
@@ -321,6 +405,18 @@ export function WalletScreen() {
           )}
         </>
       )}
+
+      {user ? (
+        <WalletWithdrawDialog
+          open={withdrawOpen}
+          onOpenChange={setWithdrawOpen}
+          userId={user.id}
+          balanceCents={balanceCents}
+          savedAccount={paymentAccount}
+          onAccountSaved={setSavedAccount}
+          onSuccess={() => void refetch()}
+        />
+      ) : null}
     </div>
   );
 }

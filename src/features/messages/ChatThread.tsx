@@ -1,6 +1,9 @@
 'use client';
 
 import { SmartSuggestionsBar } from '@/components/chat/SmartSuggestionsBar';
+import { ArrivalNudgeButton } from '@/components/plans/ArrivalNudgeButton';
+import { LiveLocationButton } from '@/components/plans/LiveLocationButton';
+import { LiveLocationViewer } from '@/components/plans/LiveLocationViewer';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { usePresence } from '@/contexts/PresenceContext';
 import { ChatAppearanceSheet } from '@/features/messages/ChatAppearanceSheet';
@@ -141,6 +144,9 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
   const [peerTyping, setPeerTyping] = useState(false);
   const peerPresenceRef = useRef(peerPresence);
   const [linkedMeetup, setLinkedMeetup] = useState<LinkedMeetup | null>(null);
+  const [myNudgedAt, setMyNudgedAt] = useState<string | null>(null);
+  const [partnerNudgedAt, setPartnerNudgedAt] = useState<string | null>(null);
+  const [nudgeReportedUserId, setNudgeReportedUserId] = useState<string | null>(null);
   const [appearance, setAppearance] = useState<ChatAppearanceState>(DEFAULT_CHAT_APPEARANCE);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
@@ -148,6 +154,7 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
   const [reportMemberId, setReportMemberId] = useState<string | null>(null);
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
   const [placeBusy, setPlaceBusy] = useState(false);
+  const [partnerLocationSessionId, setPartnerLocationSessionId] = useState<string | null>(null);
   const [placeError, setPlaceError] = useState<string | null>(null);
   const [actionTarget, setActionTarget] = useState<ChatMessageRow | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -207,6 +214,84 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
     if (!user?.id || !peer.otherId || isGroupChat) return;
     void fetchActiveMeetupWithPeer(user.id, peer.otherId).then(setLinkedMeetup);
   }, [user?.id, peer.otherId, isGroupChat]);
+
+  const nudgePlanId = isGroupChat ? peer.planId ?? null : linkedMeetup?.id ?? null;
+  const nudgePlanStatus = isGroupChat ? suggestionPlan?.status ?? '' : linkedMeetup?.status ?? '';
+  const nudgeScheduledAt = isGroupChat ? suggestionPlan?.scheduled_at ?? null : linkedMeetup?.scheduled_at ?? null;
+
+  useEffect(() => {
+    if (!user?.id || !nudgePlanId) {
+      setMyNudgedAt(null);
+      setPartnerNudgedAt(null);
+      setNudgeReportedUserId(peer.otherId ?? null);
+      return;
+    }
+    const client = createClient();
+    void client
+      .from('plan_arrival_nudges')
+      .select('user_id, nudged_at')
+      .eq('plan_id', nudgePlanId)
+      .then(({ data }) => {
+        const rows = data ?? [];
+        const mine = rows.find((r) => r.user_id === user.id);
+        const others = rows.filter((r) => r.user_id !== user.id);
+        const earliestOther = others.sort(
+          (a, b) => new Date(a.nudged_at).getTime() - new Date(b.nudged_at).getTime()
+        )[0];
+        setMyNudgedAt((mine?.nudged_at as string) ?? null);
+        setPartnerNudgedAt((earliestOther?.nudged_at as string) ?? null);
+        setNudgeReportedUserId(
+          (earliestOther?.user_id as string) ??
+            (isGroupChat && suggestionPlan?.creator_id !== user.id
+              ? suggestionPlan?.creator_id ?? null
+              : peer.otherId ?? null)
+        );
+      });
+  }, [user?.id, nudgePlanId, peer.otherId, isGroupChat, suggestionPlan?.creator_id]);
+
+  useEffect(() => {
+    if (!user?.id || !nudgePlanId) {
+      setPartnerLocationSessionId(null);
+      return;
+    }
+    const client = createClient();
+
+    void client
+      .from('live_location_sessions')
+      .select('id, sharer_id')
+      .eq('plan_id', nudgePlanId)
+      .eq('is_active', true)
+      .neq('sharer_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => setPartnerLocationSessionId(data?.id ?? null));
+
+    const channel = client
+      .channel(`live-loc-sessions:${nudgePlanId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'live_location_sessions',
+          filter: `plan_id=eq.${nudgePlanId}`,
+        },
+        () => {
+          void client
+            .from('live_location_sessions')
+            .select('id, sharer_id')
+            .eq('plan_id', nudgePlanId)
+            .eq('is_active', true)
+            .neq('sharer_id', user.id)
+            .maybeSingle()
+            .then(({ data }) => setPartnerLocationSessionId(data?.id ?? null));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [user?.id, nudgePlanId]);
 
   useEffect(() => {
     if (!isGroupChat || !conversationId) return;
@@ -970,6 +1055,12 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
                 }}
               />
             ) : null}
+            {partnerLocationSessionId ? (
+              <LiveLocationViewer
+                partnerSessionId={partnerLocationSessionId}
+                partnerName={isGroupChat ? undefined : peer.name}
+              />
+            ) : null}
             {visibleMessages.map((m) => {
               const isSystem = m.sender_id === null;
               const mine = !isSystem && m.sender_id === user?.id;
@@ -1039,6 +1130,20 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
           <p className="px-2.5 pb-1 text-center text-[11px] font-semibold text-emerald-700 min-[360px]:px-4 min-[360px]:text-[12px]">
             {copyToast}
           </p>
+        ) : null}
+        {user?.id && nudgePlanId ? (
+          <ArrivalNudgeButton
+            planId={nudgePlanId}
+            currentUserId={user.id}
+            planStatus={nudgePlanStatus}
+            scheduledAt={nudgeScheduledAt}
+            myNudgedAt={myNudgedAt}
+            partnerNudgedAt={partnerNudgedAt}
+            reportedUserId={nudgeReportedUserId}
+          />
+        ) : null}
+        {user?.id && nudgePlanId ? (
+          <LiveLocationButton planId={nudgePlanId} currentUserId={user.id} />
         ) : null}
         <SmartSuggestionsBar
           suggestions={smartSuggestions}

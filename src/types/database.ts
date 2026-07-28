@@ -264,6 +264,13 @@ export interface DbPlan {
   is_group_plan?: boolean;
   max_guests?: number | null;
   accepted_guest_count?: number;
+  minimum_member_count?: number;
+  minimum_check_notified_at?: string | null;
+  host_minimum_response_deadline?: string | null;
+  minimum_check_outcome?: string | null;
+  cancellation_reason_type?: string | null;
+  cancellation_reason_text?: string | null;
+  cancellation_timing_band?: string | null;
   /** Group dynamic split: sum of accepted guest offer amounts (kobo). */
   accepted_guest_amounts_sum_cents?: number | null;
   /** Group dynamic split: suggested per-slot share for new offers (kobo). */
@@ -272,6 +279,10 @@ export interface DbPlan {
   total_amount_cents?: number | null;
   /** Group dynamic split: when host closed the group to new guests. */
   group_closed_at?: string | null;
+  /** Group meetup completion tracking (Annexure B). */
+  completion_status?: 'pending' | 'awaiting_confirm' | 'confirmed' | 'disputed' | null;
+  host_confirmed_completion_at?: string | null;
+  auto_confirmed_at?: string | null;
   /** Group dynamic split: host leg escrow row after close. */
   host_escrow_id?: string | null;
   /** When false on paid split/guest-funded plans, guests request to join at formula price. Default true. */
@@ -542,6 +553,13 @@ export interface DbDispute {
   reporter_note: string | null;
   internal_notes: string | null;
   admin_note: string | null;
+  video_storage_path?: string | null;
+  video_uploaded_at?: string | null;
+  video_gps_lat?: number | null;
+  video_gps_lng?: number | null;
+  nudge_timestamp?: string | null;
+  chat_log_access?: 'full' | 'partial' | 'none' | 'pending' | null;
+  chat_log_access_resolved_at?: string | null;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
@@ -558,6 +576,40 @@ export interface DbDisputeEvidence {
   metadata: Record<string, unknown>;
   created_at: string;
   purge_after: string | null;
+}
+
+export type ExigencyOutcome =
+  | 'pending_review'
+  | 'late_arrival_confirmed'
+  | 'force_majeure_approved'
+  | 'no_report_auto'
+  | 'unsatisfactory'
+  | 'fairly_satisfactory';
+
+export interface DbExigencyReport {
+  id: string;
+  plan_id: string;
+  user_id: string;
+  submitted_at: string;
+  reason_type: string;
+  reason_text: string;
+  evidence_storage_path: string | null;
+  outcome: ExigencyOutcome;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  refund_percent: number | null;
+  host_percent: number | null;
+  refund_processed_at: string | null;
+  review_deadline_at: string;
+}
+
+export interface DbPlanArrivalNudge {
+  id: string;
+  plan_id: string;
+  user_id: string;
+  nudged_at: string;
+  dispute_eligible_at: string;
 }
 
 export type UserStrikeStatus = 'active' | 'suspended' | 'banned';
@@ -760,7 +812,13 @@ export interface DbSubscriptionEvent {
 }
 
 export type WalletLedgerType = 'credit' | 'debit';
-export type WalletLedgerSource = 'escrow_release' | 'goodwill' | 'refund' | 'fee' | 'adjustment';
+export type WalletLedgerSource =
+  | 'escrow_release'
+  | 'goodwill'
+  | 'refund'
+  | 'fee'
+  | 'adjustment'
+  | 'withdrawal';
 
 export interface DbWalletLedgerRow {
   id: string;
@@ -781,6 +839,72 @@ export interface DbWithdrawal {
   amount: number;
   status: WithdrawalStatus;
   created_at: string;
+}
+
+export type DisbursementRequestStatus =
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export interface DbDisbursementRequest {
+  id: string;
+  user_id: string;
+  amount_cents: number;
+  bank_code: string;
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+  flutterwave_transfer_ref: string | null;
+  status: DisbursementRequestStatus;
+  failure_reason: string | null;
+  retry_count: number;
+  wallet_ledger_debit_id: string | null;
+  initiated_at: string;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type WalletDisbursementQueueStatus = 'pending' | 'disbursed' | 'unclaimed';
+
+export interface DbWalletDisbursementQueue {
+  id: string;
+  user_id: string;
+  amount_cents: number;
+  source_wallet_ledger_id: string;
+  disburse_after: string;
+  reminder_7_sent_at: string | null;
+  reminder_20_sent_at: string | null;
+  reminder_28_sent_at: string | null;
+  status: WalletDisbursementQueueStatus;
+  disbursement_request_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type UnclaimedFundsReason =
+  | 'no_bank_account'
+  | 'transfer_failed_max_retries'
+  | 'disputed_amount'
+  | 'user_inactive';
+
+export type UnclaimedFundsStatus = 'pending_account' | 'admin_review' | 'claimed' | 'written_off';
+
+export interface DbUnclaimedFunds {
+  id: string;
+  user_id: string;
+  amount_cents: number;
+  source_wallet_ledger_id: string | null;
+  source_escrow_id: string | null;
+  reason: UnclaimedFundsReason;
+  status: UnclaimedFundsStatus;
+  admin_notes: string | null;
+  escalated_at: string | null;
+  claimed_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export type FinancialEventType =
