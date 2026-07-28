@@ -15,6 +15,11 @@ type Props = {
   onOffer: () => void;
   onPlace: () => void;
   placeBusy?: boolean;
+  onLiveLocation?: () => void;
+  liveLocationActive?: boolean;
+  liveLocationBusy?: boolean;
+  showLiveLocation?: boolean;
+  liveLocationOverlays?: ReactNode;
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
@@ -35,6 +40,11 @@ export function ChatComposer({
   onOffer,
   onPlace,
   placeBusy,
+  onLiveLocation,
+  liveLocationActive,
+  liveLocationBusy,
+  showLiveLocation,
+  liveLocationOverlays,
   value,
   onChange,
   onSend,
@@ -88,21 +98,28 @@ export function ChatComposer({
       {mentionPicker}
 
       {toolsOpen ? (
-        <ChatToolbar
-          preset={preset}
-          onOffer={() => {
-            onOffer();
-            closeTools();
-          }}
-          onPlace={() => {
-            void onPlace();
-            closeTools();
-          }}
-          placeBusy={placeBusy}
-          onAttach={openAttachPicker}
-          variant="compact"
-          className="border-b border-border/60"
-        />
+        <>
+          {liveLocationOverlays}
+          <ChatToolbar
+            preset={preset}
+            onOffer={() => {
+              onOffer();
+              closeTools();
+            }}
+            onPlace={() => {
+              void onPlace();
+              closeTools();
+            }}
+            placeBusy={placeBusy}
+            onAttach={openAttachPicker}
+            onLiveLocation={onLiveLocation}
+            liveLocationActive={liveLocationActive}
+            liveLocationBusy={liveLocationBusy}
+            showLiveLocation={showLiveLocation}
+            variant="compact"
+            className="border-b border-border/60"
+          />
+        </>
       ) : null}
 
       <MessageComposer

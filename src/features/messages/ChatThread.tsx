@@ -2,8 +2,9 @@
 
 import { SmartSuggestionsBar } from '@/components/chat/SmartSuggestionsBar';
 import { ArrivalNudgeButton } from '@/components/plans/ArrivalNudgeButton';
-import { LiveLocationButton } from '@/components/plans/LiveLocationButton';
 import { LiveLocationViewer } from '@/components/plans/LiveLocationViewer';
+import { LiveLocationSharingOverlays } from '@/components/plans/LiveLocationSharingOverlays';
+import { useLiveLocationSharing } from '@/hooks/use-live-location-sharing';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { usePresence } from '@/contexts/PresenceContext';
 import { ChatAppearanceSheet } from '@/features/messages/ChatAppearanceSheet';
@@ -218,6 +219,8 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
   const nudgePlanId = isGroupChat ? peer.planId ?? null : linkedMeetup?.id ?? null;
   const nudgePlanStatus = isGroupChat ? suggestionPlan?.status ?? '' : linkedMeetup?.status ?? '';
   const nudgeScheduledAt = isGroupChat ? suggestionPlan?.scheduled_at ?? null : linkedMeetup?.scheduled_at ?? null;
+
+  const liveLocation = useLiveLocationSharing(nudgePlanId, user?.id ?? null);
 
   useEffect(() => {
     if (!user?.id || !nudgePlanId) {
@@ -1142,9 +1145,6 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
             reportedUserId={nudgeReportedUserId}
           />
         ) : null}
-        {user?.id && nudgePlanId ? (
-          <LiveLocationButton planId={nudgePlanId} currentUserId={user.id} />
-        ) : null}
         <SmartSuggestionsBar
           suggestions={smartSuggestions}
           onSelect={(suggestion) => {
@@ -1157,6 +1157,26 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
           onOffer={onQuickSendOffer}
           onPlace={onSuggestPlace}
           placeBusy={placeBusy}
+          onLiveLocation={liveLocation.onLiveLocation}
+          liveLocationActive={liveLocation.liveLocationActive}
+          liveLocationBusy={liveLocation.liveLocationBusy}
+          showLiveLocation={liveLocation.enabled}
+          liveLocationOverlays={
+            liveLocation.showConsent || liveLocation.showPicker ? (
+              <LiveLocationSharingOverlays
+                showConsent={liveLocation.showConsent}
+                showPicker={liveLocation.showPicker}
+                onConsented={() => {
+                  liveLocation.setHasConsent(true);
+                  liveLocation.setShowConsent(false);
+                  liveLocation.setShowPicker(true);
+                }}
+                onDeclined={() => liveLocation.setShowConsent(false)}
+                onPickDuration={(m) => void liveLocation.handleStartSharing(m)}
+                onClosePicker={() => liveLocation.setShowPicker(false)}
+              />
+            ) : null
+          }
           value={text}
           onChange={handleComposerChange}
           onSend={() => void handleSend()}
