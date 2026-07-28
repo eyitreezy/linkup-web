@@ -156,7 +156,7 @@ export function WalletScreen() {
       <TabPageHeader
         kicker="Your money hub"
         title="Wallet"
-        description="Cash from escrow releases and refunds. Goodwill credits lower fees on future escrows — not withdrawable cash."
+        description="Cash from escrow releases and refunds. Goodwill credits lower fees on future escrows and are not withdrawable cash."
         icon={<IoWallet size={22} />}
       />
 
@@ -335,7 +335,7 @@ export function WalletScreen() {
             <AppEmptyState
               icon={<IoReceiptOutline size={36} className="text-primary" />}
               title="No movements yet"
-              description="Credits, debits, and goodwill from paid meetups will show here — synced with your LinkUp wallet."
+              description="Credits, debits, and goodwill from paid meetups will show here, synced with your LinkUp wallet."
               action={{ label: 'Browse Discover', href: '/discover' }}
               secondaryAction={{ label: 'View offers', href: '/offers', variant: 'secondary' }}
             />
