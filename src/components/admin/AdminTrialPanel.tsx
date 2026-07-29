@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { IoDiamondOutline } from 'react-icons/io5';
 
 function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return 'N/A';
   return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
 }
 

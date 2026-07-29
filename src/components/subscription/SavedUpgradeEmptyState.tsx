@@ -17,7 +17,7 @@ export function SavedUpgradeEmptyState({ requiredTier }: Props) {
       emoji="🔖"
       title="Save plans you love"
       titleAccent="Save"
-      description={`Bookmark meetups from Discover with ${tierLabel} and above — your shortlist stays in sync with the mobile app.`}
+      description={`Bookmark meetups from Discover with ${tierLabel} and above. Your shortlist stays in sync with the mobile app.`}
       tips={[
         { icon: IoBookmarkOutline, text: 'One tap save from any plan detail screen' },
         {

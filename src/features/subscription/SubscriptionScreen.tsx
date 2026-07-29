@@ -1,5 +1,6 @@
 'use client';
 
+import { SubscriptionHistoryContent } from '@/components/subscription/SubscriptionHistoryContent';
 import { TierBadge } from '@/components/subscription/TierBadge';
 import { ConfirmDialog } from '@/features/plan-management/ConfirmDialog';
 import { TabPageHeader } from '@/components/layout/TabPageHeader';
@@ -15,13 +16,17 @@ import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import type { BillingCycle, PaidTier, SubscriptionTier } from '@/lib/subscription/types';
 import { useSubscriptionActions } from '@/hooks/useSubscription';
 import { cn } from '@/utils/cn';
-import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+import type { DbSubscriptionEvent } from '@/types/database';
+import { useAuthStore } from '@/stores/auth-store';
+import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { IoCheckmarkCircle, IoChevronForward, IoDiamondOutline, IoSparkles } from 'react-icons/io5';
 
 export function SubscriptionScreen() {
   const searchParams = useSearchParams();
+  const user = useAuthStore((s) => s.user);
   const preselected = searchParams.get('tier') as SubscriptionTier | null;
   const { subscriptionState, refreshSubscription, dbUser } = useSubscriptionContext();
   const {
@@ -34,12 +39,31 @@ export function SubscriptionScreen() {
   } = useSubscriptionActions();
 
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [downgradeOpen, setDowngradeOpen] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const checkoutTierRef = useRef<PaidTier | null>(null);
   const tierBeforeCheckout = useRef(subscriptionState.effectiveTier);
+
+  const { data: historyEvents = [], isPending: historyLoading } = useQuery({
+    queryKey: ['subscription-history', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [] as DbSubscriptionEvent[];
+      const client = createClient();
+      const { data, error } = await client
+        .from('subscription_events')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as DbSubscriptionEvent[];
+    },
+    enabled: historyOpen && !!user?.id,
+    staleTime: 60_000,
+  });
 
   const effective = subscriptionState.effectiveTier;
   const paidTier = subscriptionState.tier;
@@ -84,7 +108,7 @@ export function SubscriptionScreen() {
       setCancelOpen(false);
       setStatusMsg(
         result.accessUntil
-          ? `Subscription cancelled — access until ${new Date(result.accessUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+          ? `Subscription cancelled. Access until ${new Date(result.accessUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
           : 'Subscription cancelled'
       );
     } else {
@@ -96,7 +120,7 @@ export function SubscriptionScreen() {
     setErrorMsg(null);
     const result = await activateGoldTrial();
     if (result.ok) {
-      setStatusMsg('Gold trial activated — head to Discover to explore!');
+      setStatusMsg('Gold trial activated. Head to Discover to explore!');
       await refreshSubscription();
     } else {
       setErrorMsg(result.error ?? 'Trial activation failed');
@@ -162,11 +186,19 @@ export function SubscriptionScreen() {
             type="button"
             onClick={() => setBillingCycle('annual')}
             className={cn(
-              'rounded-full px-4 py-2 text-[13px] font-extrabold transition',
+              'rounded-full px-4 py-2 text-[13px] transition',
               billingCycle === 'annual' ? 'linkup-gradient-primary text-white' : 'text-muted'
             )}
           >
-            Annual · save more
+            <span className="font-extrabold">Annual</span>{' '}
+            <span
+              className={cn(
+                'font-semibold',
+                billingCycle === 'annual' ? 'text-amber-100' : 'text-emerald-600'
+              )}
+            >
+              · save more
+            </span>
           </button>
         </div>
       </div>
@@ -198,13 +230,37 @@ export function SubscriptionScreen() {
         ))}
       </div>
 
-      <Link
-        href="/subscription/history"
-        className="flex items-center justify-between border-t border-border/60 py-3 text-[14px] font-semibold text-muted transition hover:text-foreground"
-      >
-        <span>View subscription history</span>
-        <IoChevronForward size={18} />
-      </Link>
+      <div className="border-t border-border/60">
+        <button
+          type="button"
+          onClick={() => setHistoryOpen((open) => !open)}
+          aria-expanded={historyOpen}
+          className="flex w-full items-center justify-between py-3 text-left text-[14px] font-semibold text-muted transition hover:text-foreground"
+        >
+          <span>View subscription history</span>
+          <IoChevronForward
+            size={18}
+            className={cn('shrink-0 transition-transform duration-300 ease-out', historyOpen && 'rotate-90')}
+          />
+        </button>
+
+        <div
+          className={cn(
+            'grid transition-[grid-template-rows,opacity] duration-300 ease-out',
+            historyOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+          )}
+        >
+          <div className="overflow-hidden">
+            <div className="space-y-3 pb-4">
+              {historyLoading ? (
+                <div className="h-28 animate-pulse rounded-2xl bg-[#EDE8FF]/70" aria-hidden />
+              ) : (
+                <SubscriptionHistoryContent events={historyEvents} />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {subscriptionState.isPaidActive && paidTier !== 'FREE' ? (
         <p className="text-center">
@@ -225,7 +281,7 @@ export function SubscriptionScreen() {
           onClick={() => void handleUpgrade('GOLD')}
           className="flex w-full min-h-[48px] items-center justify-center gap-2 rounded-full bg-amber-500 text-[15px] font-extrabold text-white shadow-md disabled:opacity-50"
         >
-          {checkoutBusy ? 'Opening checkout…' : 'Upgrade to Gold — most popular'}
+          {checkoutBusy ? 'Opening checkout…' : 'Upgrade to Gold, most popular'}
         </button>
       </div>
 

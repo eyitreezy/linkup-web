@@ -5,7 +5,7 @@ import type { DbPrivacyPolicyVersion } from '@/types/database';
 import { useCallback, useEffect, useState } from 'react';
 
 function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return 'N/A';
   return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
 }
 

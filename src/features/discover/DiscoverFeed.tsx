@@ -3,6 +3,7 @@
 import { FirstSessionModalQueue } from '@/components/discover/FirstSessionModalQueue';
 import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
+import { AppPagination } from '@/components/ui/AppPagination';
 import { PlanCardSkeleton } from '@/components/ui/Skeleton';
 import { DiscoverFeedToolbar, type DiscoverViewMode } from '@/features/discover/DiscoverFeedToolbar';
 import { DiscoverPlanCard } from '@/features/discover/DiscoverPlanCard';
@@ -47,6 +48,7 @@ import {
 } from 'react-icons/io5';
 
 const VIEW_STORAGE_KEY = 'linkup_discover_view_mode';
+const UI_PAGE_SIZE = 15;
 
 function distanceLabelFor(
   plan: Pick<PlanFeedRow, 'meetup_latitude' | 'meetup_longitude' | 'latitude' | 'longitude'>,
@@ -133,6 +135,7 @@ export function DiscoverFeed() {
   );
   const [view, setView] = useState<DiscoverViewMode>('list');
   const [page, setPage] = useState(0);
+  const [uiPage, setUiPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const fetchGenRef = useRef(0);
@@ -156,6 +159,7 @@ export function DiscoverFeed() {
 
   useEffect(() => {
     setPage(0);
+    setUiPage(0);
     setHasMore(true);
     fetchGenRef.current += 1;
   }, [activeFilter.minPriceCents, activeFilter.maxPriceCents]);
@@ -356,6 +360,42 @@ export function DiscoverFeed() {
 
   const effectiveView = isMobileLayout && view === 'list' ? 'swipe' : view;
 
+  useEffect(() => {
+    setUiPage(0);
+  }, [filterKey, effectiveView]);
+
+  const paginatedPlans = useMemo(() => {
+    if (effectiveView === 'swipe') return filteredWithPresence;
+    const start = uiPage * UI_PAGE_SIZE;
+    return filteredWithPresence.slice(start, start + UI_PAGE_SIZE);
+  }, [filteredWithPresence, uiPage, effectiveView]);
+
+  const uiPageCount = Math.max(1, Math.ceil(filteredWithPresence.length / UI_PAGE_SIZE));
+  const showUiPagination = effectiveView !== 'swipe' && filteredWithPresence.length > UI_PAGE_SIZE;
+
+  const neededPlanCount = (uiPage + 1) * UI_PAGE_SIZE;
+  useEffect(() => {
+    if (effectiveView === 'swipe') return;
+    if (filteredWithPresence.length < neededPlanCount && hasMore && !isFetching && !showInitialLoading) {
+      void loadMore();
+    }
+  }, [
+    effectiveView,
+    filteredWithPresence.length,
+    neededPlanCount,
+    hasMore,
+    isFetching,
+    showInitialLoading,
+    loadMore,
+  ]);
+
+  const handleUiPageChange = (nextPage: number) => {
+    setUiPage(nextPage);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   const feedContent = (
     <>
       {error ? (
@@ -440,7 +480,7 @@ export function DiscoverFeed() {
         />
       ) : effectiveView === 'list' ? (
         <ul className="flex w-full min-w-0 max-w-full flex-col gap-3 overflow-hidden">
-          {filteredWithPresence.map((plan) => (
+          {paginatedPlans.map((plan) => (
             <li key={plan.id}>
               {plan.is_mood_plan && plan.mood_expires_at ? (
                 <MoodPlanDiscoverPill plan={plan} viewerUserId={user?.id} />
@@ -464,7 +504,7 @@ export function DiscoverFeed() {
             !isMobileLayout && 'pb-0'
           )}
         >
-          {filteredWithPresence.map((plan) =>
+          {paginatedPlans.map((plan) =>
             plan.is_mood_plan && plan.mood_expires_at ? (
               <MoodPlanDiscoverPill key={plan.id} plan={plan} viewerUserId={user?.id} />
             ) : (
@@ -481,10 +521,20 @@ export function DiscoverFeed() {
         </div>
       )}
 
+      {showUiPagination ? (
+        <AppPagination
+          page={uiPage}
+          totalPages={uiPageCount}
+          onPageChange={handleUiPageChange}
+          busy={isFetching}
+          className="mt-2"
+        />
+      ) : null}
+
       {isFetching && !showInitialLoading ? (
         <p className="text-center text-[12px] font-semibold text-muted">Refreshing feed…</p>
       ) : null}
-      <div ref={sentinelRef} className="h-4 shrink-0" aria-hidden />
+      {effectiveView === 'swipe' ? <div ref={sentinelRef} className="h-4 shrink-0" aria-hidden /> : null}
     </>
   );
 

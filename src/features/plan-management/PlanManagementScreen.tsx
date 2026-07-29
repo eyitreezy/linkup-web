@@ -150,7 +150,7 @@ export function PlanManagementScreen() {
     plans.length === 0 ? 'No meetups yet' : query.trim() ? 'No matches' : 'Nothing in this filter';
   const emptySub =
     plans.length === 0
-      ? 'When you publish a plan, it shows up here — mood sparks and longer ideas together.'
+      ? 'When you publish a plan, it shows up here: mood sparks and longer ideas together.'
       : query.trim()
         ? 'Try another keyword, clear search, or switch to All.'
         : 'Try the All tab or pick another shelf above.';

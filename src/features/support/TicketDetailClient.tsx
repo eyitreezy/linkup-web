@@ -125,7 +125,7 @@ export function TicketDetailClient({ ticket, initialReplies }: Props) {
       <div className="space-y-2">
         <p className="text-[12px] font-extrabold uppercase tracking-wide text-muted">Conversation</p>
         {replies.length === 0 ? (
-          <p className="text-[13px] font-semibold text-muted">No replies yet — our team will respond soon.</p>
+          <p className="text-[13px] font-semibold text-muted">No replies yet. Our team will respond soon.</p>
         ) : (
           <div className="space-y-2">
             {replies.map((r) => (

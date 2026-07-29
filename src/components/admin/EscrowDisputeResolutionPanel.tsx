@@ -127,7 +127,7 @@ export function EscrowDisputeResolutionPanel({
       >
         <p className="text-[14px] font-extrabold text-foreground">Release to payee</p>
         <p className="mt-0.5 text-[12px] font-semibold text-muted">
-          Funds go to {payeeLabel} — {formatNGN(net)}
+          Funds go to {payeeLabel}: {formatNGN(net)}
         </p>
       </button>
 

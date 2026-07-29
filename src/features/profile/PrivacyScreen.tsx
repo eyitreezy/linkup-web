@@ -170,7 +170,7 @@ export function PrivacyScreen() {
         <AppEmptyState
           icon={<IoHandLeftOutline size={32} className="text-primary" />}
           title="No blocks yet"
-          description="People you block stay hidden from your feed, discovery, and messages — same privacy rules as mobile."
+          description="People you block stay hidden from your feed, discovery, and messages, with the same privacy rules as mobile."
           secondaryAction={{ label: 'Help & support', href: '/support', variant: 'secondary' }}
         />
       ) : (

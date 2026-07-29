@@ -21,7 +21,7 @@ export function VerificationGateDialog({ open, onClose }: Props) {
           Verify to continue
         </h2>
         <p className="mt-2 text-[14px] font-semibold leading-relaxed text-muted">
-          Complete identity verification before making or accepting offers — same trust rules as the LinkUp app.
+          Complete identity verification before making or accepting offers, with the same trust rules as the LinkUp app.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link

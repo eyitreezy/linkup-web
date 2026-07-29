@@ -76,7 +76,7 @@ export function AdminShell({
                   Admin
                 </h1>
                 <p className="mt-1 hidden max-w-xl text-[12px] font-semibold leading-relaxed text-muted min-[400px]:block min-[400px]:text-[14px]">
-                  Priority queues, audit trails, and resolution tools — keep the community confident.
+                  Priority queues, audit trails, and resolution tools to keep the community confident.
                 </p>
               </div>
             </div>

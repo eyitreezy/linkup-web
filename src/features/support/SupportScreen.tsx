@@ -317,7 +317,7 @@ export function SupportScreen() {
           titleAccent={tab === 'open' ? 'open' : undefined}
           description={
             tab === 'open'
-              ? 'When you need help with payments, verification, or safety, start a ticket — our team sees the same queue as the mobile app.'
+              ? 'When you need help with payments, verification, or safety, start a ticket. Our team sees the same queue as the mobile app.'
               : 'Resolved conversations stay here for your records once we close a ticket.'
           }
           tips={
@@ -325,7 +325,7 @@ export function SupportScreen() {
               ? [
                   {
                     icon: IoCardOutline,
-                    text: 'Payment & escrow questions — include plan title and approximate date',
+                    text: 'Payment and escrow questions: include plan title and approximate date',
                     iconBgClassName: 'bg-primary/10',
                   },
                   {
@@ -525,7 +525,7 @@ export function SupportScreen() {
                 }}
                 className="w-full rounded-xl border border-border p-4 text-left transition hover:border-primary/25 hover:bg-[#F8F7FF]"
               >
-                <p className="text-[14px] font-extrabold text-foreground">Something else — contact support</p>
+                <p className="text-[14px] font-extrabold text-foreground">Something else: contact support</p>
                 <p className="mt-1 text-[12px] font-semibold text-muted">A support agent will help you</p>
               </button>
             </div>

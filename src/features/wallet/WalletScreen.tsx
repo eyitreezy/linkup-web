@@ -1,6 +1,6 @@
 'use client';
 
-import { TabPageHeader } from '@/components/layout/TabPageHeader';
+import { SettingsPageHeader } from '@/components/settings/SettingsPageHeader';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { GoodwillCreditRow } from '@/components/wallet/GoodwillCreditRow';
 import { WalletWithdrawDialog } from '@/components/wallet/WalletWithdrawDialog';
@@ -26,7 +26,6 @@ import {
   IoShieldCheckmark,
   IoSparkles,
   IoTimeOutline,
-  IoWallet,
 } from 'react-icons/io5';
 
 function formatMoney(cents: number, currency = 'NGN'): string {
@@ -153,11 +152,10 @@ export function WalletScreen() {
 
   return (
     <div className="min-w-0 space-y-6 pb-10">
-      <TabPageHeader
+      <SettingsPageHeader
         kicker="Your money hub"
         title="Wallet"
-        description="Cash from escrow releases and refunds. Goodwill credits lower fees on future escrows and are not withdrawable cash."
-        icon={<IoWallet size={22} />}
+        subtitle="Cash from escrow releases and refunds. Goodwill credits lower fees on future escrows and are not withdrawable cash."
       />
 
       {error ? (

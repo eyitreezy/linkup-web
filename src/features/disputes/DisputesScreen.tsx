@@ -151,7 +151,7 @@ export function DisputesScreen() {
       <SettingsPageHeader
         kicker="Trust"
         title="Disputes"
-        subtitle="Escrow-linked cases and plan safety reports — same data as the mobile app."
+        subtitle="Escrow-linked cases and plan safety reports, with the same data as the mobile app."
       />
 
       <div className="flex flex-wrap gap-2">
@@ -176,7 +176,7 @@ export function DisputesScreen() {
           emoji="⚖️"
           title="Your disputes are quiet"
           titleAccent="quiet"
-          description="If something goes wrong with escrow or a meetup, cases land here — we review with the same process as the mobile app."
+          description="If something goes wrong with escrow or a meetup, cases land here. We review with the same process as the mobile app."
           tips={[
             {
               icon: IoWalletOutline,
@@ -185,13 +185,13 @@ export function DisputesScreen() {
             },
             {
               icon: IoShieldCheckmarkOutline,
-              text: 'Plan safety reports stay separate from casual chat — track status here',
+              text: 'Plan safety reports stay separate from casual chat. Track status here',
               iconBgClassName: 'bg-emerald-500/10',
               iconClassName: 'text-emerald-600',
             },
             {
               icon: IoDocumentTextOutline,
-              text: 'Open a support ticket anytime — we can link it to your case',
+              text: 'Open a support ticket anytime. We can link it to your case',
               iconBgClassName: 'bg-secondary/10',
               iconClassName: 'text-secondary',
             },

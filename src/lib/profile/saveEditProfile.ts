@@ -40,7 +40,7 @@ export async function saveEditProfile(args: {
   }
 
   if (!hasValidProfileLocation(draft)) {
-    return { error: 'Add your location — pick from search.' };
+    return { error: 'Add your location. Pick from search.' };
   }
   if (draft.interests.length < 1 || draft.languages.length < 1) {
     return { error: 'Pick at least one interest and one language.' };

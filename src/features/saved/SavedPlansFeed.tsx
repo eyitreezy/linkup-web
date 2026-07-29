@@ -65,7 +65,7 @@ export function SavedPlansFeed() {
         <TabPageHeader
           kicker="Bookmarks"
           title="Saved"
-          description="Plans you saved from Discover — synced with the mobile app."
+          description="Plans you saved from Discover, synced with the mobile app."
           icon={<IoBookmarkOutline size={22} />}
         />
         <SavedUpgradeEmptyState requiredTier="SILVER" />
@@ -84,7 +84,7 @@ export function SavedPlansFeed() {
       <TabPageHeader
         kicker="Bookmarks"
         title="Saved"
-        description="Plans you saved from Discover — synced with the mobile app."
+        description="Plans you saved from Discover, synced with the mobile app."
         descriptionClassName="hidden min-[400px]:block"
         icon={<IoBookmarkOutline size={22} />}
         trailing={
@@ -123,7 +123,7 @@ export function SavedPlansFeed() {
           emoji="🔖"
           title="No saved plans yet"
           titleAccent="saved"
-          description="Tap Save on any Discover card (Silver and above) — your shortlist stays in sync with the mobile app."
+          description="Tap Save on any Discover card (Silver and above). Your shortlist stays in sync with the mobile app."
           tips={[
             { icon: IoBookmarkOutline, text: 'Saved plans keep host, price, and mood context handy' },
             {

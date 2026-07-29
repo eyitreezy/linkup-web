@@ -78,7 +78,7 @@ export function moderationContentLabel(ct: string): string {
 }
 
 export function formatModerationScore(score: number | null): string {
-  if (score == null || Number.isNaN(Number(score))) return '—';
+  if (score == null || Number.isNaN(Number(score))) return 'N/A';
   return `${Math.round(Number(score) * 100)}% · heuristic`;
 }
 

@@ -5,10 +5,10 @@ import { cn } from '@/utils/cn';
 import { IoAdd, IoAlbums } from 'react-icons/io5';
 
 const MOBILE_SUB =
-  'Color-coded shelves for every stage — same energy as your wallet: clear, confident, ready to scale.';
+  'Color-coded shelves for every stage, with the same energy as your wallet: clear, confident, ready to scale.';
 
 const DESKTOP_SUB =
-  'Color-coded shelves for every stage — create, edit, archive, and track views and offers.';
+  'Color-coded shelves for every stage: create, edit, archive, and track views and offers.';
 
 /** Matches Linkup app/settings/plan-management header row + subtitle. */
 export function PlanManagementHeader() {

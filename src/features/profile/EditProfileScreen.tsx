@@ -152,7 +152,7 @@ export function EditProfileScreen() {
       <SettingsPageHeader
         kicker="Account"
         title="Edit profile"
-        subtitle="Photos, bio, prompts, and preferences — same fields as post-onboarding on mobile."
+        subtitle="Photos, bio, prompts, and preferences, with the same fields as post-onboarding on mobile."
       />
 
       <FormCard>
@@ -289,7 +289,7 @@ export function EditProfileScreen() {
       </FormCard>
 
       <FormCard>
-        <PremiumSectionHead title="Prompts (1–2)" />
+        <PremiumSectionHead title="Prompts (1 to 2)" />
         {draft.promptAnswers.map((p, idx) => (
           <div key={p.promptId} className="mt-4 border-t border-border/60 pt-4 first:mt-0 first:border-0 first:pt-0">
             <select
@@ -348,7 +348,7 @@ export function EditProfileScreen() {
       <FormCard>
         <PremiumSectionHead title="Discovery preferences" />
         <p className="text-[13px] font-semibold text-muted">
-          Age {draft.ageMin}–{draft.ageMax}, radius {draft.radiusKm} km
+          Age {draft.ageMin} to {draft.ageMax}, radius {draft.radiusKm} km
         </p>
         <label className="mt-3 block text-[12px] font-extrabold">Min age</label>
         <input

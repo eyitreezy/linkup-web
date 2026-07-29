@@ -258,7 +258,7 @@ export function AdminMeetTypesPanel() {
     if (!deleteTarget) return;
     if (planCounts[deleteTarget.id] != null && planCounts[deleteTarget.id] > 0) {
       setDeleteTarget(null);
-      setErr(`"${deleteTarget.name}" is used on plans — archive it instead.`);
+      setErr(`"${deleteTarget.name}" is used on plans. Archive it instead.`);
       return;
     }
     setDeleteBusy(true);
@@ -400,7 +400,7 @@ export function AdminMeetTypesPanel() {
     <div className="min-w-0 space-y-4">
       <AdminSectionHeader
         title="Meet types"
-        subtitle="Create and manage catalog meet types — archive types in use; delete only when unused."
+        subtitle="Create and manage catalog meet types. Archive types in use; delete only when unused."
         icon={<IoGridOutline size={22} className="text-primary" />}
         action={
           <AdminPrimaryButton
@@ -561,7 +561,7 @@ export function AdminMeetTypesPanel() {
           />
           {editing && planCounts[editing.id] != null ? (
             <p className="text-[12px] font-semibold text-muted">
-              Used on {planCounts[editing.id]} plan{planCounts[editing.id] === 1 ? '' : 's'} — archive instead of
+              Used on {planCounts[editing.id]} plan{planCounts[editing.id] === 1 ? '' : 's'}. Archive instead of
               delete when in use.
             </p>
           ) : null}

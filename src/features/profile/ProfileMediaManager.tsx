@@ -176,7 +176,7 @@ export function ProfileMediaManager({
           </p>
         </div>
         <p className="mt-1 text-[12px] font-semibold leading-relaxed text-muted">
-          Tap a photo to manage it, double-click to preview full size. Set a primary photo — it appears first across
+          Tap a photo to manage it, double-click to preview full size. Set a primary photo so it appears first across
           Discover, plans, and messages.
         </p>
 
@@ -278,7 +278,7 @@ export function ProfileMediaManager({
           </p>
         </div>
         <p className="mt-1 text-[12px] font-semibold leading-relaxed text-muted">
-          A short clip builds trust — same as top dating apps. MP4, MOV, or WebM.
+          A short clip builds trust, just like on top dating apps. MP4, MOV, or WebM.
         </p>
 
         <div className="mt-3 flex flex-col gap-3 min-[480px]:flex-row min-[480px]:items-center">
@@ -340,7 +340,7 @@ export function ProfileMediaManager({
         </p>
       ) : showValidation && profileMediaMeetsMinimums(media) ? (
         <p className="rounded-xl border border-emerald-200/80 bg-emerald-50 px-3 py-2.5 text-[13px] font-semibold text-emerald-800">
-          Media looks great — primary photo and video are set.
+          Media looks great. Primary photo and video are set.
         </p>
       ) : null}
 

@@ -293,7 +293,7 @@ export function PlanCreatorEditModal({ plan, offersCount, onClose, onSaved }: Pr
 
           {activeCaps.canToggleMood && meetTypeMoodHint && isMoodPlan ? (
             <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] font-semibold text-amber-900">
-              This meet type is usually for scheduled plans — you can still save as a mood draft and
+              This meet type is usually for scheduled plans. You can still save as a mood draft and
               publish when ready.
             </p>
           ) : null}
@@ -304,7 +304,7 @@ export function PlanCreatorEditModal({ plan, offersCount, onClose, onSaved }: Pr
                 <div>
                   <p className="text-[12px] font-extrabold uppercase tracking-wide text-muted">Mood plan</p>
                   <p className="mt-1 text-[13px] font-semibold text-muted">
-                    Short-lived spark in Discover — starts when you publish.
+                    Short-lived spark in Discover. Starts when you publish.
                   </p>
                 </div>
               ) : null}

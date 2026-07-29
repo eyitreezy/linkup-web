@@ -215,7 +215,7 @@ export function AdminVerifyPanel({
           </div>
         }
       >
-        <p className="text-[13px] font-semibold text-muted">Required — this text is shared with the member.</p>
+        <p className="text-[13px] font-semibold text-muted">Required. This text is shared with the member.</p>
         <textarea
           value={rejectReason}
           onChange={(e) => setRejectReason(e.target.value)}
@@ -246,7 +246,7 @@ export function AdminReportsPanel({ data, onReload }: { data: AdminDashboardData
     <>
       <AdminSectionHeader
         title="Safety reports"
-        subtitle="User and content reports — resolve, warn, or suspend from detail."
+        subtitle="User and content reports. Resolve, warn, or suspend from detail."
         icon={<IoFlagOutline size={22} className="text-primary" />}
       />
       {sorted.length === 0 ? (
@@ -488,12 +488,12 @@ export function AdminDisputesPanel({
 
     let walletMsg =
       status === 'rejected'
-        ? 'Dispute rejected — no wallet action taken.'
+        ? 'Dispute rejected. No wallet action taken.'
         : resolution === 'refund'
           ? 'Full refund issued to guest where applicable.'
           : resolution === 'partial'
             ? 'Partial refund applied.'
-            : 'Dispute resolved — funds released to host where applicable.';
+            : 'Dispute resolved. Funds released to host where applicable.';
 
     if (
       status === 'resolved' &&
@@ -515,7 +515,7 @@ export function AdminDisputesPanel({
           setGoodwillError(
             `Resolution succeeded but goodwill issuance failed: ${gwErr.message}. Retry from the member admin panel.`
           );
-          walletMsg += ` Goodwill issuance failed — retry from admin user panel.`;
+          walletMsg += ` Goodwill issuance failed. Retry from admin user panel.`;
         }
       }
     }
@@ -539,7 +539,7 @@ export function AdminDisputesPanel({
       />
       <AdminSectionHeader
         title="Member plan disputes"
-        subtitle="Evidence in private storage — open signed links in the browser; audit is chronological."
+        subtitle="Evidence in private storage. Open signed links in the browser; audit is chronological."
         icon={<IoScaleOutline size={22} className="text-primary" />}
       />
       <div className="mb-4 flex gap-2">
@@ -571,7 +571,7 @@ export function AdminDisputesPanel({
 
       <AdminSectionHeader
         title="Escrow disputes"
-        subtitle="Legacy escrow queue — payment holds and release disputes."
+        subtitle="Legacy escrow queue for payment holds and release disputes."
         icon={<IoWalletOutline size={22} className="text-primary" />}
       />
       {data.escrowDisputes.length === 0 ? (
@@ -782,7 +782,7 @@ export function AdminSupportPanel({ data, onReload }: { data: AdminDashboardData
     <>
       <AdminSectionHeader
         title="Support inbox"
-        subtitle="SLA-sorted queue — reply, change status, and leave internal notes."
+        subtitle="SLA-sorted queue. Reply, change status, and leave internal notes."
         icon={<IoChatbubblesOutline size={22} className="text-primary" />}
       />
       <div className="mb-4 flex gap-2">
@@ -841,7 +841,7 @@ export function AdminPlansSection() {
     <>
       <AdminSectionHeader
         title="Plans directory"
-        subtitle="Mood TTL, suppression, archive, and deep links — pair with Reports for context."
+        subtitle="Mood TTL, suppression, archive, and deep links. Pair with Reports for context."
         icon={<IoAlbumsOutline size={22} className="text-primary" />}
       />
       <AdminPlansPanel />
@@ -854,7 +854,7 @@ export function AdminPrivacyPolicySection() {
     <>
       <AdminSectionHeader
         title="Privacy policy"
-        subtitle="View the current version and publish updates — new versions trigger member re-consent."
+        subtitle="View the current version and publish updates. New versions trigger member re-consent."
         icon={<IoDocumentTextOutline size={22} className="text-primary" />}
       />
       <AdminPrivacyPolicyPanel />

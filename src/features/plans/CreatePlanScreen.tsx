@@ -692,7 +692,7 @@ export function CreatePlanScreen() {
       <div className="linkup-card flex items-center gap-3 p-4">
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-extrabold text-foreground">Hide from discovery browse</p>
-          <p className="text-[13px] font-semibold text-muted">Platinum — share via link only</p>
+          <p className="text-[13px] font-semibold text-muted">Platinum: share via link only</p>
         </div>
         <ToggleSwitch
           id="plan-privacy"

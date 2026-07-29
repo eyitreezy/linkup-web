@@ -214,7 +214,7 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
       <div>
         <p className="text-[12px] font-extrabold uppercase tracking-wide text-muted">Meet type</p>
         <p className="mt-1 text-[13px] font-semibold text-muted">
-          Pick a vibe or add your own — edit or remove custom types with the icons on each chip.
+          Pick a vibe or add your own. Edit or remove custom types with the icons on each chip.
         </p>
       </div>
 

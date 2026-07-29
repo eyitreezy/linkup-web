@@ -158,7 +158,7 @@ export function MultiCitySelector({ selected, onChange, showValidation }: Props)
       <p className={cn('text-[12px] font-semibold', showError ? 'text-[#EF4444]' : 'text-muted')}>
         {showError
           ? `Select at least ${MULTI_CITY_MIN} cities (up to ${MULTI_CITY_MAX}).`
-          : `Choose ${MULTI_CITY_MIN}–${MULTI_CITY_MAX} Nigerian cities for discover visibility.`}
+          : `Choose ${MULTI_CITY_MIN} to ${MULTI_CITY_MAX} Nigerian cities for discover visibility.`}
       </p>
     </div>
   );
