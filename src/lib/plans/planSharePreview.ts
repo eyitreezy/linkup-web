@@ -140,6 +140,7 @@ export interface HostRatingPreview {
 
 type ReviewRowRaw = {
   id: string;
+  reviewer_id: string;
   score_punctuality: number;
   score_conduct: number;
   score_plan_quality: number | null;
@@ -152,8 +153,25 @@ type ReviewRowRaw = {
     location_label: string | null;
     meet_types?: { name: string } | { name: string }[] | null;
   }[] | null;
-  reviewer?: { display_name: string | null } | { display_name: string | null }[] | null;
 };
+
+async function reviewerDisplayNames(
+  client: SupabaseClient,
+  reviewerIds: string[]
+): Promise<Map<string, string | null>> {
+  const map = new Map<string, string | null>();
+  if (reviewerIds.length === 0) return map;
+
+  const { data } = await client
+    .from('profiles')
+    .select('user_id, display_name')
+    .in('user_id', reviewerIds);
+
+  for (const row of data ?? []) {
+    map.set(row.user_id as string, row.display_name as string | null);
+  }
+  return map;
+}
 
 export async function fetchHostRatingPreview(
   client: SupabaseClient,
@@ -170,17 +188,17 @@ export async function fetchHostRatingPreview(
 
   const meetsThreshold = (profile.completed_meetup_count ?? 0) >= 3;
 
-  const { data: reviews } = await client
+  const { data: reviews, error: reviewsError } = await client
     .from('meetup_reviews')
     .select(`
       id,
+      reviewer_id,
       score_punctuality,
       score_conduct,
       score_plan_quality,
       review_text,
       revealed_at,
-      plans!inner ( location_label, meet_types ( name ) ),
-      reviewer:profiles!reviewer_id ( display_name )
+      plans!inner ( location_label, meet_types ( name ) )
     `)
     .eq('reviewee_id', hostUserId)
     .eq('reviewer_role', 'guest')
@@ -190,7 +208,15 @@ export async function fetchHostRatingPreview(
     .order('revealed_at', { ascending: false })
     .limit(3);
 
-  const recentReviews: HostReviewPreview[] = ((reviews ?? []) as ReviewRowRaw[]).map((r) => {
+  if (reviewsError) return { data: null, error: reviewsError };
+
+  const reviewRows = (reviews ?? []) as ReviewRowRaw[];
+  const namesByReviewer = await reviewerDisplayNames(
+    client,
+    [...new Set(reviewRows.map((r) => r.reviewer_id))]
+  );
+
+  const recentReviews: HostReviewPreview[] = reviewRows.map((r) => {
     const planQuality = r.score_plan_quality ?? r.score_conduct;
     const overall =
       planQuality * 0.4 + r.score_conduct * 0.35 + r.score_punctuality * 0.25;
@@ -198,12 +224,12 @@ export async function fetchHostRatingPreview(
     const plan = Array.isArray(r.plans) ? r.plans[0] : r.plans;
     const meetTypeRaw = plan?.meet_types;
     const meetType = Array.isArray(meetTypeRaw) ? meetTypeRaw[0] : meetTypeRaw;
-    const reviewer = Array.isArray(r.reviewer) ? r.reviewer[0] : r.reviewer;
+    const displayName = namesByReviewer.get(r.reviewer_id);
 
     return {
       id: r.id,
       reviewer_first_name:
-        reviewer?.display_name?.trim().split(/\s+/)[0] ?? 'A guest',
+        displayName?.trim().split(/\s+/)[0] ?? 'A guest',
       score_overall: Math.round(overall * 10) / 10,
       review_text: r.review_text ?? null,
       meet_type_name: meetType?.name ?? null,

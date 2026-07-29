@@ -16,7 +16,8 @@ type ReviewReportRow = {
   reason: string;
   reason_text: string | null;
   reported_at: string;
-  reporter?: { display_name: string | null } | { display_name: string | null }[] | null;
+  reporter_id: string;
+  reporter_name?: string | null;
   review?: {
     id: string;
     review_text: string | null;
@@ -25,15 +26,7 @@ type ReviewReportRow = {
     score_plan_quality: number | null;
     reviewee_id: string;
     reviewer_role: string;
-  } | {
-    id: string;
-    review_text: string | null;
-    score_punctuality: number;
-    score_conduct: number;
-    score_plan_quality: number | null;
-    reviewee_id: string;
-    reviewer_role: string;
-  }[] | null;
+  } | null;
 };
 
 type Props = {
@@ -51,14 +44,14 @@ export function AdminReviewReportsPanel({ adminUserId, onReload }: Props) {
     setLoading(true);
     setErr(null);
     const client = createClient();
-    const { data, error } = await client
+    const { data: reports, error } = await client
       .from('review_reports')
       .select(`
         id,
         reason,
         reason_text,
         reported_at,
-        reporter:profiles!reporter_id ( display_name ),
+        reporter_id,
         review:meetup_reviews (
           id,
           review_text,
@@ -75,9 +68,51 @@ export function AdminReviewReportsPanel({ adminUserId, onReload }: Props) {
     if (error) {
       setErr(error.message);
       setRows([]);
-    } else {
-      setRows((data ?? []) as ReviewReportRow[]);
+      setLoading(false);
+      return;
     }
+
+    const rawRows = (reports ?? []) as Array<{
+      id: string;
+      reason: string;
+      reason_text: string | null;
+      reported_at: string;
+      reporter_id: string;
+      review:
+        | ReviewReportRow['review']
+        | NonNullable<ReviewReportRow['review']>[]
+        | null;
+    }>;
+
+    const reporterIds = [...new Set(rawRows.map((r) => r.reporter_id).filter(Boolean))];
+    const profileNames = new Map<string, string | null>();
+
+    if (reporterIds.length > 0) {
+      const { data: profiles } = await client
+        .from('profiles')
+        .select('user_id, display_name')
+        .in('user_id', reporterIds);
+
+      for (const p of profiles ?? []) {
+        profileNames.set(p.user_id as string, p.display_name as string | null);
+      }
+    }
+
+    setRows(
+      rawRows.map((row) => {
+        const reviewRaw = row.review;
+        const review = Array.isArray(reviewRaw) ? reviewRaw[0] ?? null : reviewRaw;
+        return {
+          id: row.id,
+          reason: row.reason,
+          reason_text: row.reason_text,
+          reported_at: row.reported_at,
+          reporter_id: row.reporter_id,
+          reporter_name: profileNames.get(row.reporter_id) ?? null,
+          review,
+        };
+      })
+    );
     setLoading(false);
   }, []);
 
@@ -87,8 +122,7 @@ export function AdminReviewReportsPanel({ adminUserId, onReload }: Props) {
 
   async function handleSuppress(report: ReviewReportRow) {
     if (!adminUserId) return;
-    const reviewRaw = report.review;
-    const review = Array.isArray(reviewRaw) ? reviewRaw[0] : reviewRaw;
+    const review = report.review;
     if (!review) return;
 
     setBusyId(report.id);
@@ -179,9 +213,7 @@ export function AdminReviewReportsPanel({ adminUserId, onReload }: Props) {
       ) : (
         <ul className="space-y-3">
           {rows.map((row) => {
-            const reporter = Array.isArray(row.reporter) ? row.reporter[0] : row.reporter;
-            const reviewRaw = row.review;
-            const review = Array.isArray(reviewRaw) ? reviewRaw[0] : reviewRaw;
+            const review = row.review;
 
             return (
               <li key={row.id}>
@@ -190,7 +222,7 @@ export function AdminReviewReportsPanel({ adminUserId, onReload }: Props) {
                     <div>
                       <StatusPill label={row.reason} tone="warn" />
                       <p className="mt-2 text-[13px] font-extrabold text-foreground">
-                        Reported by {reporter?.display_name?.trim() || 'Member'}
+                        Reported by {row.reporter_name?.trim() || 'Member'}
                       </p>
                       <p className="text-[11px] font-semibold text-muted">
                         {new Date(row.reported_at).toLocaleString()}
