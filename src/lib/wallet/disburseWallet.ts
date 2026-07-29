@@ -53,6 +53,12 @@ export async function confirmMeetupHappened(planId: string): Promise<{
     return { ok: false, error: error.message };
   }
 
+  void supabase
+    .rpc('unlock_plan_reviews', { p_plan_id: planId })
+    .then(({ error: unlockError }) => {
+      if (unlockError) console.error('[unlock_plan_reviews]', unlockError.message);
+    });
+
   const row = data as { escrows_released?: number } | null;
   return { ok: true, escrowsReleased: row?.escrows_released ?? 0 };
 }

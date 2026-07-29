@@ -1,5 +1,6 @@
 'use client';
 
+import { HostRatingBadge } from '@/components/reviews/HostRatingBadge';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { HostPresenceChip } from '@/components/presence/HostPresenceChip';
 import { CreatorSpotlightChip } from '@/components/plans/CreatorSpotlightChip';
@@ -102,6 +103,11 @@ export function DiscoverPlanCard({
               <p className="truncate text-[13px] font-extrabold text-foreground">{name}</p>
               {isPlatinum ? <TierBadge tier="PLATINUM" size="sm" /> : null}
               {isCreatorSpotlighted ? <CreatorSpotlightChip /> : null}
+              <HostRatingBadge
+                score={plan.creator?.host_rating_score}
+                count={plan.creator?.host_rating_count}
+                completedMeetupCount={plan.creator?.completed_meetup_count}
+              />
             </div>
             <p className="truncate text-[12px] font-semibold text-muted">
               {plan.location_label ?? 'Location TBD'}

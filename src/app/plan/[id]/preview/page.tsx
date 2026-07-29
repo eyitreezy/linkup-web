@@ -1,6 +1,7 @@
 import { APP_NAME } from '@/lib/brand';
 import {
   fetchPlanSharePreview,
+  fetchHostRatingPreview,
   planShareCity,
   planShareHostFirstName,
   planSharePreviewUrl,
@@ -21,19 +22,19 @@ type Props = { params: Promise<{ id: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   if (!isSupabaseConfigured) {
-    return { title: `${APP_NAME} — Verified Meetups` };
+    return { title: `${APP_NAME} Verified Meetups` };
   }
 
   const supabase = createPublicClient();
   const { data: plan } = await fetchPlanSharePreview(supabase, id);
 
   if (!plan) {
-    return { title: `${APP_NAME} — Verified Meetups` };
+    return { title: `${APP_NAME} Verified Meetups` };
   }
 
   const city = planShareCity(plan.location_label);
   const meetType = plan.meet_types?.name ?? 'Meetup';
-  const title = `${meetType} in ${city} — ${APP_NAME}`;
+  const title = `${meetType} in ${city} on ${APP_NAME}`;
   const description = `Join a verified ${meetType.toLowerCase()} meetup on ${APP_NAME}.`;
   const previewUrl = planSharePreviewUrl(id, env.appUrl);
   const cardUrl = `${env.appUrl}/api/plan/${id}/card`;
@@ -72,6 +73,10 @@ export default async function PlanPreviewPage({ params }: Props) {
   const { data: plan } = await fetchPlanSharePreview(supabase, id);
 
   if (!plan) notFound();
+
+  const { data: hostRating } = plan.creator_id
+    ? await fetchHostRatingPreview(supabase, plan.creator_id)
+    : { data: null };
 
   const city = planShareCity(plan.location_label);
   const meetTypeName = plan.meet_types?.name ?? 'Meetup';
@@ -149,6 +154,66 @@ export default async function PlanPreviewPage({ params }: Props) {
             </span>
             <span className="text-xs font-semibold text-primary">Verified</span>
           </div>
+
+          {hostRating?.meets_public_threshold ? (
+            <div className="border-t border-border/60 pt-3 mt-3">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-amber-500">★</span>
+                <span className="text-sm font-extrabold text-foreground">
+                  {hostRating.host_rating_score?.toFixed(1)}
+                </span>
+                <span className="text-xs font-semibold text-muted">
+                  {hostRating.host_rating_count}{' '}
+                  {hostRating.host_rating_count !== 1 ? 'reviews' : 'review'}
+                </span>
+              </div>
+
+              {hostRating.recent_reviews.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted mb-2">
+                    What people say about {planShareHostFirstName(plan.creator?.display_name)}
+                  </p>
+
+                  {hostRating.recent_reviews.map((review) => (
+                    <div
+                      key={review.id}
+                      className="rounded-xl border border-border/60 bg-[#F8F7FF]/60 p-3"
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-[11px] font-extrabold text-primary">
+                          {review.reviewer_first_name[0]?.toUpperCase() ?? 'G'}
+                        </div>
+                        <span className="text-sm font-extrabold text-foreground">
+                          {review.reviewer_first_name}
+                        </span>
+                        <span className="text-xs text-amber-500">
+                          {'★'.repeat(Math.round(review.score_overall))}
+                        </span>
+                        {review.meet_type_name ? (
+                          <span className="ml-auto text-[10px] font-semibold text-muted">
+                            {review.meet_type_name}
+                            {review.city ? ` · ${review.city}` : ''}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {review.review_text ? (
+                        <p className="text-sm font-semibold leading-relaxed text-foreground line-clamp-3">
+                          {review.review_text}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+
+                  <p className="text-xs font-semibold text-muted text-center italic">
+                    Sign in to see all {hostRating.host_rating_count} reviews and full plan details
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : hostRating && !hostRating.meets_public_threshold ? (
+            <p className="text-sm font-semibold text-muted">New to LinkUp</p>
+          ) : null}
 
           <p className="text-xs italic text-muted">
             Sign up to see full details, the exact location, and to join this meetup.

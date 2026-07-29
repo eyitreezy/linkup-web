@@ -3,6 +3,7 @@ export type AdminTabId =
   | 'reports'
   | 'moderation'
   | 'plan_disputes'
+  | 'review_reports'
   | 'support'
   | 'users'
   | 'plans'

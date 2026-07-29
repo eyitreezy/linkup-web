@@ -20,6 +20,9 @@ export type CreatorProfile = Pick<
   | 'preferences'
   | 'spotlight_until'
   | 'masked_activity_enabled'
+  | 'host_rating_score'
+  | 'host_rating_count'
+  | 'completed_meetup_count'
 > & {
   subscription_tier?: SubscriptionTierDb;
 };
@@ -30,7 +33,7 @@ export type PlanFeedRow = DbPlan & {
 };
 
 const CREATOR_PROFILE_FIELDS =
-  'user_id, display_name, avatar_url, primary_photo_url, photo_urls, verified_badge, ai_trust_score, preferences, spotlight_until, masked_activity_enabled';
+  'user_id, display_name, avatar_url, primary_photo_url, photo_urls, verified_badge, ai_trust_score, preferences, spotlight_until, masked_activity_enabled, host_rating_score, host_rating_count, completed_meetup_count';
 
 type ProfileRow = Pick<
   DbProfile,
@@ -44,6 +47,9 @@ type ProfileRow = Pick<
   | 'preferences'
   | 'spotlight_until'
   | 'masked_activity_enabled'
+  | 'host_rating_score'
+  | 'host_rating_count'
+  | 'completed_meetup_count'
 >;
 
 async function fetchProfilesForCreators(

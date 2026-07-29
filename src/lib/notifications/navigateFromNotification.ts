@@ -132,8 +132,7 @@ export function navigateFromNotification(
     push('/wallet');
     return;
   }
-  if (
-    t === 'meetup_confirm_requested' &&
+  if (t === 'meetup_confirm_requested' &&
     data?.planId &&
     typeof data.planId === 'string'
   ) {
@@ -177,6 +176,10 @@ export function navigateFromNotification(
     t === 'withdrawal_failed'
   ) {
     push('/wallet');
+    return;
+  }
+  if (t === 'review_request' && data?.planId && typeof data.planId === 'string') {
+    push(`/plan/${data.planId}/review`);
     return;
   }
   if (t === 'plan_invitation_received' && data?.planId && data?.invitationId) {

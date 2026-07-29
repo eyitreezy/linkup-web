@@ -15,6 +15,7 @@ import {
   IoRefresh,
   IoScaleOutline,
   IoShieldCheckmark,
+  IoStarOutline,
   IoWalletOutline,
 } from 'react-icons/io5';
 
@@ -42,6 +43,7 @@ export const ADMIN_TAB_ICONS: Record<AdminTabId, ReactNode> = {
   reports: <IoFlagOutline size={18} />,
   moderation: <IoFlashOutline size={18} />,
   plan_disputes: <IoScaleOutline size={18} />,
+  review_reports: <IoStarOutline size={18} />,
   support: <IoChatbubblesOutline size={18} />,
   users: <IoPeopleOutline size={18} />,
   plans: <IoAlbumsOutline size={18} />,

@@ -1,5 +1,6 @@
 'use client';
 
+import { ReviewList } from '@/components/profile/ReviewList';
 import { TierBadge } from '@/components/subscription/TierBadge';
 import { HostMediaGallery } from '@/components/profile/HostMediaGallery';
 import type { SubscriptionTier } from '@/lib/subscription/types';
@@ -280,6 +281,50 @@ export function UserProfileScreen({ userId }: Props) {
             </div>
           ))}
         </div>
+      ) : null}
+
+      {(profile.completed_meetup_count ?? 0) > 0 ? (
+        <section className="space-y-3">
+          <SectionHead title="Reviews" />
+
+          {(profile.completed_meetup_count ?? 0) >= 3 && profile.host_rating_score ? (
+            <div className="linkup-card p-4">
+              <div className="flex items-baseline gap-2">
+                <span className="font-display text-3xl font-extrabold text-foreground">
+                  {profile.host_rating_score.toFixed(1)}
+                </span>
+                <span className="text-xl text-amber-500" aria-hidden>
+                  ★
+                </span>
+                <span className="text-[13px] font-semibold text-muted">
+                  {profile.host_rating_count ?? 0}{' '}
+                  {(profile.host_rating_count ?? 0) !== 1 ? 'reviews' : 'review'}
+                </span>
+              </div>
+
+              <div className="mt-3 space-y-1">
+                {[
+                  { label: 'Punctuality', value: profile.host_score_punctuality },
+                  { label: 'Conduct', value: profile.host_score_conduct },
+                  { label: 'Plan quality', value: profile.host_score_plan_quality },
+                ]
+                  .filter((d) => d.value != null)
+                  .map((d) => (
+                    <div key={d.label} className="flex justify-between">
+                      <span className="text-[12px] font-semibold text-muted">{d.label}</span>
+                      <span className="text-[12px] font-extrabold text-foreground">
+                        {d.value?.toFixed(1)}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[13px] font-semibold text-muted">New to LinkUp</p>
+          )}
+
+          <ReviewList profileUserId={profile.user_id} />
+        </section>
       ) : null}
 
       {canInteract ? (

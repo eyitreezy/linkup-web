@@ -170,6 +170,18 @@ export interface DbProfile {
   ai_trust_score: number | null;
   /** Public “verified host” flag; kept in sync with `users.verification_status` via DB trigger — prefer updating the request/user row, not this field directly. */
   verified_badge: boolean;
+  /** Host rating aggregate (guest reviews about this member as host). */
+  host_rating_score?: number | null;
+  host_rating_count?: number;
+  host_score_punctuality?: number | null;
+  host_score_conduct?: number | null;
+  host_score_plan_quality?: number | null;
+  /** Guest rating aggregate (host reviews about this member as guest). */
+  guest_rating_score?: number | null;
+  guest_rating_count?: number;
+  guest_score_punctuality?: number | null;
+  guest_score_conduct?: number | null;
+  completed_meetup_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -283,6 +295,8 @@ export interface DbPlan {
   completion_status?: 'pending' | 'awaiting_confirm' | 'confirmed' | 'disputed' | null;
   host_confirmed_completion_at?: string | null;
   auto_confirmed_at?: string | null;
+  review_unlock_at?: string | null;
+  review_reveal_at?: string | null;
   /** Group dynamic split: host leg escrow row after close. */
   host_escrow_id?: string | null;
   /** When false on paid split/guest-funded plans, guests request to join at formula price. Default true. */
@@ -563,6 +577,48 @@ export interface DbDispute {
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
+}
+
+export type ReviewReportReason =
+  | 'inaccurate'
+  | 'abusive'
+  | 'retaliatory'
+  | 'spam'
+  | 'other';
+
+export type ReviewReportStatus = 'pending' | 'reviewed' | 'suppressed' | 'dismissed';
+
+export interface DbMeetupReview {
+  id: string;
+  plan_id: string;
+  reviewer_id: string;
+  reviewee_id: string;
+  reviewer_role: 'host' | 'guest';
+  score_punctuality: number;
+  score_conduct: number;
+  score_plan_quality: number | null;
+  review_text: string | null;
+  is_hidden: boolean;
+  submitted_at: string;
+  revealed_at: string | null;
+  unlock_at: string | null;
+  edit_locked_at: string | null;
+  is_suppressed: boolean;
+  suppressed_by: string | null;
+  suppressed_at: string | null;
+  suppression_reason: string | null;
+}
+
+export interface DbReviewReport {
+  id: string;
+  review_id: string;
+  reporter_id: string;
+  reason: ReviewReportReason;
+  reason_text: string | null;
+  status: ReviewReportStatus;
+  reported_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
 }
 
 export type DisputeEvidenceType = 'video' | 'image' | 'text';

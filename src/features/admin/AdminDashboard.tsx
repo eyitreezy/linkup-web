@@ -1,6 +1,11 @@
 'use client';
 
-import { ADMIN_TAB_ICONS, AdminShell, type AdminTabId } from '@/features/admin/AdminShell';
+import { AdminReviewReportsPanel } from '@/components/admin/AdminReviewReportsPanel';
+import {
+  ADMIN_TAB_ICONS,
+  AdminShell,
+  type AdminTabId,
+} from '@/features/admin/AdminShell';
 import {
   AdminDisputesPanel,
   AdminMeetTypesSection,
@@ -110,6 +115,11 @@ export function AdminDashboard() {
           badge: (stats?.disputesOpen ?? 0) + (stats?.escrowOpen ?? 0),
           icon: ADMIN_TAB_ICONS.plan_disputes,
         },
+        {
+          id: 'review_reports' as const,
+          label: 'Reviews',
+          icon: ADMIN_TAB_ICONS.review_reports,
+        },
         { id: 'support' as const, label: 'Support', badge: stats?.ticketsOpen, icon: ADMIN_TAB_ICONS.support },
         { id: 'users' as const, label: 'Users', icon: ADMIN_TAB_ICONS.users },
         { id: 'plans' as const, label: 'Plans', icon: ADMIN_TAB_ICONS.plans },
@@ -178,6 +188,9 @@ export function AdminDashboard() {
       {data && tab === 'moderation' ? <AdminModerationPanel data={data} /> : null}
       {data && tab === 'plan_disputes' ? (
         <AdminDisputesPanel data={data} onReload={() => void load()} />
+      ) : null}
+      {tab === 'review_reports' ? (
+        <AdminReviewReportsPanel adminUserId={adminRecordId} onReload={() => void load()} />
       ) : null}
       {data && tab === 'support' ? <AdminSupportPanel data={data} onReload={() => void load()} /> : null}
       {tab === 'users' ? <AdminUsersSection /> : null}

@@ -119,3 +119,107 @@ export async function fetchPlanSharePreview(
     error: null,
   };
 }
+
+export interface HostReviewPreview {
+  id: string;
+  reviewer_first_name: string;
+  score_overall: number;
+  review_text: string | null;
+  meet_type_name: string | null;
+  city: string | null;
+  revealed_at: string;
+}
+
+export interface HostRatingPreview {
+  host_rating_score: number | null;
+  host_rating_count: number;
+  completed_meetup_count: number;
+  meets_public_threshold: boolean;
+  recent_reviews: HostReviewPreview[];
+}
+
+type ReviewRowRaw = {
+  id: string;
+  score_punctuality: number;
+  score_conduct: number;
+  score_plan_quality: number | null;
+  review_text: string | null;
+  revealed_at: string | null;
+  plans?: {
+    location_label: string | null;
+    meet_types?: { name: string } | { name: string }[] | null;
+  } | {
+    location_label: string | null;
+    meet_types?: { name: string } | { name: string }[] | null;
+  }[] | null;
+  reviewer?: { display_name: string | null } | { display_name: string | null }[] | null;
+};
+
+export async function fetchHostRatingPreview(
+  client: SupabaseClient,
+  hostUserId: string
+): Promise<{ data: HostRatingPreview | null; error: Error | null }> {
+  const { data: profile, error: profileError } = await client
+    .from('profiles')
+    .select('host_rating_score, host_rating_count, completed_meetup_count')
+    .eq('user_id', hostUserId)
+    .maybeSingle();
+
+  if (profileError) return { data: null, error: profileError };
+  if (!profile) return { data: null, error: null };
+
+  const meetsThreshold = (profile.completed_meetup_count ?? 0) >= 3;
+
+  const { data: reviews } = await client
+    .from('meetup_reviews')
+    .select(`
+      id,
+      score_punctuality,
+      score_conduct,
+      score_plan_quality,
+      review_text,
+      revealed_at,
+      plans!inner ( location_label, meet_types ( name ) ),
+      reviewer:profiles!reviewer_id ( display_name )
+    `)
+    .eq('reviewee_id', hostUserId)
+    .eq('reviewer_role', 'guest')
+    .eq('is_hidden', false)
+    .eq('is_suppressed', false)
+    .gt('score_punctuality', 0)
+    .order('revealed_at', { ascending: false })
+    .limit(3);
+
+  const recentReviews: HostReviewPreview[] = ((reviews ?? []) as ReviewRowRaw[]).map((r) => {
+    const planQuality = r.score_plan_quality ?? r.score_conduct;
+    const overall =
+      planQuality * 0.4 + r.score_conduct * 0.35 + r.score_punctuality * 0.25;
+
+    const plan = Array.isArray(r.plans) ? r.plans[0] : r.plans;
+    const meetTypeRaw = plan?.meet_types;
+    const meetType = Array.isArray(meetTypeRaw) ? meetTypeRaw[0] : meetTypeRaw;
+    const reviewer = Array.isArray(r.reviewer) ? r.reviewer[0] : r.reviewer;
+
+    return {
+      id: r.id,
+      reviewer_first_name:
+        reviewer?.display_name?.trim().split(/\s+/)[0] ?? 'A guest',
+      score_overall: Math.round(overall * 10) / 10,
+      review_text: r.review_text ?? null,
+      meet_type_name: meetType?.name ?? null,
+      city: planShareCity(plan?.location_label),
+      revealed_at: r.revealed_at ?? '',
+    };
+  });
+
+  return {
+    data: {
+      host_rating_score: profile.host_rating_score as number | null,
+      host_rating_count: (profile.host_rating_count as number) ?? 0,
+      completed_meetup_count: (profile.completed_meetup_count as number) ?? 0,
+      meets_public_threshold: meetsThreshold,
+      recent_reviews: recentReviews,
+    },
+    error: null,
+  };
+}

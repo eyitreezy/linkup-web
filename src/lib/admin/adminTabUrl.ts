@@ -5,6 +5,7 @@ const ADMIN_TAB_IDS: AdminTabId[] = [
   'reports',
   'moderation',
   'plan_disputes',
+  'review_reports',
   'support',
   'users',
   'plans',
