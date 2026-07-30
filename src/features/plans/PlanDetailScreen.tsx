@@ -550,16 +550,14 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         backHref="/discover"
         backLabel="Back to Discover"
         right={
-          !isCreator ? (
-            <button
-              type="button"
-              onClick={() => setShareModalOpen(true)}
-              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/20 bg-white/90 text-foreground shadow-sm transition hover:bg-[#EDE8FF]/60"
-              aria-label="Share this plan"
-            >
-              <IoShareOutline size={22} />
-            </button>
-          ) : null
+          <button
+            type="button"
+            onClick={() => setShareModalOpen(true)}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/20 bg-white/90 text-foreground shadow-sm transition hover:bg-[#EDE8FF]/60"
+            aria-label="Share this plan"
+          >
+            <IoShareOutline size={22} />
+          </button>
         }
       />
 
@@ -819,12 +817,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
               Manage offers
             </button>
           ) : null}
-          <button type="button" className={actionSecondary} onClick={() => setShareModalOpen(true)}>
-            <span className="inline-flex items-center gap-2">
-              <IoShareOutline size={18} />
-              Share
-            </span>
-          </button>
         </div>
       ) : ctx && !isCreator ? (
         <ActionRail
