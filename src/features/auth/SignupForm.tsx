@@ -4,6 +4,7 @@ import { AuthDivider } from '@/components/auth/AuthDivider';
 import { AuthButton, AuthInput, AuthPasswordInput, AuthTrustLine } from '@/components/auth/AuthFormPrimitives';
 import { GoogleAuthBlock } from '@/features/auth/GoogleAuthBlock';
 import { recordPrivacyConsent } from '@/lib/privacy/recordPrivacyConsent';
+import { resolvePostAuthDestination } from '@/lib/auth/resolvePostAuthDestination';
 import { createClient } from '@/lib/supabase/client';
 import { env } from '@/lib/env';
 import { cn } from '@/utils/cn';
@@ -97,7 +98,8 @@ function SignupFields() {
         setVerificationSent(true);
         return;
       }
-      router.push(next.startsWith('/') && !next.startsWith('//') ? next : '/discover');
+      const destination = await resolvePostAuthDestination(supabase, next);
+      router.push(destination.startsWith('/') && !destination.startsWith('//') ? destination : '/discover');
       router.refresh();
     } catch {
       setError('Could not create account. Try again.');

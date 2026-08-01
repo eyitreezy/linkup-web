@@ -1,4 +1,8 @@
 import { formatAuthCallbackError, isPkceVerifierError } from '@/lib/auth/authCallbackErrors';
+import {
+  resolvePostAuthDestinationForUserId,
+  safeAuthNextPath,
+} from '@/lib/auth/resolvePostAuthDestination';
 import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
 import { isSupabaseConfigured } from '@/lib/env';
 import {
@@ -9,8 +13,7 @@ import { recordPrivacyConsentServer } from '@/lib/privacy/recordPrivacyConsentSe
 import { NextRequest, NextResponse } from 'next/server';
 
 function safeNextPath(raw: string | null): string {
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/discover';
-  return raw;
+  return safeAuthNextPath(raw);
 }
 
 function loginErrorRedirect(origin: string, message: string) {
@@ -54,11 +57,8 @@ export async function GET(request: NextRequest) {
     return loginErrorRedirect(origin, 'No authorization code returned from Google.');
   }
 
-  const redirectUrl = new URL(next, origin).toString();
-  const response = NextResponse.redirect(redirectUrl);
-  response.cookies.set('linkup_auth_next', '', { path: '/', maxAge: 0 });
-
-  const supabase = createRouteHandlerClient(request, response);
+  const cookieResponse = NextResponse.next({ request });
+  const supabase = createRouteHandlerClient(request, cookieResponse);
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
@@ -68,16 +68,26 @@ export async function GET(request: NextRequest) {
     return loginErrorRedirect(origin, error.message);
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const pendingSignupConsent = hasPendingSignupPrivacyConsentCookie(request.headers.get('cookie'));
-  if (pendingSignupConsent) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      await recordPrivacyConsentServer(supabase, user.id, 'signup');
-    }
-    response.cookies.set(PENDING_SIGNUP_PRIVACY_CONSENT_COOKIE, '', { path: '/', maxAge: 0 });
+  if (pendingSignupConsent && user) {
+    await recordPrivacyConsentServer(supabase, user.id, 'signup');
+    cookieResponse.cookies.set(PENDING_SIGNUP_PRIVACY_CONSENT_COOKIE, '', { path: '/', maxAge: 0 });
   }
 
-  return response;
+  let destination = next;
+  if (user) {
+    destination = await resolvePostAuthDestinationForUserId(supabase, user.id, next);
+  }
+
+  const redirectResponse = NextResponse.redirect(new URL(destination, origin));
+  cookieResponse.cookies.getAll().forEach(({ name, value, ...options }) => {
+    redirectResponse.cookies.set(name, value, options);
+  });
+  redirectResponse.cookies.set('linkup_auth_next', '', { path: '/', maxAge: 0 });
+
+  return redirectResponse;
 }

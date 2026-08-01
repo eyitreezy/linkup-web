@@ -7,6 +7,10 @@ import {
   formatAuthCallbackError,
   isPkceVerifierError,
 } from '@/lib/auth/authCallbackErrors';
+import {
+  resolvePostAuthDestination,
+  safeAuthNextPath,
+} from '@/lib/auth/resolvePostAuthDestination';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -14,8 +18,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { IoCheckmarkCircleOutline, IoAlertCircleOutline } from 'react-icons/io5';
 
 function safeNextPath(raw: string | null): string {
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/discover';
-  return raw;
+  return safeAuthNextPath(raw);
 }
 
 function EmailConfirmHandler() {
@@ -67,7 +70,8 @@ function EmailConfirmHandler() {
       }
 
       setPhase('success');
-      router.replace(next);
+      const destination = await resolvePostAuthDestination(supabase, next);
+      router.replace(destination);
       router.refresh();
     })();
 
@@ -96,7 +100,7 @@ function EmailConfirmHandler() {
             Sign in
           </AuthButton>
           <p className="mt-3 text-center text-[13px] font-semibold text-muted max-lg:text-white/75">
-            Opened the link in a different browser? That is normal — your account was still created.
+            Opened the link in a different browser? That is normal. Your account was still created.
           </p>
         </div>
       </AuthShell>

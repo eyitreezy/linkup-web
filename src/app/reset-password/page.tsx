@@ -85,7 +85,7 @@ export default function ResetPasswordPage() {
       variant="recovery"
       showHero={false}
       headingVariant="join-logo"
-      subtitle="Choose something strong — you'll use it to sign in to LinkUp."
+      subtitle="Choose something strong. You will use it to sign in to LinkUp."
     >
       <form onSubmit={onSubmit} className="auth-form-stack space-y-3 max-lg:space-y-0">
         <AuthPasswordInput

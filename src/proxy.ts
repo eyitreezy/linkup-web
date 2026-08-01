@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 import { env, isSupabaseConfigured } from '@/lib/env';
+import { resolvePostAuthDestinationForUserId } from '@/lib/auth/resolvePostAuthDestination';
 
 const AUTH_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password'];
 
@@ -127,7 +128,8 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isAuthPath(pathname) && user) {
-    return NextResponse.redirect(new URL('/discover', request.url));
+    const destination = await resolvePostAuthDestinationForUserId(supabase, user.id);
+    return NextResponse.redirect(new URL(destination, request.url));
   }
 
   if (user && isProtectedAppPath(pathname) && pathname !== '/onboarding' && !pathname.startsWith('/onboarding/')) {

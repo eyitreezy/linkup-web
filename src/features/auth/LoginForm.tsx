@@ -4,6 +4,7 @@ import { AuthDivider } from '@/components/auth/AuthDivider';
 import { AuthButton, AuthInput, AuthPasswordInput, AuthTrustLine } from '@/components/auth/AuthFormPrimitives';
 import { GoogleAuthBlock } from '@/features/auth/GoogleAuthBlock';
 import { EMAIL_CONFIRMED_LOGIN_MESSAGE, formatAuthCallbackError } from '@/lib/auth/authCallbackErrors';
+import { resolvePostAuthDestination } from '@/lib/auth/resolvePostAuthDestination';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -42,7 +43,8 @@ function LoginFields() {
         setError(err.message);
         return;
       }
-      router.push(next);
+      const destination = await resolvePostAuthDestination(supabase, next);
+      router.push(destination);
       router.refresh();
     } catch {
       setError('Could not sign in. Check your connection and try again.');
