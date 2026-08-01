@@ -1,5 +1,6 @@
+import { formatAuthCallbackError, isPkceVerifierError } from '@/lib/auth/authCallbackErrors';
 import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
-import { env, isSupabaseConfigured } from '@/lib/env';
+import { isSupabaseConfigured } from '@/lib/env';
 import {
   hasPendingSignupPrivacyConsentCookie,
   PENDING_SIGNUP_PRIVACY_CONSENT_COOKIE,
@@ -14,8 +15,12 @@ function safeNextPath(raw: string | null): string {
 
 function loginErrorRedirect(origin: string, message: string) {
   const url = new URL('/login', origin);
-  url.searchParams.set('error', 'auth_callback');
-  url.searchParams.set('error_description', message.slice(0, 200));
+  if (isPkceVerifierError(message)) {
+    url.searchParams.set('error', 'email_confirmed');
+  } else {
+    url.searchParams.set('error', 'auth_callback');
+    url.searchParams.set('error_description', formatAuthCallbackError(message).slice(0, 200));
+  }
   return NextResponse.redirect(url.toString());
 }
 

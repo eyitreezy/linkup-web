@@ -64,7 +64,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith('/auth/callback')) {
+  if (pathname.startsWith('/auth/callback') || pathname.startsWith('/auth/confirm')) {
     return NextResponse.next();
   }
 

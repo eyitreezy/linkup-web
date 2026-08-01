@@ -53,7 +53,7 @@ export function GoogleAuthBlock({ mode, privacyConsentChecked, onPrivacyConsentR
         loading={loading}
         label={mode === 'login' ? 'Continue with Google' : 'Sign up with Google'}
       />
-      {error ? <p className="mt-2 text-[13px] font-semibold text-[#EF4444]">{error}</p> : null}
+      {error ? <p className="auth-error mt-2">{error}</p> : null}
       <AuthDivider
         label={mode === 'login' ? 'Or continue with email' : 'Or sign up with email'}
         tone="glass"

@@ -2,6 +2,14 @@
  * Auth mobile shell (≤1023px) — scales from 320px to 1023px; 425px+ is the comfort target.
  */
 
+/* Auth errors — desktop card + mobile glass */
+.auth-error {
+  color: #ef4444;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 .auth-mobile-root {
   --auth-pad-x: 0.75rem;
   --auth-pad-top: max(0.625rem, env(safe-area-inset-top, 0px));
@@ -351,17 +359,8 @@
 }
 
 .auth-mobile-root .auth-error {
-  color: #fca5a5;
-  font-size: 0.75rem;
-  font-weight: 600;
+  color: #f87171;
   text-align: center;
-  line-height: 1.35;
-}
-
-@media (min-width: 375px) {
-  .auth-mobile-root .auth-error {
-    font-size: 0.8125rem;
-  }
 }
 
 .auth-mobile-root .auth-trust {

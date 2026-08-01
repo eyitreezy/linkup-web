@@ -37,7 +37,9 @@ function SignupFields() {
       const { error: err } = await supabase.auth.resend({
         type: 'signup',
         email: email.trim(),
-        options: { emailRedirectTo: `${env.siteUrl}/auth/callback` },
+        options: {
+          emailRedirectTo: `${env.siteUrl}/auth/confirm?next=${encodeURIComponent(next.startsWith('/') && !next.startsWith('//') ? next : '/discover')}`,
+        },
       });
       if (err) {
         setResendError(err.message);
@@ -80,7 +82,7 @@ function SignupFields() {
         email: trimmedEmail,
         password,
         options: {
-          emailRedirectTo: `${env.siteUrl}/auth/callback?next=${encodeURIComponent(next.startsWith('/') && !next.startsWith('//') ? next : '/discover')}`,
+          emailRedirectTo: `${env.siteUrl}/auth/confirm?next=${encodeURIComponent(next.startsWith('/') && !next.startsWith('//') ? next : '/discover')}`,
           data: { display_name: trimmedName },
         },
       });

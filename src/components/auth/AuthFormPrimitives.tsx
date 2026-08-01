@@ -28,9 +28,7 @@ export const AuthInput = forwardRef<
         {...props}
       />
       {error ? (
-        <span className="auth-error mt-1.5 block text-[12px] font-semibold text-[#EF4444] max-lg:text-center">
-          {error}
-        </span>
+        <span className="auth-error mt-1.5 block max-lg:text-center">{error}</span>
       ) : null}
     </label>
   );
@@ -75,9 +73,7 @@ export const AuthPasswordInput = forwardRef<
         </button>
       </div>
       {error ? (
-        <span className="auth-error mt-1.5 block text-[12px] font-semibold text-[#EF4444] max-lg:text-center">
-          {error}
-        </span>
+        <span className="auth-error mt-1.5 block max-lg:text-center">{error}</span>
       ) : null}
     </label>
   );

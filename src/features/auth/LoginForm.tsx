@@ -3,6 +3,7 @@
 import { AuthDivider } from '@/components/auth/AuthDivider';
 import { AuthButton, AuthInput, AuthPasswordInput, AuthTrustLine } from '@/components/auth/AuthFormPrimitives';
 import { GoogleAuthBlock } from '@/features/auth/GoogleAuthBlock';
+import { EMAIL_CONFIRMED_LOGIN_MESSAGE, formatAuthCallbackError } from '@/lib/auth/authCallbackErrors';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -17,12 +18,13 @@ function LoginFields() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(() => {
+    if (authError === 'email_confirmed') return EMAIL_CONFIRMED_LOGIN_MESSAGE;
     if (authError !== 'auth_callback') return null;
     if (authErrorDesc) {
       try {
-        return decodeURIComponent(authErrorDesc.replace(/\+/g, ' '));
+        return formatAuthCallbackError(decodeURIComponent(authErrorDesc.replace(/\+/g, ' ')));
       } catch {
-        return authErrorDesc;
+        return formatAuthCallbackError(authErrorDesc);
       }
     }
     return 'Sign-in could not be completed. Check Supabase redirect URLs and Google provider.';
