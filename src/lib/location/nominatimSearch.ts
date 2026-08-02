@@ -35,20 +35,20 @@ export async function searchNominatimSuggestions(
     if (!res.ok) return [];
 
     const rows = (await res.json()) as NominatimResult[];
-    return rows
-      .map((row) => {
-        const label = row.display_name?.trim();
-        const latitude = row.lat != null ? Number(row.lat) : NaN;
-        const longitude = row.lon != null ? Number(row.lon) : NaN;
-        if (!label || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-        return {
-          label,
-          latitude,
-          longitude,
-          placeId: row.place_id != null ? `osm:${row.place_id}` : undefined,
-        } satisfies LocationSuggestion;
-      })
-      .filter((row): row is LocationSuggestion => row != null);
+    return rows.flatMap((row) => {
+      const label = row.display_name?.trim();
+      const latitude = row.lat != null ? Number(row.lat) : NaN;
+      const longitude = row.lon != null ? Number(row.lon) : NaN;
+      if (!label || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
+
+      const suggestion: LocationSuggestion = {
+        label,
+        latitude,
+        longitude,
+        placeId: row.place_id != null ? `osm:${row.place_id}` : undefined,
+      };
+      return [suggestion];
+    });
   } catch {
     return [];
   }
