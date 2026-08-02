@@ -15,7 +15,12 @@ export const LOCATION_SUGGEST_MIN_CHARS = 3;
 
 type AutocompleteResponse = {
   status: string;
-  predictions?: { description: string; place_id: string }[];
+  predictions?: {
+    description: string;
+    place_id: string;
+    latitude?: number;
+    longitude?: number;
+  }[];
 };
 
 type PlaceDetailsResponse = {
@@ -45,8 +50,8 @@ async function serverPlacePredictions(
 
   return (autoJson.predictions ?? []).slice(0, limit).map((p) => ({
     label: p.description,
-    latitude: 0,
-    longitude: 0,
+    latitude: typeof p.latitude === 'number' ? p.latitude : 0,
+    longitude: typeof p.longitude === 'number' ? p.longitude : 0,
     placeId: p.place_id,
   }));
 }
@@ -88,7 +93,8 @@ export async function searchGooglePlaceSuggestions(
     if (clientRows.length > 0) return clientRows;
   }
 
-  return serverPlacePredictions(trimmed, limit);
+  const serverRows = await serverPlacePredictions(trimmed, limit);
+  return serverRows;
 }
 
 export async function resolveGooglePlaceSuggestion(
@@ -97,7 +103,9 @@ export async function resolveGooglePlaceSuggestion(
   if (suggestion.latitude !== 0 && suggestion.longitude !== 0) {
     return suggestion;
   }
-  if (!suggestion.placeId) return suggestion;
+  if (!suggestion.placeId || suggestion.placeId.startsWith('osm:')) {
+    return suggestion;
+  }
 
   if (typeof window !== 'undefined') {
     const resolved = await clientPlaceDetails(suggestion.placeId);

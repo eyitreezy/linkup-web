@@ -5,6 +5,7 @@ import {
   resolveGooglePlaceSuggestion,
   searchGooglePlaceSuggestions,
 } from '@/lib/location/placesAutocomplete';
+import { loadGooglePlacesLibrary } from '@/lib/location/googlePlacesClient';
 import type { LocationSuggestion } from '@/lib/location/types';
 import { isGoogleMapsConfigured } from '@/lib/maps/config';
 import { cn } from '@/utils/cn';
@@ -31,12 +32,12 @@ export function LocationSearchField({
   const [open, setOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  const userInteractedRef = useRef(false);
   const mapsReady = isGoogleMapsConfigured();
 
   const updateDropdownPosition = useCallback(() => {
@@ -55,29 +56,31 @@ export function LocationSearchField({
   const runSearch = useCallback(
     async (q: string) => {
       const trimmed = q.trim();
-      if (!mapsReady || trimmed.length < LOCATION_SUGGEST_MIN_CHARS) {
+      if (trimmed.length < LOCATION_SUGGEST_MIN_CHARS) {
         setSuggestions([]);
         setOpen(false);
+        setSearched(false);
         return;
       }
-      if (!userInteractedRef.current) return;
 
       setLoading(true);
       try {
         const rows = await searchGooglePlaceSuggestions(q, 8);
         setSuggestions(rows);
+        setSearched(true);
         setOpen(rows.length > 0);
         if (rows.length > 0) updateDropdownPosition();
       } finally {
         setLoading(false);
       }
     },
-    [mapsReady, updateDropdownPosition]
+    [updateDropdownPosition]
   );
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    if (mapsReady) void loadGooglePlacesLibrary();
+  }, [mapsReady]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -113,6 +116,7 @@ export function LocationSearchField({
 
   async function pick(s: LocationSuggestion) {
     setOpen(false);
+    setSearched(false);
     const resolved = await resolveGooglePlaceSuggestion(s);
     onChange(resolved.label);
     onSelect?.(resolved);
@@ -120,7 +124,9 @@ export function LocationSearchField({
 
   const trimmedLen = value.trim().length;
   const showTypeMoreHint =
-    mapsReady && trimmedLen > 0 && trimmedLen < LOCATION_SUGGEST_MIN_CHARS;
+    trimmedLen > 0 && trimmedLen < LOCATION_SUGGEST_MIN_CHARS;
+  const showNoResults =
+    !loading && searched && trimmedLen >= LOCATION_SUGGEST_MIN_CHARS && suggestions.length === 0;
 
   const dropdown =
     open && suggestions.length > 0 ? (
@@ -148,24 +154,6 @@ export function LocationSearchField({
       </ul>
     ) : null;
 
-  if (!mapsReady) {
-    return (
-      <label className={cn('block w-full', className)}>
-        <span className="mb-1.5 block text-[13px] font-bold text-foreground">{label}</span>
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Enter location (add Google Maps API key for search)"
-          className="w-full rounded-2xl border border-border bg-[#F8F9FC] px-4 py-3.5 text-[15px] font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-        />
-        <span className="mt-1.5 block text-[12px] font-semibold text-muted">
-          Set <code className="text-primary">NEXT_PUBLIC_GOOGLE_MAPS_WEB_API_KEY</code> in .env.local (server
-          routes proxy Places — same key as mobile).
-        </span>
-      </label>
-    );
-  }
-
   return (
     <div className={cn('relative block w-full', className)}>
       <label className="block">
@@ -173,15 +161,13 @@ export function LocationSearchField({
         <input
           ref={inputRef}
           value={value}
-          onChange={(e) => {
-            userInteractedRef.current = true;
-            onChange(e.target.value);
-          }}
+          onChange={(e) => onChange(e.target.value)}
           onFocus={() => {
-            userInteractedRef.current = true;
             if (suggestions.length > 0) {
               updateDropdownPosition();
               setOpen(true);
+            } else if (trimmedLen >= LOCATION_SUGGEST_MIN_CHARS) {
+              void runSearch(value);
             }
           }}
           placeholder={placeholder}
@@ -192,14 +178,26 @@ export function LocationSearchField({
         />
       </label>
       {loading ? (
-        <span className="pointer-events-none absolute right-4 top-11 text-[12px] font-semibold text-muted">
-          …
+        <span className="pointer-events-none absolute right-4 top-[2.85rem] text-[12px] font-semibold text-muted">
+          Searching…
         </span>
       ) : null}
       {showTypeMoreHint ? (
         <p className="mt-1.5 text-[12px] font-semibold text-muted">
           Type at least {LOCATION_SUGGEST_MIN_CHARS} characters to see places.
         </p>
+      ) : null}
+      {showNoResults ? (
+        <p className="mt-1.5 text-[12px] font-semibold text-muted">
+          No places found. Try a city, neighborhood, or landmark.
+        </p>
+      ) : null}
+      {!mapsReady ? (
+        <span className="mt-1.5 block text-[12px] font-semibold text-muted">
+          Location search uses OpenStreetMap. Add{' '}
+          <code className="text-primary">NEXT_PUBLIC_GOOGLE_MAPS_WEB_API_KEY</code> for Google Places
+          when available.
+        </span>
       ) : null}
       {mounted && dropdown ? createPortal(dropdown, document.body) : null}
     </div>

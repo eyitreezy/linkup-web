@@ -97,7 +97,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       if (!draft.adultConfirmed) return 'Confirm you are 18+ to continue.';
       return profileMediaValidationMessage(draft.profileMedia);
     }
-    if (step === 1) return 'Add interests, languages, intent, and 1–2 prompts.';
+    if (step === 1) return 'Add interests, languages, intent, and 1 to 2 prompts.';
     if (step === 2) return 'Pick your location from search results.';
     return null;
   }, [step, draft]);
@@ -191,7 +191,8 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       <SettingsPageHeader
         kicker="Welcome"
         title="Set up your profile"
-        subtitle="Photos, video, and basics — same quality bar as the LinkUp app."
+        subtitle="Photos, video, and basics with the same quality bar as the LinkUp app."
+        showBack={false}
       />
 
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -300,7 +301,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
             </div>
           </FormCard>
           <FormCard>
-            <PremiumSectionHead title="Prompts (1–2)" />
+            <PremiumSectionHead title="Prompts (1 to 2)" />
             {draft.promptAnswers.map((p, idx) => (
               <div key={p.promptId} className="mt-4 border-t border-border/60 pt-4 first:mt-0 first:border-0 first:pt-0">
                 <select
@@ -365,7 +366,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
             onChange={(v) => setDraft((d) => ({ ...d, profilePublic: v }))}
           />
           <p className="mt-3 text-[13px] font-semibold text-muted">
-            Age {draft.ageMin}–{draft.ageMax}, radius {draft.radiusKm} km
+            Age {draft.ageMin} to {draft.ageMax}, radius {draft.radiusKm} km
           </p>
           <label className="mt-3 block text-[12px] font-extrabold">Min age</label>
           <input type="range" min={18} max={60} value={draft.ageMin} onChange={(e) => setDraft((d) => ({ ...d, ageMin: Number(e.target.value) }))} className="w-full" />
@@ -381,14 +382,14 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
           <div className="flex items-start gap-2 rounded-2xl border border-amber-200/80 bg-amber-50 px-4 py-3">
             <IoSparkles className="mt-0.5 shrink-0 text-amber-600" size={16} />
             <p className="text-[14px] font-semibold text-amber-900">
-              Want a free 7-day Silver trial? Verify your identity after publishing — approved verification
+              Want a free 7-day Silver trial? Verify your identity after publishing. Approved verification
               automatically starts your trial.
             </p>
           </div>
           <div className="linkup-card border border-border/80 bg-[#F5F6FA] p-4">
             <p className="text-[14px] font-extrabold text-foreground">Contacts import</p>
             <p className="mt-1 text-[13px] font-semibold leading-relaxed text-muted">
-              Available on the LinkUp mobile app — import your contacts there for additional safety context when
+              Available on the LinkUp mobile app. Import your contacts there for additional safety context when
               matching.
             </p>
           </div>

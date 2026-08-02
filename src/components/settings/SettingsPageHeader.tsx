@@ -8,6 +8,7 @@ type Props = {
   subtitle: string;
   backHref?: string;
   backLabel?: string;
+  showBack?: boolean;
   actions?: React.ReactNode;
   className?: string;
 };
@@ -18,21 +19,26 @@ export function SettingsPageHeader({
   subtitle,
   backHref = '/profile',
   backLabel = 'Back to profile',
+  showBack = true,
   actions,
   className,
 }: Props) {
   return (
     <div className={cn('space-y-4', className)}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <Link
-          href={backHref}
-          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/20 bg-white/90 text-foreground shadow-sm transition hover:bg-[#EDE8FF]/60"
-          aria-label={backLabel}
-        >
-          <IoArrowBack size={22} />
-        </Link>
-        {actions}
-      </div>
+      {showBack || actions ? (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          {showBack ? (
+            <Link
+              href={backHref}
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/20 bg-white/90 text-foreground shadow-sm transition hover:bg-[#EDE8FF]/60"
+              aria-label={backLabel}
+            >
+              <IoArrowBack size={22} />
+            </Link>
+          ) : null}
+          {actions}
+        </div>
+      ) : null}
       <header className="flex gap-4">
         <div className="mt-2 h-14 w-1 shrink-0 rounded-full linkup-gradient-primary" aria-hidden />
         <div>
