@@ -2,6 +2,8 @@ import { searchNominatimSuggestions } from '@/lib/location/nominatimSearch';
 import { getGoogleMapsServerApiKey, getGoogleMapsWebApiKey } from '@/lib/maps/config';
 import { NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+
 type GoogleAutocompleteResponse = {
   status?: string;
   predictions?: { description: string; place_id: string }[];

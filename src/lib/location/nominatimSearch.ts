@@ -30,7 +30,7 @@ export async function searchNominatimSuggestions(
         'User-Agent': NOMINATIM_USER_AGENT,
         'Accept-Language': 'en',
       },
-      next: { revalidate: 0 },
+      cache: 'no-store',
     });
     if (!res.ok) return [];
 

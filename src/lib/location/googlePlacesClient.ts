@@ -4,6 +4,7 @@
  */
 import type { LocationSuggestion } from '@/lib/location/types';
 import { getGoogleMapsWebApiKey } from '@/lib/maps/config';
+import { withTimeout } from '@/lib/async/withTimeout';
 
 let loadPromise: Promise<typeof google | null> | null = null;
 
@@ -21,13 +22,19 @@ export function loadGooglePlacesLibrary(): Promise<typeof google | null> {
   const existing = getGoogleGlobal();
   if (existing?.maps?.places) return Promise.resolve(existing);
 
-  if (loadPromise) return loadPromise;
+  if (loadPromise) {
+    return withTimeout(loadPromise, 4000, null);
+  }
 
   loadPromise = new Promise((resolve) => {
     const scriptId = 'linkup-google-places-js';
     const prior = document.getElementById(scriptId) as HTMLScriptElement | null;
 
-    const onReady = () => resolve(getGoogleGlobal() ?? null);
+    const finish = (value: typeof google | null) => {
+      resolve(value);
+    };
+
+    const onReady = () => finish(getGoogleGlobal() ?? null);
 
     if (prior) {
       if (getGoogleGlobal()?.maps?.places) {
@@ -35,21 +42,23 @@ export function loadGooglePlacesLibrary(): Promise<typeof google | null> {
         return;
       }
       prior.addEventListener('load', onReady, { once: true });
-      prior.addEventListener('error', () => resolve(null), { once: true });
+      prior.addEventListener('error', () => finish(null), { once: true });
+      setTimeout(() => finish(getGoogleGlobal()?.maps?.places ? getGoogleGlobal()! : null), 4000);
       return;
     }
 
     const script = document.createElement('script');
     script.id = scriptId;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&loading=async`;
     script.async = true;
     script.defer = true;
     script.onload = onReady;
-    script.onerror = () => resolve(null);
+    script.onerror = () => finish(null);
     document.head.appendChild(script);
+    setTimeout(() => finish(getGoogleGlobal()?.maps?.places ? getGoogleGlobal()! : null), 4000);
   });
 
-  return loadPromise;
+  return withTimeout(loadPromise, 4000, null);
 }
 
 export async function clientPlacePredictions(
@@ -62,7 +71,9 @@ export async function clientPlacePredictions(
   const service = new g.maps.places.AutocompleteService();
 
   return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve([]), 3000);
     service.getPlacePredictions({ input }, (predictions, status) => {
+      clearTimeout(timer);
       if (status !== g.maps.places.PlacesServiceStatus.OK || !predictions?.length) {
         resolve([]);
         return;

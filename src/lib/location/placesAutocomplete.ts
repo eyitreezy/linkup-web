@@ -1,8 +1,8 @@
 /**
- * Google Places suggestions for location fields.
- * Browser: Maps JavaScript Places library (referrer-restricted keys).
- * Server fallback: Next.js API routes (requires a non-referrer server key).
+ * Location suggestions for search fields.
+ * Order: server API (Nominatim fallback) → browser Google Places (optional, timed).
  */
+import { withTimeout } from '@/lib/async/withTimeout';
 import { safeFetch } from '@/lib/fetch/safeFetch';
 import {
   clientPlaceDetails,
@@ -10,8 +10,10 @@ import {
 } from '@/lib/location/googlePlacesClient';
 import type { LocationSuggestion } from '@/lib/location/types';
 
-/** User must type more than 2 characters before suggestions run. */
+/** User must type at least this many characters before suggestions run. */
 export const LOCATION_SUGGEST_MIN_CHARS = 3;
+
+const CLIENT_GOOGLE_TIMEOUT_MS = 2500;
 
 type AutocompleteResponse = {
   status: string;
@@ -44,11 +46,11 @@ async function serverPlacePredictions(
   } catch {
     return [];
   }
-  if (autoJson.status !== 'OK' && autoJson.status !== 'ZERO_RESULTS') {
-    return [];
-  }
 
-  return (autoJson.predictions ?? []).slice(0, limit).map((p) => ({
+  const predictions = autoJson.predictions ?? [];
+  if (autoJson.status !== 'OK' || predictions.length === 0) return [];
+
+  return predictions.slice(0, limit).map((p) => ({
     label: p.description,
     latitude: typeof p.latitude === 'number' ? p.latitude : 0,
     longitude: typeof p.longitude === 'number' ? p.longitude : 0,
@@ -56,12 +58,8 @@ async function serverPlacePredictions(
   }));
 }
 
-async function serverPlaceDetails(
-  placeId: string
-): Promise<LocationSuggestion | null> {
-  const res = await safeFetch(
-    `/api/places/details?place_id=${encodeURIComponent(placeId)}`
-  );
+async function serverPlaceDetails(placeId: string): Promise<LocationSuggestion | null> {
+  const res = await safeFetch(`/api/places/details?place_id=${encodeURIComponent(placeId)}`);
   if (!res?.ok) return null;
 
   let detJson: PlaceDetailsResponse;
@@ -81,6 +79,14 @@ async function serverPlaceDetails(
   };
 }
 
+async function clientPlacePredictionsWithTimeout(
+  query: string,
+  limit: number
+): Promise<LocationSuggestion[]> {
+  if (typeof window === 'undefined') return [];
+  return withTimeout(clientPlacePredictions(query, limit), CLIENT_GOOGLE_TIMEOUT_MS, []);
+}
+
 export async function searchGooglePlaceSuggestions(
   query: string,
   limit = 8
@@ -88,13 +94,11 @@ export async function searchGooglePlaceSuggestions(
   const trimmed = query.trim();
   if (trimmed.length < LOCATION_SUGGEST_MIN_CHARS) return [];
 
-  if (typeof window !== 'undefined') {
-    const clientRows = await clientPlacePredictions(trimmed, limit);
-    if (clientRows.length > 0) return clientRows;
-  }
-
   const serverRows = await serverPlacePredictions(trimmed, limit);
-  return serverRows;
+  if (serverRows.length > 0) return serverRows;
+
+  const clientRows = await clientPlacePredictionsWithTimeout(trimmed, limit);
+  return clientRows;
 }
 
 export async function resolveGooglePlaceSuggestion(
@@ -108,7 +112,11 @@ export async function resolveGooglePlaceSuggestion(
   }
 
   if (typeof window !== 'undefined') {
-    const resolved = await clientPlaceDetails(suggestion.placeId);
+    const resolved = await withTimeout(
+      clientPlaceDetails(suggestion.placeId),
+      CLIENT_GOOGLE_TIMEOUT_MS,
+      null
+    );
     if (resolved) return resolved;
   }
 

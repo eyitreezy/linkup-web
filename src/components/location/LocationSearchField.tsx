@@ -5,11 +5,9 @@ import {
   resolveGooglePlaceSuggestion,
   searchGooglePlaceSuggestions,
 } from '@/lib/location/placesAutocomplete';
-import { loadGooglePlacesLibrary } from '@/lib/location/googlePlacesClient';
 import type { LocationSuggestion } from '@/lib/location/types';
-import { isGoogleMapsConfigured } from '@/lib/maps/config';
 import { cn } from '@/utils/cn';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 type Props = {
@@ -26,30 +24,33 @@ export function LocationSearchField({
   value,
   onChange,
   onSelect,
-  placeholder = 'Search for a place…',
+  placeholder = 'Search city, neighborhood, or landmark',
   className,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const listboxId = useId();
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestSeqRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  const mapsReady = isGoogleMapsConfigured();
+  const trimmedLen = value.trim().length;
+  const canSearch = trimmedLen >= LOCATION_SUGGEST_MIN_CHARS;
 
-  const updateDropdownPosition = useCallback(() => {
+  const syncDropdownPosition = useCallback(() => {
     const el = inputRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     setDropdownStyle({
       position: 'fixed',
-      top: rect.bottom + 4,
+      top: rect.bottom + 6,
       left: rect.left,
-      width: rect.width,
-      zIndex: 10000,
+      width: Math.max(rect.width, 240),
+      zIndex: 99999,
     });
   }, []);
 
@@ -58,33 +59,48 @@ export function LocationSearchField({
       const trimmed = q.trim();
       if (trimmed.length < LOCATION_SUGGEST_MIN_CHARS) {
         setSuggestions([]);
-        setOpen(false);
         setSearched(false);
+        setOpen(false);
+        setLoading(false);
         return;
       }
 
+      const requestId = ++requestSeqRef.current;
       setLoading(true);
+      setOpen(true);
+      syncDropdownPosition();
+
       try {
-        const rows = await searchGooglePlaceSuggestions(q, 8);
+        const rows = await searchGooglePlaceSuggestions(trimmed, 8);
+        if (requestId !== requestSeqRef.current) return;
+
         setSuggestions(rows);
         setSearched(true);
-        setOpen(rows.length > 0);
-        if (rows.length > 0) updateDropdownPosition();
+        setOpen(true);
+        syncDropdownPosition();
+      } catch {
+        if (requestId !== requestSeqRef.current) return;
+        setSuggestions([]);
+        setSearched(true);
+        setOpen(true);
       } finally {
-        setLoading(false);
+        if (requestId === requestSeqRef.current) {
+          setLoading(false);
+        }
       }
     },
-    [updateDropdownPosition]
+    [syncDropdownPosition]
   );
 
   useEffect(() => {
     setMounted(true);
-    if (mapsReady) void loadGooglePlacesLibrary();
-  }, [mapsReady]);
+  }, []);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => void runSearch(value), 280);
+    debounceRef.current = setTimeout(() => {
+      void runSearch(value);
+    }, 250);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -92,15 +108,15 @@ export function LocationSearchField({
 
   useEffect(() => {
     if (!open) return;
-    updateDropdownPosition();
-    const onScrollOrResize = () => updateDropdownPosition();
+    syncDropdownPosition();
+    const onScrollOrResize = () => syncDropdownPosition();
     window.addEventListener('scroll', onScrollOrResize, true);
     window.addEventListener('resize', onScrollOrResize);
     return () => {
       window.removeEventListener('scroll', onScrollOrResize, true);
       window.removeEventListener('resize', onScrollOrResize);
     };
-  }, [open, suggestions.length, updateDropdownPosition]);
+  }, [open, suggestions.length, loading, syncDropdownPosition]);
 
   useEffect(() => {
     if (!open) return;
@@ -122,37 +138,47 @@ export function LocationSearchField({
     onSelect?.(resolved);
   }
 
-  const trimmedLen = value.trim().length;
-  const showTypeMoreHint =
-    trimmedLen > 0 && trimmedLen < LOCATION_SUGGEST_MIN_CHARS;
-  const showNoResults =
-    !loading && searched && trimmedLen >= LOCATION_SUGGEST_MIN_CHARS && suggestions.length === 0;
+  const showPanel = open && canSearch && (loading || searched);
+  const showTypeMoreHint = trimmedLen > 0 && trimmedLen < LOCATION_SUGGEST_MIN_CHARS;
+  const showNoResults = !loading && searched && canSearch && suggestions.length === 0;
 
-  const dropdown =
-    open && suggestions.length > 0 ? (
-      <ul
-        ref={listRef}
-        style={dropdownStyle}
-        className="max-h-56 overflow-auto rounded-2xl border border-border bg-white py-1 shadow-lg"
-        role="listbox"
-        aria-label="Location suggestions"
-      >
-        {suggestions.map((s) => (
-          <li key={s.placeId ?? s.label} role="option">
-            <button
-              type="button"
-              className="w-full px-4 py-2.5 text-left text-[14px] font-semibold text-foreground hover:bg-[#F8F7FF]"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                void pick(s);
-              }}
-            >
-              {s.label}
-            </button>
-          </li>
-        ))}
-      </ul>
-    ) : null;
+  const dropdown = showPanel ? (
+    <ul
+      ref={listRef}
+      id={listboxId}
+      style={dropdownStyle}
+      className="max-h-60 overflow-auto rounded-2xl border border-border bg-white py-1 shadow-xl ring-1 ring-black/5"
+      role="listbox"
+      aria-label="Location suggestions"
+    >
+      {loading ? (
+        <li className="px-4 py-3 text-[13px] font-semibold text-muted" role="presentation">
+          Searching…
+        </li>
+      ) : null}
+      {!loading && suggestions.length === 0 ? (
+        <li className="px-4 py-3 text-[13px] font-semibold text-muted" role="presentation">
+          No places found. Try a city or neighborhood name.
+        </li>
+      ) : null}
+      {!loading
+        ? suggestions.map((s) => (
+            <li key={`${s.placeId ?? 'place'}-${s.label}`} role="option">
+              <button
+                type="button"
+                className="w-full px-4 py-2.5 text-left text-[14px] font-semibold text-foreground hover:bg-[#F8F7FF]"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  void pick(s);
+                }}
+              >
+                {s.label}
+              </button>
+            </li>
+          ))
+        : null}
+    </ul>
+  ) : null;
 
   return (
     <div className={cn('relative block w-full', className)}>
@@ -161,43 +187,40 @@ export function LocationSearchField({
         <input
           ref={inputRef}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={() => {
-            if (suggestions.length > 0) {
-              updateDropdownPosition();
+          onChange={(e) => {
+            onChange(e.target.value);
+            if (e.target.value.trim().length >= LOCATION_SUGGEST_MIN_CHARS) {
               setOpen(true);
-            } else if (trimmedLen >= LOCATION_SUGGEST_MIN_CHARS) {
-              void runSearch(value);
+              syncDropdownPosition();
+            }
+          }}
+          onFocus={() => {
+            if (canSearch) {
+              setOpen(true);
+              syncDropdownPosition();
+              if (!searched && !loading) {
+                void runSearch(value);
+              }
             }
           }}
           placeholder={placeholder}
           autoComplete="off"
+          role="combobox"
           aria-autocomplete="list"
-          aria-expanded={open && suggestions.length > 0}
+          aria-expanded={showPanel}
+          aria-controls={showPanel ? listboxId : undefined}
           className="w-full rounded-2xl border border-border bg-[#F8F9FC] px-4 py-3.5 text-[15px] font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
         />
       </label>
-      {loading ? (
-        <span className="pointer-events-none absolute right-4 top-[2.85rem] text-[12px] font-semibold text-muted">
-          Searching…
-        </span>
-      ) : null}
       {showTypeMoreHint ? (
         <p className="mt-1.5 text-[12px] font-semibold text-muted">
           Type at least {LOCATION_SUGGEST_MIN_CHARS} characters to see places.
         </p>
       ) : null}
-      {showNoResults ? (
+      {showNoResults && !showPanel ? (
         <p className="mt-1.5 text-[12px] font-semibold text-muted">
           No places found. Try a city, neighborhood, or landmark.
         </p>
-      ) : null}
-      {!mapsReady ? (
-        <span className="mt-1.5 block text-[12px] font-semibold text-muted">
-          Location search uses OpenStreetMap. Add{' '}
-          <code className="text-primary">NEXT_PUBLIC_GOOGLE_MAPS_WEB_API_KEY</code> for Google Places
-          when available.
-        </span>
       ) : null}
       {mounted && dropdown ? createPortal(dropdown, document.body) : null}
     </div>

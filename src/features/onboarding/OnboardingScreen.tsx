@@ -344,7 +344,14 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
           <PremiumSectionHead title="Location" />
           <LocationSearchField
             value={draft.locationLabel}
-            onChange={(label) => setDraft((d) => ({ ...d, locationLabel: label }))}
+            onChange={(label) =>
+              setDraft((d) => ({
+                ...d,
+                locationLabel: label,
+                locationLatitude: null,
+                locationLongitude: null,
+              }))
+            }
             onSelect={(s) =>
               setDraft((d) => ({
                 ...d,
