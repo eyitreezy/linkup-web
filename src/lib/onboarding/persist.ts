@@ -1,7 +1,11 @@
 import { hasValidProfileLocation, profileLocationFromDraft } from '@/lib/profile/profileLocation';
 import { persistProfileMediaDraft } from '@/lib/profile/media/persist';
 import { profileMediaMeetsMinimums, profileMediaValidationMessage } from '@/lib/profile/media/validation';
+import { draftFromProfile } from '@/lib/onboarding/hydrate';
 import { createClient } from '@/lib/supabase/client';
+import { fetchProfileVideo } from '@/services/profileMedia.service';
+import { fetchUserProfileBundle } from '@/services/profile.service';
+import type { DbProfile } from '@/types/database';
 import type { ProfilePreferences } from '@/types/database';
 import { preferencesFromDraft, type OnboardingDraft } from '@/types/onboarding';
 import { ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
@@ -11,14 +15,106 @@ function birthIso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function mergedPreferences(
+  draft: OnboardingDraft,
+  existingPreferences: ProfilePreferences | null,
+  stepIndex: number
+): ProfilePreferences {
+  return {
+    ...(existingPreferences ?? {}),
+    ...preferencesFromDraft(draft),
+    adult_confirmed: draft.adultConfirmed,
+    onboarding_step: Math.max(0, Math.min(stepIndex, ONBOARDING_TOTAL_STEPS - 1)),
+  };
+}
+
+function draftNeedsMediaUpload(draft: OnboardingDraft): boolean {
+  if (!profileMediaMeetsMinimums(draft.profileMedia)) return false;
+  const hasLocalPhoto = draft.profileMedia.photos.some((p) => p.localFile);
+  const hasLocalVideo = Boolean(draft.profileMedia.video?.localFile);
+  return hasLocalPhoto || hasLocalVideo;
+}
+
+/** Debounced progress save — keeps onboarding data across refresh without requiring Continue. */
+export async function autosaveOnboardingProgress(args: {
+  userId: string;
+  draft: OnboardingDraft;
+  stepIndex: number;
+  existingPreferences: ProfilePreferences | null;
+  existingVideoMediaId?: string;
+  existingVideoStoragePath?: string;
+}): Promise<{ error: string | null; preferences: ProfilePreferences; mediaUploaded: boolean }> {
+  const { userId, draft, stepIndex, existingPreferences } = args;
+  const client = createClient();
+  const mergedPrefs = mergedPreferences(draft, existingPreferences, stepIndex);
+
+  const patch: Record<string, unknown> = {
+    display_name: draft.displayName.trim() || null,
+    preferences: mergedPrefs,
+    onboarding_status: 'pending',
+  };
+
+  patch.birth_date = birthIso(draft.birthDate);
+
+  if (draft.bio.trim()) {
+    patch.bio = draft.bio.trim();
+  }
+
+  if (draft.selfGender) {
+    patch.gender = draft.selfGender;
+  }
+
+  if (hasValidProfileLocation(draft)) {
+    Object.assign(patch, profileLocationFromDraft(draft));
+  }
+
+  if (stepIndex >= 3) {
+    patch.age_min = draft.ageMin;
+    patch.age_max = draft.ageMax;
+    patch.radius_km = draft.radiusKm;
+    patch.is_profile_public = draft.profilePublic;
+  }
+
+  let mediaUploaded = false;
+  if (draftNeedsMediaUpload(draft)) {
+    try {
+      const media = await persistProfileMediaDraft({
+        userId,
+        media: draft.profileMedia,
+        existingVideoMediaId: args.existingVideoMediaId,
+        existingVideoStoragePath: args.existingVideoStoragePath,
+      });
+      patch.photo_urls = media.photo_urls;
+      patch.primary_photo_url = media.primary_photo_url;
+      patch.avatar_url = media.avatar_url;
+      mediaUploaded = true;
+    } catch (e) {
+      return {
+        error: e instanceof Error ? e.message : 'Media upload failed',
+        preferences: mergedPrefs,
+        mediaUploaded: false,
+      };
+    }
+  }
+
+  const { error } = await client.from('profiles').update(patch).eq('user_id', userId);
+  return {
+    error: error?.message ?? null,
+    preferences: mergedPrefs,
+    mediaUploaded,
+  };
+}
+
 export async function persistOnboardingResumeStep(args: {
   userId: string;
   stepIndex: number;
   existingPreferences: ProfilePreferences | null;
+  preferencePatch?: ProfilePreferences;
 }): Promise<{ error: string | null }> {
   const clamped = Math.max(0, Math.min(args.stepIndex, ONBOARDING_TOTAL_STEPS - 1));
   const merged: ProfilePreferences = {
     ...(args.existingPreferences ?? {}),
+    ...(args.preferencePatch ?? {}),
     onboarding_step: clamped,
   };
   const client = createClient();
@@ -92,6 +188,39 @@ export async function saveOnboardingStep(args: {
   return { error: error?.message ?? null };
 }
 
+async function resolveDraftForFinalize(
+  userId: string,
+  draft: OnboardingDraft
+): Promise<{ draft: OnboardingDraft; error: string | null }> {
+  const client = createClient();
+  const bundle = await fetchUserProfileBundle(client, userId);
+  const video = await fetchProfileVideo(client, userId);
+  const fromDb = draftFromProfile(bundle.profile, video);
+
+  const merged: OnboardingDraft = {
+    ...fromDb,
+    ...draft,
+    adultConfirmed: draft.adultConfirmed || fromDb.adultConfirmed,
+    profileMedia: profileMediaMeetsMinimums(draft.profileMedia) ? draft.profileMedia : fromDb.profileMedia,
+    locationLabel: hasValidProfileLocation(draft) ? draft.locationLabel : fromDb.locationLabel,
+    locationLatitude: hasValidProfileLocation(draft) ? draft.locationLatitude : fromDb.locationLatitude,
+    locationLongitude: hasValidProfileLocation(draft) ? draft.locationLongitude : fromDb.locationLongitude,
+  };
+
+  const msg = profileMediaValidationMessage(merged.profileMedia);
+  if (msg) return { draft: merged, error: msg };
+
+  if (!merged.adultConfirmed) {
+    return { draft: merged, error: 'Confirm you are 18 or older to continue.' };
+  }
+
+  if (!hasValidProfileLocation(merged)) {
+    return { draft: merged, error: 'Pick your location from search results.' };
+  }
+
+  return { draft: merged, error: null };
+}
+
 export async function finalizeOnboarding(args: {
   userId: string;
   draft: OnboardingDraft;
@@ -99,45 +228,58 @@ export async function finalizeOnboarding(args: {
   existingVideoMediaId?: string;
   existingVideoStoragePath?: string;
 }): Promise<{ error: string | null }> {
-  const msg = profileMediaValidationMessage(args.draft.profileMedia);
-  if (msg) return { error: msg };
+  const resolved = await resolveDraftForFinalize(args.userId, args.draft);
+  if (resolved.error) return { error: resolved.error };
 
+  const draft = resolved.draft;
   const client = createClient();
   let mediaPatch: { photo_urls: string[]; primary_photo_url: string | null; avatar_url: string | null };
+
   try {
     mediaPatch = await persistProfileMediaDraft({
       userId: args.userId,
-      media: args.draft.profileMedia,
+      media: draft.profileMedia,
       existingVideoMediaId: args.existingVideoMediaId,
       existingVideoStoragePath: args.existingVideoStoragePath,
     });
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Media upload failed' };
+    const bundle = await fetchUserProfileBundle(client, args.userId);
+    const profile = bundle.profile as DbProfile | null;
+    const dbMedia = draftFromProfile(profile, null).profileMedia;
+    if (profile?.photo_urls?.length && profileMediaMeetsMinimums(dbMedia)) {
+      mediaPatch = {
+        photo_urls: profile.photo_urls ?? [],
+        primary_photo_url: profile.primary_photo_url ?? profile.avatar_url ?? null,
+        avatar_url: profile.avatar_url ?? profile.primary_photo_url ?? null,
+      };
+    } else {
+      return { error: e instanceof Error ? e.message : 'Media upload failed' };
+    }
   }
 
   const mergedPrefs: ProfilePreferences = {
     ...(args.existingPreferences ?? {}),
-    ...preferencesFromDraft(args.draft),
-    adult_confirmed: args.draft.adultConfirmed,
+    ...preferencesFromDraft(draft),
+    adult_confirmed: draft.adultConfirmed,
   };
   delete (mergedPrefs as ProfilePreferences & { onboarding_step?: number }).onboarding_step;
 
   const { error } = await client
     .from('profiles')
     .update({
-      display_name: args.draft.displayName.trim(),
-      bio: args.draft.bio.trim() || null,
-      birth_date: birthIso(args.draft.birthDate),
-      gender: args.draft.selfGender,
+      display_name: draft.displayName.trim(),
+      bio: draft.bio.trim() || null,
+      birth_date: birthIso(draft.birthDate),
+      gender: draft.selfGender,
       photo_urls: mediaPatch.photo_urls,
       primary_photo_url: mediaPatch.primary_photo_url,
       avatar_url: mediaPatch.avatar_url,
-      age_min: args.draft.ageMin,
-      age_max: args.draft.ageMax,
-      radius_km: args.draft.radiusKm,
-      is_profile_public: args.draft.profilePublic,
+      age_min: draft.ageMin,
+      age_max: draft.ageMax,
+      radius_km: draft.radiusKm,
+      is_profile_public: draft.profilePublic,
       onboarding_status: 'complete',
-      ...profileLocationFromDraft(args.draft),
+      ...profileLocationFromDraft(draft),
       preferences: mergedPrefs,
     })
     .eq('user_id', args.userId);

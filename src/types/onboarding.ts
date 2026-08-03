@@ -65,7 +65,7 @@ export function defaultOnboardingDraft(): OnboardingDraft {
 
 export function preferencesFromDraft(draft: OnboardingDraft): ProfilePreferences {
   return {
-    adult_confirmed: draft.adultConfirmed || undefined,
+    adult_confirmed: draft.adultConfirmed,
     languages: draft.languages,
     interests: draft.interests,
     meeting_intent: draft.meetingIntent ?? undefined,

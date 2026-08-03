@@ -9,8 +9,14 @@ import { ProfileMediaManager } from '@/features/profile/ProfileMediaManager';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
 import { HINGE_PROMPTS, INTEREST_TAGS, LANGUAGE_OPTIONS, ONBOARDING_STEP_LABELS, ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
 import { ageFromBirthDate, draftFromProfile } from '@/lib/onboarding/hydrate';
-import { finalizeOnboarding, persistOnboardingResumeStep, saveOnboardingStep } from '@/lib/onboarding/persist';
+import { autosaveOnboardingProgress, finalizeOnboarding, saveOnboardingStep } from '@/lib/onboarding/persist';
+import {
+  clearOnboardingSessionDraft,
+  loadOnboardingSessionDraft,
+  saveOnboardingSessionDraft,
+} from '@/lib/onboarding/sessionDraft';
 import { linkInvitationAfterSignup } from '@/lib/plans/planInvitations';
+import { mediaDraftFromProfile } from '@/lib/profile/media/draft';
 import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
 import { profileMediaMeetsMinimums, profileMediaValidationMessage } from '@/lib/profile/media/validation';
 import { createClient } from '@/lib/supabase/client';
@@ -18,7 +24,8 @@ import { fetchProfileVideo } from '@/services/profileMedia.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { useAuthStore } from '@/stores/auth-store';
 import type { MeetingIntent } from '@/types/onboarding';
-import { defaultOnboardingDraft, type OnboardingDraft } from '@/types/onboarding';
+import { defaultOnboardingDraft, preferencesFromDraft, type OnboardingDraft } from '@/types/onboarding';
+import type { ProfilePreferences } from '@/types/database';
 import { cn } from '@/utils/cn';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -33,6 +40,9 @@ const INTENTS: { id: MeetingIntent; label: string }[] = [
   { id: 'networking', label: 'Networking' },
 ];
 
+const AUTOSAVE_MS = 900;
+const AUTOSAVE_MEDIA_MS = 1800;
+
 export function OnboardingScreen({ invitationToken }: { invitationToken?: string | null }) {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
@@ -41,7 +51,24 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<OnboardingDraft>(() => defaultOnboardingDraft());
   const [saving, setSaving] = useState(false);
+  const [autosaving, setAutosaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const preferencesRef = useRef<ProfilePreferences | null>(null);
+  const videoMetaRef = useRef<{ id?: string; storagePath?: string }>({});
+  const hydratedUserRef = useRef<string | null>(null);
+  const autosaveReadyRef = useRef(false);
+  const skipAutosaveOnceRef = useRef(false);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftRef = useRef(draft);
+  const stepRef = useRef(step);
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['onboarding-bundle', user?.id],
@@ -56,17 +83,135 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
   });
 
   useEffect(() => {
-    if (!data?.profile) return;
-    setDraft(draftFromProfile(data.profile, data.video));
-    if (data.profile.onboarding_status === 'pending') {
-      const raw = data.profile.preferences?.onboarding_step;
-      const idx =
-        typeof raw === 'number' && Number.isFinite(raw)
-          ? Math.max(0, Math.min(Math.floor(raw), ONBOARDING_TOTAL_STEPS - 1))
-          : 0;
-      setStep(idx);
+    if (!data?.profile || !user?.id) return;
+
+    preferencesRef.current = data.profile.preferences ?? null;
+    videoMetaRef.current = {
+      id: data.video?.id,
+      storagePath: data.video?.storagePath,
+    };
+
+    const resumeStep =
+      data.profile.onboarding_status === 'pending'
+        ? Math.max(
+            0,
+            Math.min(
+              Math.floor(data.profile.preferences?.onboarding_step ?? 0),
+              ONBOARDING_TOTAL_STEPS - 1
+            )
+          )
+        : 0;
+
+    if (hydratedUserRef.current !== user.id) {
+      hydratedUserRef.current = user.id;
+      skipAutosaveOnceRef.current = true;
+      autosaveReadyRef.current = false;
+
+      const fromDb = draftFromProfile(data.profile, data.video);
+      const fromSession = loadOnboardingSessionDraft(user.id);
+      const mergedDraft: OnboardingDraft = fromSession
+        ? {
+            ...fromDb,
+            ...fromSession.draft,
+            profileMedia: fromDb.profileMedia,
+            localPhotoFiles: fromDb.localPhotoFiles,
+            remotePhotoUrls: fromDb.remotePhotoUrls,
+          }
+        : fromDb;
+
+      const mergedStep = fromSession
+        ? Math.max(resumeStep, Math.min(fromSession.step, ONBOARDING_TOTAL_STEPS - 1))
+        : resumeStep;
+
+      setDraft(mergedDraft);
+      setStep(mergedStep);
+      window.setTimeout(() => {
+        autosaveReadyRef.current = true;
+      }, 200);
     }
-  }, [data?.profile, data?.video]);
+  }, [data?.profile, data?.video, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    saveOnboardingSessionDraft(user.id, step, draft);
+  }, [draft, step, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const userId = user.id;
+
+    function flushAutosave() {
+      if (!autosaveReadyRef.current || saving) return;
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+      saveOnboardingSessionDraft(userId, stepRef.current, draftRef.current);
+      void autosaveOnboardingProgress({
+        userId,
+        draft: draftRef.current,
+        stepIndex: stepRef.current,
+        existingPreferences: preferencesRef.current,
+        existingVideoMediaId: videoMetaRef.current.id,
+        existingVideoStoragePath: videoMetaRef.current.storagePath,
+      });
+    }
+
+    window.addEventListener('pagehide', flushAutosave);
+    return () => window.removeEventListener('pagehide', flushAutosave);
+  }, [user?.id, saving]);
+
+  useEffect(() => {
+    if (!autosaveReadyRef.current || !user?.id || saving) return;
+
+    if (skipAutosaveOnceRef.current) {
+      skipAutosaveOnceRef.current = false;
+      return;
+    }
+
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+
+    const hasLocalMedia =
+      draft.profileMedia.photos.some((p) => p.localFile) || Boolean(draft.profileMedia.video?.localFile);
+    const delay = hasLocalMedia ? AUTOSAVE_MEDIA_MS : AUTOSAVE_MS;
+
+    autosaveTimerRef.current = setTimeout(() => {
+      void (async () => {
+        setAutosaving(true);
+        const result = await autosaveOnboardingProgress({
+          userId: user.id,
+          draft,
+          stepIndex: step,
+          existingPreferences: preferencesRef.current,
+          existingVideoMediaId: videoMetaRef.current.id,
+          existingVideoStoragePath: videoMetaRef.current.storagePath,
+        });
+        setAutosaving(false);
+
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+
+        preferencesRef.current = result.preferences;
+
+        if (result.mediaUploaded) {
+          skipAutosaveOnceRef.current = true;
+          const client = createClient();
+          const bundle = await fetchUserProfileBundle(client, user.id);
+          const video = await fetchProfileVideo(client, user.id);
+          videoMetaRef.current = { id: video?.id, storagePath: video?.storagePath };
+          if (bundle.profile) {
+            setDraft((d) => ({
+              ...d,
+              profileMedia: mediaDraftFromProfile(bundle.profile, video),
+            }));
+          }
+        }
+      })();
+    }, delay);
+
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [draft, step, user?.id, saving]);
 
   const canContinue = useMemo(() => {
     if (step === 0) {
@@ -122,7 +267,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
         /* fall through */
       }
     }
-    router.push('/discover');
+    router.replace('/discover');
     router.refresh();
   }
 
@@ -130,26 +275,29 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     if (!user?.id || !canContinue) return;
     setSaving(true);
     setError(null);
+    const savedPreferences = preferencesRef.current ?? data?.profile?.preferences ?? null;
 
     if (step < ONBOARDING_TOTAL_STEPS - 1) {
       const { error: err } = await saveOnboardingStep({
         userId: user.id,
         draft,
-        existingPreferences: data?.profile?.preferences ?? null,
+        existingPreferences: savedPreferences,
         stepIndex: step,
-        existingVideoMediaId: data?.video?.id,
-        existingVideoStoragePath: data?.video?.storagePath,
+        existingVideoMediaId: videoMetaRef.current.id ?? data?.video?.id,
+        existingVideoStoragePath: videoMetaRef.current.storagePath ?? data?.video?.storagePath,
       });
       setSaving(false);
       if (err) {
         setError(err);
         return;
       }
-      await persistOnboardingResumeStep({
-        userId: user.id,
-        stepIndex: step + 1,
-        existingPreferences: data?.profile?.preferences ?? null,
-      });
+      preferencesRef.current = {
+        ...(savedPreferences ?? {}),
+        ...preferencesFromDraft(draft),
+        adult_confirmed: draft.adultConfirmed,
+        onboarding_step: Math.min(step + 1, ONBOARDING_TOTAL_STEPS - 1),
+      };
+      skipAutosaveOnceRef.current = true;
       setStep((s) => s + 1);
       await queryClient.invalidateQueries({ queryKey: ['onboarding-bundle'] });
       return;
@@ -158,15 +306,18 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     const { error: err } = await finalizeOnboarding({
       userId: user.id,
       draft,
-      existingPreferences: data?.profile?.preferences ?? null,
-      existingVideoMediaId: data?.video?.id,
-      existingVideoStoragePath: data?.video?.storagePath,
+      existingPreferences: savedPreferences,
+      existingVideoMediaId: videoMetaRef.current.id ?? data?.video?.id,
+      existingVideoStoragePath: videoMetaRef.current.storagePath ?? data?.video?.storagePath,
     });
     setSaving(false);
     if (err) {
       setError(err);
       return;
     }
+
+    clearOnboardingSessionDraft();
+    await queryClient.invalidateQueries({ queryKey: ['onboarding-bundle'] });
     await queryClient.invalidateQueries({ queryKey: ['profile-bundle'] });
     await routeAfterOnboarding();
   }
@@ -210,6 +361,9 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       </div>
 
       {error ? <p className="text-[14px] font-extrabold text-red-600">{error}</p> : null}
+      {autosaving ? (
+        <p className="text-[12px] font-semibold text-muted">Saving your progress…</p>
+      ) : null}
 
       {step === 0 ? (
         <FormCard>
