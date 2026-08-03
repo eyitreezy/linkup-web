@@ -1,22 +1,49 @@
 'use client';
 
 import { TIER_META } from '@/lib/subscription/constants';
-import { deriveSubscriptionState } from '@/lib/subscription/deriveState';
+import { clearSubscriptionCheckoutTxRef, loadSubscriptionCheckoutTxRef } from '@/lib/subscription/subscriptionCheckoutSession';
+import { invokeConfirmSubscriptionPayment } from '@/lib/subscription/verifySubscriptionPayment';
+import { clearPermissionCache } from '@/lib/subscription/checkPermission';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { IoHourglassOutline } from 'react-icons/io5';
+
+type Phase = 'processing' | 'success' | 'failed' | 'timeout';
 
 function CallbackContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const userId = useAuthStore((s) => s.user?.id);
   const status = searchParams.get('status');
-  const [phase, setPhase] = useState<'processing' | 'success' | 'failed'>('processing');
+  const txRefFromUrl = searchParams.get('tx_ref');
+  const [phase, setPhase] = useState<Phase>('processing');
   const [message, setMessage] = useState('Activating your plan…');
-  const startTier = useRef<string | null>(null);
-  const polled = useRef(false);
+  const [checkBusy, setCheckBusy] = useState(false);
+  const startedRef = useRef(false);
+  const client = useMemo(() => createClient(), []);
+
+  const txRef = txRefFromUrl?.trim() || loadSubscriptionCheckoutTxRef();
+
+  const runConfirmation = useCallback(async (): Promise<boolean> => {
+    if (!userId || !txRef) return false;
+
+    const result = await invokeConfirmSubscriptionPayment(client, txRef);
+    if (result.activated) {
+      clearSubscriptionCheckoutTxRef();
+      clearPermissionCache();
+      const tierKey = (result.tier ?? 'SILVER') as keyof typeof TIER_META;
+      const label = TIER_META[tierKey]?.label ?? 'your plan';
+      setMessage(`You're now on ${label} 🎉`);
+      setPhase('success');
+      window.setTimeout(() => router.replace('/subscription'), 2000);
+      return true;
+    }
+
+    return false;
+  }, [client, router, txRef, userId]);
 
   useEffect(() => {
     if (status === 'cancelled' || status === 'failed') {
@@ -34,50 +61,85 @@ function CallbackContent() {
   }, [status, router]);
 
   useEffect(() => {
-    if (status !== 'successful' || !userId || polled.current) return;
-    polled.current = true;
+    if (status !== 'successful' || !userId || startedRef.current) return;
+    if (!txRef) {
+      setPhase('failed');
+      setMessage('Missing payment reference. Open subscription history or try again.');
+      return;
+    }
+
+    startedRef.current = true;
     const started = Date.now();
-    const client = createClient();
-    void client
-      .from('users')
-      .select(
-        'subscription_tier, subscription_expires_at, silver_trial_expires_at, gold_trial_expires_at, has_been_silver_subscriber, billing_cycle'
-      )
-      .eq('id', userId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          startTier.current = deriveSubscriptionState(
-            data as Parameters<typeof deriveSubscriptionState>[0]
-          ).effectiveTier;
-        }
-      });
-    const interval = setInterval(() => {
-      void (async () => {
-        const { data } = await client
-          .from('users')
-          .select(
-            'subscription_tier, subscription_expires_at, silver_trial_expires_at, gold_trial_expires_at, has_been_silver_subscriber, billing_cycle'
-          )
-          .eq('id', userId)
-          .maybeSingle();
-        if (!data) return;
-        const next = deriveSubscriptionState(data as Parameters<typeof deriveSubscriptionState>[0]);
-        if (startTier.current != null && next.effectiveTier !== startTier.current) {
-          clearInterval(interval);
-          const label = TIER_META[next.effectiveTier].label;
-          setMessage(`You're now on ${label} 🎉`);
-          setPhase('success');
-          setTimeout(() => router.replace('/subscription'), 2000);
-        } else if (Date.now() - started > 30_000) {
-          clearInterval(interval);
-          setPhase('failed');
-          setMessage('Still processing — refresh your subscription page in a moment.');
-        }
-      })();
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [status, userId, router]);
+    let interval: number | null = null;
+
+    void (async () => {
+      const immediate = await runConfirmation();
+      if (immediate) return;
+
+      interval = window.setInterval(() => {
+        void (async () => {
+          const ok = await runConfirmation();
+          if (ok) {
+            if (interval) window.clearInterval(interval);
+            return;
+          }
+          if (Date.now() - started > 45_000) {
+            if (interval) window.clearInterval(interval);
+            setPhase('timeout');
+            setMessage(
+              'Your payment was received by Flutterwave. We are still waiting for confirmation — tap Check again in a moment.'
+            );
+          }
+        })();
+      }, 2500);
+    })();
+
+    return () => {
+      if (interval) window.clearInterval(interval);
+    };
+  }, [runConfirmation, status, txRef, userId]);
+
+  async function onCheckAgain() {
+    if (!txRef) return;
+    setCheckBusy(true);
+    try {
+      const ok = await runConfirmation();
+      if (!ok) {
+        setPhase('timeout');
+        setMessage(
+          'Still processing. If you were charged, your plan should appear shortly — refresh the subscription page or contact support.'
+        );
+      }
+    } finally {
+      setCheckBusy(false);
+    }
+  }
+
+  if (phase === 'timeout') {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background p-6">
+        <div className="linkup-card max-w-md rounded-2xl p-8 text-center">
+          <IoHourglassOutline className="mx-auto text-amber-500" size={48} />
+          <h1 className="mt-4 font-display text-xl font-extrabold text-foreground">Almost there</h1>
+          <p className="mt-2 text-[14px] font-semibold text-muted">{message}</p>
+          <button
+            type="button"
+            onClick={() => void onCheckAgain()}
+            disabled={checkBusy}
+            className="mt-6 inline-flex min-h-[44px] w-full items-center justify-center rounded-full linkup-gradient-primary px-6 text-[14px] font-extrabold text-white disabled:opacity-60"
+          >
+            {checkBusy ? 'Checking…' : 'Check again'}
+          </button>
+          <Link
+            href="/subscription"
+            className="mt-3 inline-flex min-h-[44px] items-center justify-center text-[14px] font-semibold text-muted hover:text-foreground"
+          >
+            Back to subscription
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background p-6">

@@ -4,6 +4,7 @@ import { getSubscriptionCallbackUrl } from '@/lib/flutterwave/callbackUrl';
 import { openFlutterwaveCheckout } from '@/lib/flutterwave/openFlutterwaveCheckout';
 import { extractPaymentLink } from '@/lib/flutterwave/paymentLink';
 import { clearPermissionCache } from '@/lib/subscription/checkPermission';
+import { saveSubscriptionCheckoutTxRef } from '@/lib/subscription/subscriptionCheckoutSession';
 import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import type { BillingCycle, PaidTier } from '@/lib/subscription/types';
 import { createClient } from '@/lib/supabase/client';
@@ -78,8 +79,10 @@ export function useSubscriptionActions() {
           },
         });
         if (error) throw new Error(error.message);
+        const payload = data as { tx_ref?: string } | null;
         const link = extractPaymentLink(data);
         if (!link) throw new Error('No payment link returned from create-subscription');
+        if (payload?.tx_ref) saveSubscriptionCheckoutTxRef(payload.tx_ref);
         const opened = openFlutterwaveCheckout(link);
         if (!opened.ok) throw new Error(opened.error ?? 'Could not open checkout');
         pollForTierChange(previousEffective);

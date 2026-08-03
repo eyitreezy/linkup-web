@@ -1,6 +1,6 @@
 import type { DbSubscriptionEvent } from '@/types/database';
 
-export const HIDDEN_SUBSCRIPTION_EVENT_TYPES = new Set(['trial_expiring_notified']);
+export const HIDDEN_SUBSCRIPTION_EVENT_TYPES = new Set(['trial_expiring_notified', 'checkout_started']);
 
 export const EVENT_LABELS: Record<string, (e: DbSubscriptionEvent) => string | null> = {
   trial_started: (e) =>
