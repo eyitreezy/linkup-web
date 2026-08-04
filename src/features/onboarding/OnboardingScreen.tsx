@@ -8,6 +8,8 @@ import { ToggleRow } from '@/components/settings/ToggleRow';
 import { ProfileMediaManager } from '@/features/profile/ProfileMediaManager';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
 import { HINGE_PROMPTS, INTEREST_TAGS, LANGUAGE_OPTIONS, ONBOARDING_STEP_LABELS, ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
+import { validatePromptAnswers } from '@/lib/onboarding/promptAnswers';
+import { ProfilePromptEditor } from '@/components/profile/ProfilePromptEditor';
 import { ageFromBirthDate, draftFromProfile } from '@/lib/onboarding/hydrate';
 import { autosaveOnboardingProgress, finalizeOnboarding, saveOnboardingStep } from '@/lib/onboarding/persist';
 import {
@@ -238,13 +240,11 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       );
     }
     if (step === 1) {
-      const filled = draft.promptAnswers.filter((p) => p.answer.trim().length > 0);
       return (
         draft.interests.length >= 1 &&
         draft.languages.length >= 1 &&
         draft.meetingIntent != null &&
-        filled.length >= 1 &&
-        filled.length <= 2
+        validatePromptAnswers(draft.promptAnswers) === null
       );
     }
     if (step === 2) return hasValidProfileLocation(draft);
@@ -256,7 +256,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       if (!draft.adultConfirmed) return 'Confirm you are 18+ to continue.';
       return profileMediaValidationMessage(draft.profileMedia);
     }
-    if (step === 1) return 'Add interests, languages, intent, and 1 to 2 prompts.';
+    if (step === 1) return validatePromptAnswers(draft.promptAnswers) ?? 'Add interests, languages, intent, and at least one prompt.';
     if (step === 2) return 'Pick your location from search results.';
     return null;
   }, [step, draft]);
@@ -498,40 +498,11 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
             </div>
           </FormCard>
           <FormCard>
-            <PremiumSectionHead title="Prompts (1 to 2)" />
-            {draft.promptAnswers.map((p, idx) => (
-              <div key={p.promptId} className="mt-4 border-t border-border/60 pt-4 first:mt-0 first:border-0 first:pt-0">
-                <select
-                  className="w-full rounded-xl border border-border px-3 py-2 text-[13px] font-semibold"
-                  value={p.promptId}
-                  onChange={(e) => {
-                    const pr = HINGE_PROMPTS.find((x) => x.id === e.target.value);
-                    setDraft((d) => {
-                      const next = [...d.promptAnswers];
-                      next[idx] = { ...next[idx], promptId: e.target.value, prompt: pr?.text ?? '' };
-                      return { ...d, promptAnswers: next };
-                    });
-                  }}
-                >
-                  {HINGE_PROMPTS.map((hp) => (
-                    <option key={hp.id} value={hp.id}>
-                      {hp.text}
-                    </option>
-                  ))}
-                </select>
-                <textarea
-                  className="mt-2 w-full rounded-xl border border-border px-3 py-2.5 text-[14px] font-semibold"
-                  value={p.answer}
-                  onChange={(e) => {
-                    setDraft((d) => {
-                      const next = [...d.promptAnswers];
-                      next[idx] = { ...next[idx], answer: e.target.value };
-                      return { ...d, promptAnswers: next };
-                    });
-                  }}
-                />
-              </div>
-            ))}
+            <ProfilePromptEditor
+              answers={draft.promptAnswers}
+              onChange={(promptAnswers) => setDraft((d) => ({ ...d, promptAnswers }))}
+              showValidation
+            />
           </FormCard>
         </>
       ) : null}

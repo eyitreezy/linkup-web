@@ -7,7 +7,9 @@ import { SettingsPageHeader } from '@/components/settings/SettingsPageHeader';
 import { ToggleRow } from '@/components/settings/ToggleRow';
 import { AppStatusDialog } from '@/components/ui/AppStatusDialog';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
-import { HINGE_PROMPTS, INTEREST_TAGS, LANGUAGE_OPTIONS } from '@/lib/onboarding/constants';
+import { INTEREST_TAGS, LANGUAGE_OPTIONS } from '@/lib/onboarding/constants';
+import { validatePromptAnswers } from '@/lib/onboarding/promptAnswers';
+import { ProfilePromptEditor } from '@/components/profile/ProfilePromptEditor';
 import { ageFromBirthDate, draftFromProfile } from '@/lib/onboarding/hydrate';
 import { onboardingDraftsEqual } from '@/lib/profile/draftEquals';
 import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
@@ -72,7 +74,6 @@ export function EditProfileScreen() {
 
   const canSave = useMemo(() => {
     const age = ageFromBirthDate(draft.birthDate);
-    const filled = draft.promptAnswers.filter((p) => p.answer.trim().length > 0);
     const photos = draft.profileMedia.photos.filter((p) => p.url || p.localFile).length;
     return (
       draft.displayName.trim().length >= 1 &&
@@ -82,8 +83,7 @@ export function EditProfileScreen() {
       draft.interests.length >= 1 &&
       draft.languages.length >= 1 &&
       draft.meetingIntent != null &&
-      filled.length >= 1 &&
-      filled.length <= 2 &&
+      validatePromptAnswers(draft.promptAnswers) === null &&
       hasValidProfileLocation(draft) &&
       profileMediaMeetsMinimums(draft.profileMedia)
     );
@@ -289,60 +289,11 @@ export function EditProfileScreen() {
       </FormCard>
 
       <FormCard>
-        <PremiumSectionHead title="Prompts (1 to 2)" />
-        {draft.promptAnswers.map((p, idx) => (
-          <div key={p.promptId} className="mt-4 border-t border-border/60 pt-4 first:mt-0 first:border-0 first:pt-0">
-            <select
-              className="w-full rounded-xl border border-border px-3 py-2 text-[13px] font-semibold"
-              value={p.promptId}
-              onChange={(e) => {
-                const pr = HINGE_PROMPTS.find((x) => x.id === e.target.value);
-                setDraft((d) => {
-                  const next = [...d.promptAnswers];
-                  next[idx] = { ...next[idx], promptId: e.target.value, prompt: pr?.text ?? '' };
-                  return { ...d, promptAnswers: next };
-                });
-              }}
-            >
-              {HINGE_PROMPTS.map((hp) => (
-                <option key={hp.id} value={hp.id}>
-                  {hp.text}
-                </option>
-              ))}
-            </select>
-            <textarea
-              className="mt-2 w-full rounded-xl border border-border px-3 py-2.5 text-[14px] font-semibold"
-              placeholder="Your answer…"
-              value={p.answer}
-              onChange={(e) => {
-                setDraft((d) => {
-                  const next = [...d.promptAnswers];
-                  next[idx] = { ...next[idx], answer: e.target.value };
-                  return { ...d, promptAnswers: next };
-                });
-              }}
-            />
-          </div>
-        ))}
-        {draft.promptAnswers.length < 2 ? (
-          <button
-            type="button"
-            className="mt-3 text-[13px] font-extrabold text-primary"
-            onClick={() => {
-              const extra = HINGE_PROMPTS.find((h) => !draft.promptAnswers.some((p) => p.promptId === h.id));
-              if (extra)
-                setDraft((d) => ({
-                  ...d,
-                  promptAnswers: [
-                    ...d.promptAnswers,
-                    { promptId: extra.id, prompt: extra.text, answer: '' },
-                  ],
-                }));
-            }}
-          >
-            Add another prompt
-          </button>
-        ) : null}
+        <ProfilePromptEditor
+          answers={draft.promptAnswers}
+          onChange={(promptAnswers) => setDraft((d) => ({ ...d, promptAnswers }))}
+          showValidation={isDirty}
+        />
       </FormCard>
 
       <FormCard>

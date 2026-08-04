@@ -1,4 +1,5 @@
 import { mediaDraftFromProfile } from '@/lib/profile/media/draft';
+import { dedupePromptAnswers } from '@/lib/onboarding/promptAnswers';
 import type { DbProfileVideo } from '@/lib/profile/media/types';
 import type { DbProfile } from '@/types/database';
 import { defaultOnboardingDraft, type OnboardingDraft } from '@/types/onboarding';
@@ -53,11 +54,13 @@ export function draftFromProfile(p: DbProfile | null, video?: DbProfileVideo | n
 
   const raw = pref.prompt_answers;
   if (Array.isArray(raw) && raw.length > 0) {
-    d.promptAnswers = raw.map((x: { prompt_id?: string; prompt?: string; answer?: string }) => ({
-      promptId: String(x.prompt_id ?? 'custom'),
-      prompt: String(x.prompt ?? ''),
-      answer: String(x.answer ?? ''),
-    }));
+    d.promptAnswers = dedupePromptAnswers(
+      raw.map((x: { prompt_id?: string; prompt?: string; answer?: string }) => ({
+        promptId: String(x.prompt_id ?? 'custom'),
+        prompt: String(x.prompt ?? ''),
+        answer: String(x.answer ?? ''),
+      }))
+    );
   }
 
   return d;

@@ -1,4 +1,5 @@
 import { ageFromBirthDate } from '@/lib/onboarding/hydrate';
+import { validatePromptAnswers } from '@/lib/onboarding/promptAnswers';
 import { persistProfileMediaDraft } from '@/lib/profile/media/persist';
 import {
   activePhotoCount,
@@ -46,6 +47,9 @@ export async function saveEditProfile(args: {
     return { error: 'Pick at least one interest and one language.' };
   }
   if (!draft.meetingIntent) return { error: 'Choose what you are here for.' };
+
+  const promptError = validatePromptAnswers(draft.promptAnswers);
+  if (promptError) return { error: promptError };
 
   let mediaPatch: {
     photo_urls: string[];

@@ -1,5 +1,6 @@
 import type { ProfileMediaDraft } from '@/lib/profile/media/types';
 import { defaultProfileMediaDraft } from '@/lib/profile/media/draft';
+import { exportPromptAnswersForDb } from '@/lib/onboarding/promptAnswers';
 import type { ProfilePreferences } from '@/types/database';
 
 export type MeetingIntent = 'friendship' | 'dating' | 'activity' | 'networking';
@@ -50,7 +51,7 @@ export function defaultOnboardingDraft(): OnboardingDraft {
     interests: [],
     languages: [],
     meetingIntent: null,
-    promptAnswers: [{ promptId: 'green_flag', prompt: 'My biggest green flag is…', answer: '' }],
+    promptAnswers: [],
     selfGender: null,
     showMe: 'everyone',
     ageMin: 22,
@@ -69,9 +70,7 @@ export function preferencesFromDraft(draft: OnboardingDraft): ProfilePreferences
     languages: draft.languages,
     interests: draft.interests,
     meeting_intent: draft.meetingIntent ?? undefined,
-    prompt_answers: draft.promptAnswers
-      .filter((p) => p.answer.trim())
-      .map(({ promptId, prompt, answer }) => ({ prompt_id: promptId, prompt, answer })),
+    prompt_answers: exportPromptAnswersForDb(draft.promptAnswers),
     show_me: draft.showMe,
     self_gender: draft.selfGender ?? undefined,
   };
