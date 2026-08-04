@@ -4,6 +4,12 @@ import { AuthDivider } from '@/components/auth/AuthDivider';
 import { AuthButton, AuthInput, AuthPasswordInput, AuthTrustLine } from '@/components/auth/AuthFormPrimitives';
 import { GoogleAuthBlock } from '@/features/auth/GoogleAuthBlock';
 import { recordPrivacyConsent } from '@/lib/privacy/recordPrivacyConsent';
+import {
+  DUPLICATE_EMAIL_SIGNUP_MESSAGE,
+  formatSignUpError,
+  isDuplicateEmailSignup,
+  normalizeAuthEmail,
+} from '@/lib/auth/signupHelpers';
 import { resolvePostAuthDestination } from '@/lib/auth/resolvePostAuthDestination';
 import { createClient } from '@/lib/supabase/client';
 import { env } from '@/lib/env';
@@ -25,6 +31,7 @@ function SignupFields() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
+  const [duplicateEmail, setDuplicateEmail] = useState(false);
   const [resendBusy, setResendBusy] = useState(false);
   const [resendNotice, setResendNotice] = useState<string | null>(null);
   const [resendError, setResendError] = useState<string | null>(null);
@@ -37,7 +44,7 @@ function SignupFields() {
       const supabase = createClient();
       const { error: err } = await supabase.auth.resend({
         type: 'signup',
-        email: email.trim(),
+        email: normalizeAuthEmail(email),
         options: {
           emailRedirectTo: `${env.siteUrl}/auth/confirm?next=${encodeURIComponent(next.startsWith('/') && !next.startsWith('//') ? next : '/discover')}`,
         },
@@ -59,12 +66,12 @@ function SignupFields() {
     setError(null);
     setShowConsentError(false);
     const trimmedName = displayName.trim();
-    const trimmedEmail = email.trim();
+    const normalizedEmail = normalizeAuthEmail(email);
     if (!trimmedName) {
       setError('Please enter your name.');
       return;
     }
-    if (!trimmedEmail) {
+    if (!normalizedEmail) {
       setError('Please enter your email.');
       return;
     }
@@ -77,10 +84,11 @@ function SignupFields() {
       return;
     }
     setBusy(true);
+    setDuplicateEmail(false);
     try {
       const supabase = createClient();
       const { data, error: err } = await supabase.auth.signUp({
-        email: trimmedEmail,
+        email: normalizedEmail,
         password,
         options: {
           emailRedirectTo: `${env.siteUrl}/auth/confirm?next=${encodeURIComponent(next.startsWith('/') && !next.startsWith('//') ? next : '/discover')}`,
@@ -88,13 +96,20 @@ function SignupFields() {
         },
       });
       if (err) {
-        setError(err.message);
+        setError(formatSignUpError(err.message));
+        return;
+      }
+      if (isDuplicateEmailSignup(data.user)) {
+        setEmail(normalizedEmail);
+        setDuplicateEmail(true);
+        setError(null);
         return;
       }
       if (data.user) {
         await recordPrivacyConsent(data.user.id, 'signup');
       }
       if (!data.session) {
+        setEmail(normalizedEmail);
         setVerificationSent(true);
         return;
       }
@@ -106,6 +121,55 @@ function SignupFields() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (duplicateEmail) {
+    return (
+      <div className="auth-verify-card">
+        <IoMailOpenOutline className="mx-auto text-secondary" size={32} />
+        <h2 className="mt-3 font-display text-lg font-extrabold text-foreground max-lg:text-white">
+          Account already exists
+        </h2>
+        <p className="mt-2 text-[14px] font-semibold leading-relaxed text-muted max-lg:text-white/85">
+          {DUPLICATE_EMAIL_SIGNUP_MESSAGE}{' '}
+          <span className="font-extrabold text-foreground max-lg:text-white">{email}</span>
+        </p>
+        {resendNotice ? (
+          <p className="mt-3 text-[13px] font-semibold leading-relaxed text-emerald-700 max-lg:text-emerald-200">
+            {resendNotice}
+          </p>
+        ) : null}
+        {resendError ? <p className="auth-error mt-3">{resendError}</p> : null}
+        <Link
+          href={`/login?next=${encodeURIComponent(next)}`}
+          className="auth-btn-gradient linkup-gradient-primary mt-4 inline-flex min-h-[48px] w-full items-center justify-center rounded-full px-6 text-[15px] font-extrabold text-white shadow-md hover:opacity-95"
+        >
+          Log in
+        </Link>
+        <AuthButton
+          type="button"
+          fullWidth
+          className="mt-2"
+          disabled={resendBusy}
+          onClick={() => void onResendVerification()}
+        >
+          {resendBusy ? 'Sending…' : 'Resend verification email'}
+        </AuthButton>
+        <AuthButton
+          type="button"
+          fullWidth
+          className="mt-2"
+          variant="ghost"
+          onClick={() => {
+            setDuplicateEmail(false);
+            setResendNotice(null);
+            setResendError(null);
+          }}
+        >
+          Use a different email
+        </AuthButton>
+      </div>
+    );
   }
 
   if (verificationSent) {

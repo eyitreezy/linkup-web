@@ -4,6 +4,7 @@ import { AuthDivider } from '@/components/auth/AuthDivider';
 import { AuthButton, AuthInput, AuthPasswordInput, AuthTrustLine } from '@/components/auth/AuthFormPrimitives';
 import { GoogleAuthBlock } from '@/features/auth/GoogleAuthBlock';
 import { EMAIL_CONFIRMED_LOGIN_MESSAGE, formatAuthCallbackError } from '@/lib/auth/authCallbackErrors';
+import { normalizeAuthEmail } from '@/lib/auth/signupHelpers';
 import { resolvePostAuthDestination } from '@/lib/auth/resolvePostAuthDestination';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
@@ -38,7 +39,10 @@ function LoginFields() {
     setBusy(true);
     try {
       const supabase = createClient();
-      const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+      const { error: err } = await supabase.auth.signInWithPassword({
+        email: normalizeAuthEmail(email),
+        password,
+      });
       if (err) {
         setError(err.message);
         return;
