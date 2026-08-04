@@ -5,6 +5,7 @@ const STORAGE_KEY = 'linkup_onboarding_session';
 type StoredDraft = {
   userId: string;
   step: number;
+  maxReachedStep: number;
   updatedAt: number;
   displayName: string;
   birthDate: string;
@@ -25,10 +26,16 @@ type StoredDraft = {
   profilePublic: boolean;
 };
 
-function toStored(userId: string, step: number, draft: OnboardingDraft): StoredDraft {
+function toStored(
+  userId: string,
+  step: number,
+  maxReachedStep: number,
+  draft: OnboardingDraft
+): StoredDraft {
   return {
     userId,
     step,
+    maxReachedStep,
     updatedAt: Date.now(),
     displayName: draft.displayName,
     birthDate: draft.birthDate.toISOString(),
@@ -73,10 +80,15 @@ function fromStored(stored: StoredDraft): Partial<OnboardingDraft> {
   };
 }
 
-export function saveOnboardingSessionDraft(userId: string, step: number, draft: OnboardingDraft): void {
+export function saveOnboardingSessionDraft(
+  userId: string,
+  step: number,
+  maxReachedStep: number,
+  draft: OnboardingDraft
+): void {
   if (typeof window === 'undefined') return;
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toStored(userId, step, draft)));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toStored(userId, step, maxReachedStep, draft)));
   } catch {
     /* quota or private mode */
   }
@@ -84,14 +96,19 @@ export function saveOnboardingSessionDraft(userId: string, step: number, draft: 
 
 export function loadOnboardingSessionDraft(
   userId: string
-): { step: number; draft: Partial<OnboardingDraft> } | null {
+): { step: number; maxReachedStep: number; draft: Partial<OnboardingDraft>; updatedAt: number } | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const stored = JSON.parse(raw) as StoredDraft;
     if (stored.userId !== userId) return null;
-    return { step: stored.step, draft: fromStored(stored) };
+    return {
+      step: stored.step,
+      maxReachedStep: stored.maxReachedStep ?? stored.step,
+      draft: fromStored(stored),
+      updatedAt: stored.updatedAt ?? 0,
+    };
   } catch {
     return null;
   }

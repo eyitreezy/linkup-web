@@ -55,10 +55,7 @@ export async function autosaveOnboardingProgress(args: {
   };
 
   patch.birth_date = birthIso(draft.birthDate);
-
-  if (draft.bio.trim()) {
-    patch.bio = draft.bio.trim();
-  }
+  patch.bio = draft.bio.trim() || null;
 
   if (draft.selfGender) {
     patch.gender = draft.selfGender;

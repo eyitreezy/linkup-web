@@ -3,6 +3,7 @@
 import {
   formatFilterPriceMajor,
   parseFilterPriceMajor,
+  sanitizeFilterPriceInput,
   validateDiscoverPriceRange,
 } from '@/lib/discovery/feedPriceFilter';
 import {
@@ -22,7 +23,7 @@ import {
 import { TIER_META } from '@/lib/subscription/constants';
 import type { SubscriptionTier } from '@/lib/subscription/types';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { IoFunnel, IoLockClosed } from 'react-icons/io5';
 
 const MOODS: { id: DiscoveryMood; label: string }[] = [
@@ -175,6 +176,17 @@ export function DiscoverFilterPanel({
   const sliderValue = distanceSet ? Math.min(draft.maxDistanceKm!, sliderMax) : 0;
   const distanceLabel = distanceSet ? `${sliderValue} km` : 'Any distance';
 
+  const canApply = useMemo(() => {
+    return (
+      draftMood !== 'all' ||
+      (distanceTouched && draft.maxDistanceKm != null && draft.maxDistanceKm > 0) ||
+      minPriceText.trim() !== '' ||
+      maxPriceText.trim() !== '' ||
+      draft.hostPresence !== 'all' ||
+      draft.verifiedHostsOnly
+    );
+  }, [draft.hostPresence, draft.maxDistanceKm, draft.verifiedHostsOnly, draftMood, distanceTouched, maxPriceText, minPriceText]);
+
   return (
     <div
       className={cn(
@@ -290,7 +302,7 @@ export function DiscoverFilterPanel({
             inputMode="numeric"
             placeholder="Min"
             value={minPriceText}
-            onChange={(e) => setMinPriceText(e.target.value)}
+            onChange={(e) => setMinPriceText(sanitizeFilterPriceInput(e.target.value))}
             className="rounded-xl border border-border bg-surface px-3 py-2 text-[14px] font-semibold outline-none focus:border-primary/40"
           />
           <input
@@ -298,7 +310,7 @@ export function DiscoverFilterPanel({
             inputMode="numeric"
             placeholder="Max"
             value={maxPriceText}
-            onChange={(e) => setMaxPriceText(e.target.value)}
+            onChange={(e) => setMaxPriceText(sanitizeFilterPriceInput(e.target.value))}
             className="rounded-xl border border-border bg-surface px-3 py-2 text-[14px] font-semibold outline-none focus:border-primary/40"
           />
         </div>
@@ -359,7 +371,8 @@ export function DiscoverFilterPanel({
         <button
           type="button"
           onClick={apply}
-          className="w-full rounded-full linkup-gradient-primary py-2.5 text-[14px] font-extrabold text-white shadow-md"
+          disabled={!canApply}
+          className="w-full rounded-full linkup-gradient-primary py-2.5 text-[14px] font-extrabold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50"
         >
           Apply filters
         </button>

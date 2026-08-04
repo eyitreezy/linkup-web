@@ -49,6 +49,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
   const queryClient = useQueryClient();
   const invitationTokenRef = useRef(invitationToken?.trim() || null);
   const [step, setStep] = useState(0);
+  const [maxReachedStep, setMaxReachedStep] = useState(0);
   const [draft, setDraft] = useState<OnboardingDraft>(() => defaultOnboardingDraft());
   const [saving, setSaving] = useState(false);
   const [autosaving, setAutosaving] = useState(false);
@@ -61,6 +62,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftRef = useRef(draft);
   const stepRef = useRef(step);
+  const maxReachedStepRef = useRef(maxReachedStep);
 
   useEffect(() => {
     draftRef.current = draft;
@@ -69,6 +71,10 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
   useEffect(() => {
     stepRef.current = step;
   }, [step]);
+
+  useEffect(() => {
+    maxReachedStepRef.current = maxReachedStep;
+  }, [maxReachedStep]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['onboarding-bundle', user?.id],
@@ -113,6 +119,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
         ? {
             ...fromDb,
             ...fromSession.draft,
+            adultConfirmed: Boolean(fromSession.draft.adultConfirmed || fromDb.adultConfirmed),
             profileMedia: fromDb.profileMedia,
             localPhotoFiles: fromDb.localPhotoFiles,
             remotePhotoUrls: fromDb.remotePhotoUrls,
@@ -123,8 +130,15 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
         ? Math.max(resumeStep, Math.min(fromSession.step, ONBOARDING_TOTAL_STEPS - 1))
         : resumeStep;
 
+      const mergedMaxReached = Math.max(
+        resumeStep,
+        fromSession?.maxReachedStep ?? 0,
+        mergedStep
+      );
+
       setDraft(mergedDraft);
       setStep(mergedStep);
+      setMaxReachedStep(mergedMaxReached);
       window.setTimeout(() => {
         autosaveReadyRef.current = true;
       }, 200);
@@ -132,9 +146,9 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
   }, [data?.profile, data?.video, user?.id]);
 
   useEffect(() => {
-    if (!user?.id) return;
-    saveOnboardingSessionDraft(user.id, step, draft);
-  }, [draft, step, user?.id]);
+    if (!user?.id || hydratedUserRef.current !== user.id) return;
+    saveOnboardingSessionDraft(user.id, step, maxReachedStep, draft);
+  }, [draft, step, maxReachedStep, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -143,7 +157,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     function flushAutosave() {
       if (!autosaveReadyRef.current || saving) return;
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-      saveOnboardingSessionDraft(userId, stepRef.current, draftRef.current);
+      saveOnboardingSessionDraft(userId, stepRef.current, maxReachedStepRef.current, draftRef.current);
       void autosaveOnboardingProgress({
         userId,
         draft: draftRef.current,
@@ -271,6 +285,12 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     router.refresh();
   }
 
+  function goToStep(nextStep: number) {
+    if (nextStep > maxReachedStep || nextStep < 0 || nextStep >= ONBOARDING_TOTAL_STEPS) return;
+    skipAutosaveOnceRef.current = true;
+    setStep(nextStep);
+  }
+
   async function handleContinue() {
     if (!user?.id || !canContinue) return;
     setSaving(true);
@@ -298,7 +318,9 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
         onboarding_step: Math.min(step + 1, ONBOARDING_TOTAL_STEPS - 1),
       };
       skipAutosaveOnceRef.current = true;
-      setStep((s) => s + 1);
+      const nextStep = step + 1;
+      setMaxReachedStep((m) => Math.max(m, nextStep));
+      setStep(nextStep);
       await queryClient.invalidateQueries({ queryKey: ['onboarding-bundle'] });
       return;
     }
@@ -347,17 +369,38 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       />
 
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {ONBOARDING_STEP_LABELS.map((label, i) => (
-          <span
-            key={label}
-            className={cn(
-              'shrink-0 rounded-full px-3 py-1.5 text-[11px] font-extrabold min-[400px]:text-[12px]',
-              i === step ? 'linkup-gradient-primary text-white shadow-sm' : 'border border-border bg-white text-muted'
-            )}
-          >
-            {i + 1}. {label}
-          </span>
-        ))}
+        {ONBOARDING_STEP_LABELS.map((label, i) => {
+          const active = i === step;
+          const reachable = i <= maxReachedStep;
+          const className = cn(
+            'shrink-0 rounded-full px-3 py-1.5 text-[11px] font-extrabold min-[400px]:text-[12px]',
+            active
+              ? 'linkup-gradient-primary text-white shadow-sm'
+              : reachable
+                ? 'border border-primary/30 bg-white text-foreground hover:border-primary/50'
+                : 'cursor-not-allowed border border-border bg-white/80 text-muted opacity-60'
+          );
+
+          if (!reachable) {
+            return (
+              <span key={label} className={className} aria-disabled="true">
+                {i + 1}. {label}
+              </span>
+            );
+          }
+
+          return (
+            <button
+              key={label}
+              type="button"
+              onClick={() => goToStep(i)}
+              className={className}
+              aria-current={active ? 'step' : undefined}
+            >
+              {i + 1}. {label}
+            </button>
+          );
+        })}
       </div>
 
       {error ? <p className="text-[14px] font-extrabold text-red-600">{error}</p> : null}
