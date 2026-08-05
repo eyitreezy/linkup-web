@@ -9,6 +9,7 @@ import type { DbProfile } from '@/types/database';
 import type { ProfilePreferences } from '@/types/database';
 import { preferencesFromDraft, type OnboardingDraft } from '@/types/onboarding';
 import { ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
+import { getOnboardingFinishBlocker } from '@/lib/onboarding/validation';
 import { markSoftKycPromptPending } from '@/lib/verification/softPromptStorage';
 
 function birthIso(d: Date): string {
@@ -204,16 +205,8 @@ async function resolveDraftForFinalize(
     locationLongitude: hasValidProfileLocation(draft) ? draft.locationLongitude : fromDb.locationLongitude,
   };
 
-  const msg = profileMediaValidationMessage(merged.profileMedia);
-  if (msg) return { draft: merged, error: msg };
-
-  if (!merged.adultConfirmed) {
-    return { draft: merged, error: 'Confirm you are 18 or older to continue.' };
-  }
-
-  if (!hasValidProfileLocation(merged)) {
-    return { draft: merged, error: 'Pick your location from search results.' };
-  }
+  const blocker = getOnboardingFinishBlocker(merged);
+  if (blocker) return { draft: merged, error: blocker };
 
   return { draft: merged, error: null };
 }
@@ -242,7 +235,8 @@ export async function finalizeOnboarding(args: {
   } catch (e) {
     const bundle = await fetchUserProfileBundle(client, args.userId);
     const profile = bundle.profile as DbProfile | null;
-    const dbMedia = draftFromProfile(profile, null).profileMedia;
+    const fallbackVideo = await fetchProfileVideo(client, args.userId);
+    const dbMedia = draftFromProfile(profile, fallbackVideo).profileMedia;
     if (profile?.photo_urls?.length && profileMediaMeetsMinimums(dbMedia)) {
       mediaPatch = {
         photo_urls: profile.photo_urls ?? [],

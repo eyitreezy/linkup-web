@@ -122,20 +122,26 @@ export function HostMediaGallery({ profile, video = null, className }: Props) {
       </div>
 
       {count > 1 ? (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex gap-1 px-3 pb-2 pt-3">
+        <div className="absolute inset-x-0 top-0 z-20 flex gap-1 px-3 pb-2 pt-3">
           {items.map((item, i) => (
-            <div
+            <button
               key={item.id}
-              className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-white/30"
-              aria-hidden
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIndex(i);
+              }}
+              className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-white/30 p-0"
+              aria-label={`View ${item.kind === 'video' ? 'intro video' : 'photo'} ${i + 1} of ${count}`}
+              aria-current={i === safeIndex ? 'true' : undefined}
             >
-              <div
+              <span
                 className={cn(
-                  'h-full rounded-full bg-white transition-all duration-300',
+                  'block h-full rounded-full bg-white transition-all duration-300',
                   i === safeIndex ? 'w-full opacity-100' : i < safeIndex ? 'w-full opacity-45' : 'w-0 opacity-0'
                 )}
               />
-            </div>
+            </button>
           ))}
         </div>
       ) : null}

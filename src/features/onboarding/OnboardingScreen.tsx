@@ -9,6 +9,7 @@ import { ProfileMediaManager } from '@/features/profile/ProfileMediaManager';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
 import { HINGE_PROMPTS, INTEREST_TAGS, LANGUAGE_OPTIONS, ONBOARDING_STEP_LABELS, ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
 import { validatePromptAnswers } from '@/lib/onboarding/promptAnswers';
+import { getOnboardingFinishBlocker, mergeDraftForFinishCheck } from '@/lib/onboarding/validation';
 import { ProfilePromptEditor } from '@/components/profile/ProfilePromptEditor';
 import { ageFromBirthDate, draftFromProfile } from '@/lib/onboarding/hydrate';
 import { autosaveOnboardingProgress, finalizeOnboarding, saveOnboardingStep } from '@/lib/onboarding/persist';
@@ -229,6 +230,11 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     };
   }, [draft, step, user?.id, saving]);
 
+  const finishDraft = useMemo(() => {
+    if (!data?.profile) return draft;
+    return mergeDraftForFinishCheck(draft, data.profile, data.video ?? null);
+  }, [draft, data?.profile, data?.video]);
+
   const canContinue = useMemo(() => {
     if (step === 0) {
       const age = ageFromBirthDate(draft.birthDate);
@@ -248,8 +254,8 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       );
     }
     if (step === 2) return hasValidProfileLocation(draft);
-    return true;
-  }, [step, draft]);
+    return getOnboardingFinishBlocker(finishDraft) === null;
+  }, [step, draft, finishDraft]);
 
   const continueHint = useMemo(() => {
     if (step === 0) {
@@ -258,8 +264,8 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     }
     if (step === 1) return validatePromptAnswers(draft.promptAnswers) ?? 'Add interests, languages, intent, and at least one prompt.';
     if (step === 2) return 'Pick your location from search results.';
-    return null;
-  }, [step, draft]);
+    return getOnboardingFinishBlocker(finishDraft);
+  }, [step, draft, finishDraft]);
 
   useEffect(() => {
     if (invitationToken?.trim()) {
@@ -325,10 +331,43 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       return;
     }
 
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+
+    const flushResult = await autosaveOnboardingProgress({
+      userId: user.id,
+      draft,
+      stepIndex: step,
+      existingPreferences: savedPreferences,
+      existingVideoMediaId: videoMetaRef.current.id ?? data?.video?.id,
+      existingVideoStoragePath: videoMetaRef.current.storagePath ?? data?.video?.storagePath,
+    });
+    if (flushResult.error) {
+      setSaving(false);
+      setError(flushResult.error);
+      return;
+    }
+    preferencesRef.current = flushResult.preferences;
+
+    if (flushResult.mediaUploaded) {
+      const client = createClient();
+      const bundle = await fetchUserProfileBundle(client, user.id);
+      const video = await fetchProfileVideo(client, user.id);
+      videoMetaRef.current = { id: video?.id, storagePath: video?.storagePath };
+      if (bundle.profile) {
+        setDraft((d) => ({
+          ...d,
+          profileMedia: mediaDraftFromProfile(bundle.profile, video),
+        }));
+      }
+    }
+
     const { error: err } = await finalizeOnboarding({
       userId: user.id,
       draft,
-      existingPreferences: savedPreferences,
+      existingPreferences: flushResult.preferences,
       existingVideoMediaId: videoMetaRef.current.id ?? data?.video?.id,
       existingVideoStoragePath: videoMetaRef.current.storagePath ?? data?.video?.storagePath,
     });
