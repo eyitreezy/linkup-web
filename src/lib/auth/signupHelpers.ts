@@ -14,7 +14,7 @@ export function isDuplicateEmailSignup(user: User | null | undefined): boolean {
 }
 
 export const DUPLICATE_EMAIL_SIGNUP_MESSAGE =
-  'An account with this email already exists. Log in, or resend the verification email if you have not confirmed yet.';
+  'An account with this email already exists. Log in instead.';
 
 export function formatSignUpError(message: string): string {
   if (/already registered|already been registered|user already exists|email address is already/i.test(message)) {

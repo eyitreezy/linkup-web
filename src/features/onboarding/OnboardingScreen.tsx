@@ -63,6 +63,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
   const autosaveReadyRef = useRef(false);
   const skipAutosaveOnceRef = useRef(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onboardingFinishedRef = useRef(false);
   const draftRef = useRef(draft);
   const stepRef = useRef(step);
   const maxReachedStepRef = useRef(maxReachedStep);
@@ -149,7 +150,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
   }, [data?.profile, data?.video, user?.id]);
 
   useEffect(() => {
-    if (!user?.id || hydratedUserRef.current !== user.id) return;
+    if (!user?.id || hydratedUserRef.current !== user.id || onboardingFinishedRef.current) return;
     saveOnboardingSessionDraft(user.id, step, maxReachedStep, draft);
   }, [draft, step, maxReachedStep, user?.id]);
 
@@ -158,7 +159,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     const userId = user.id;
 
     function flushAutosave() {
-      if (!autosaveReadyRef.current || saving) return;
+      if (!autosaveReadyRef.current || saving || onboardingFinishedRef.current) return;
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
       saveOnboardingSessionDraft(userId, stepRef.current, maxReachedStepRef.current, draftRef.current);
       void autosaveOnboardingProgress({
@@ -176,7 +177,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
   }, [user?.id, saving]);
 
   useEffect(() => {
-    if (!autosaveReadyRef.current || !user?.id || saving) return;
+    if (!autosaveReadyRef.current || !user?.id || saving || onboardingFinishedRef.current) return;
 
     if (skipAutosaveOnceRef.current) {
       skipAutosaveOnceRef.current = false;
@@ -289,6 +290,11 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     }
     router.replace('/discover');
     router.refresh();
+    window.setTimeout(() => {
+      if (window.location.pathname.startsWith('/onboarding')) {
+        window.location.assign('/discover');
+      }
+    }, 400);
   }
 
   function goToStep(nextStep: number) {
@@ -309,9 +315,6 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     if (!canContinue) {
       const blocker = step === ONBOARDING_TOTAL_STEPS - 1 ? getOnboardingFinishBlocker(finishDraft) : continueHint;
       if (blocker) setError(blocker);
-      if (finishBlockerStep != null && finishBlockerStep !== step) {
-        goToStep(finishBlockerStep);
-      }
       return;
     }
     setSaving(true);
@@ -350,6 +353,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       clearTimeout(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
     }
+    autosaveReadyRef.current = false;
 
     const flushResult = await autosaveOnboardingProgress({
       userId: user.id,
@@ -360,6 +364,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       existingVideoStoragePath: videoMetaRef.current.storagePath ?? data?.video?.storagePath,
     });
     if (flushResult.error) {
+      autosaveReadyRef.current = true;
       setSaving(false);
       setError(flushResult.error);
       return;
@@ -397,10 +402,12 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     });
     setSaving(false);
     if (err) {
+      autosaveReadyRef.current = true;
       setError(err);
       return;
     }
 
+    onboardingFinishedRef.current = true;
     clearOnboardingSessionDraft();
     await queryClient.invalidateQueries({ queryKey: ['onboarding-bundle'] });
     await queryClient.invalidateQueries({ queryKey: ['profile-bundle'] });
@@ -651,7 +658,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
 
       <button
         type="button"
-        disabled={saving}
+        disabled={saving || !canContinue}
         onClick={() => void handleContinue()}
         className="w-full min-h-[48px] rounded-full linkup-gradient-primary font-extrabold text-white shadow-md disabled:opacity-50"
       >

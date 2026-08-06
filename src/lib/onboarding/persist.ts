@@ -47,6 +47,16 @@ export async function autosaveOnboardingProgress(args: {
 }): Promise<{ error: string | null; preferences: ProfilePreferences; mediaUploaded: boolean }> {
   const { userId, draft, stepIndex, existingPreferences } = args;
   const client = createClient();
+
+  const existing = await fetchUserProfileBundle(client, userId);
+  if (existing.profile?.onboarding_status === 'complete') {
+    return {
+      error: null,
+      preferences: existing.profile.preferences ?? existingPreferences ?? mergedPreferences(draft, existingPreferences, stepIndex),
+      mediaUploaded: false,
+    };
+  }
+
   const mergedPrefs = mergedPreferences(draft, existingPreferences, stepIndex);
 
   const patch: Record<string, unknown> = {
@@ -255,7 +265,7 @@ export async function finalizeOnboarding(args: {
   };
   delete (mergedPrefs as ProfilePreferences & { onboarding_step?: number }).onboarding_step;
 
-  const { error } = await client
+  const { error, data } = await client
     .from('profiles')
     .update({
       display_name: draft.displayName.trim(),
@@ -273,9 +283,14 @@ export async function finalizeOnboarding(args: {
       ...profileLocationFromDraft(draft),
       preferences: mergedPrefs,
     })
-    .eq('user_id', args.userId);
+    .eq('user_id', args.userId)
+    .select('onboarding_status')
+    .single();
 
   if (error) return { error: error.message };
+  if (data?.onboarding_status !== 'complete') {
+    return { error: 'Could not complete onboarding. Try again.' };
+  }
 
   await markSoftKycPromptPending();
   return { error: null };
