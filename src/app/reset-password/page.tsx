@@ -2,30 +2,81 @@
 
 import { AuthShell } from '@/components/auth/AuthShell';
 import { AuthButton, AuthPasswordInput } from '@/components/auth/AuthFormPrimitives';
+import { formatAuthCallbackError } from '@/lib/auth/authCallbackErrors';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 import { IoAlertCircleOutline } from 'react-icons/io5';
 
-export default function ResetPasswordPage() {
+function ResetPasswordFields() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    const recoveryError = searchParams.get('error');
+    const desc = searchParams.get('error_description');
+    if (recoveryError === 'link_expired') {
+      return 'This reset link expired or was already used. Request a new one below.';
+    }
+    if (recoveryError === 'recovery_failed' && desc) {
+      try {
+        return formatAuthCallbackError(decodeURIComponent(desc.replace(/\+/g, ' ')));
+      } catch {
+        return formatAuthCallbackError(desc);
+      }
+    }
+    return null;
+  });
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const [hasSession, setHasSession] = useState(false);
 
   useEffect(() => {
-    void (async () => {
-      const supabase = createClient();
+    const supabase = createClient();
+
+    async function establishRecoverySession() {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      const tokenHash = params.get('token_hash');
+      const type = params.get('type');
+
+      if (code) {
+        const { error: exchangeErr } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeErr) {
+          setError(formatAuthCallbackError(exchangeErr.message));
+        }
+        window.history.replaceState({}, '', '/reset-password');
+      } else if (tokenHash && type === 'recovery') {
+        const { error: otpErr } = await supabase.auth.verifyOtp({
+          type: 'recovery',
+          token_hash: tokenHash,
+        });
+        if (otpErr) {
+          setError(formatAuthCallbackError(otpErr.message));
+        }
+        window.history.replaceState({}, '', '/reset-password');
+      }
+
       const {
         data: { session },
       } = await supabase.auth.getSession();
       setHasSession(!!session?.user);
       setReady(true);
-    })();
+    }
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setHasSession(!!session?.user);
+        setReady(true);
+      }
+    });
+
+    void establishRecoverySession();
+    return () => subscription.unsubscribe();
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
@@ -64,7 +115,8 @@ export default function ResetPasswordPage() {
         <div className="auth-verify-card">
           <IoAlertCircleOutline className="mx-auto text-[#F59E0B]" size={40} />
           <p className="mt-3 text-[14px] font-semibold leading-relaxed text-muted max-lg:text-white/85">
-            Open the reset link from your email again, or request a new one from the sign-in screen.
+            {error ??
+              'Open the reset link from your email again, or request a new one from the sign-in screen.'}
           </p>
           <AuthButton type="button" fullWidth className="mt-4" onClick={() => router.replace('/login')}>
             Back to sign in
@@ -113,5 +165,19 @@ export default function ResetPasswordPage() {
         </Link>
       </form>
     </AuthShell>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthShell variant="recovery" showHero={false}>
+          <p className="text-center text-muted max-lg:text-white/60">Loading…</p>
+        </AuthShell>
+      }
+    >
+      <ResetPasswordFields />
+    </Suspense>
   );
 }

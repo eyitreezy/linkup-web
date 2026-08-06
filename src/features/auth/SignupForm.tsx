@@ -6,8 +6,10 @@ import { GoogleAuthBlock } from '@/features/auth/GoogleAuthBlock';
 import { recordPrivacyConsent } from '@/lib/privacy/recordPrivacyConsent';
 import {
   DUPLICATE_EMAIL_SIGNUP_MESSAGE,
+  formatResendVerificationError,
   formatSignUpError,
   isDuplicateEmailSignup,
+  isDuplicateSignUpError,
   normalizeAuthEmail,
 } from '@/lib/auth/signupHelpers';
 import { resolvePostAuthDestination } from '@/lib/auth/resolvePostAuthDestination';
@@ -50,7 +52,7 @@ function SignupFields() {
         },
       });
       if (err) {
-        setResendError(err.message);
+        setResendError(formatResendVerificationError(err.message));
         return;
       }
       setResendNotice('Verification email sent again. Check your inbox and spam folder.');
@@ -96,7 +98,14 @@ function SignupFields() {
         },
       });
       if (err) {
-        setError(formatSignUpError(err.message));
+        const formatted = formatSignUpError(err.message);
+        if (isDuplicateSignUpError(err.message)) {
+          setEmail(normalizedEmail);
+          setDuplicateEmail(true);
+          setError(null);
+          return;
+        }
+        setError(formatted);
         return;
       }
       if (isDuplicateEmailSignup(data.user)) {

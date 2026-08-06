@@ -17,8 +17,22 @@ export const DUPLICATE_EMAIL_SIGNUP_MESSAGE =
   'An account with this email already exists. Log in, or resend the verification email if you have not confirmed yet.';
 
 export function formatSignUpError(message: string): string {
-  if (/already registered|already been registered|user already exists/i.test(message)) {
+  if (/already registered|already been registered|user already exists|email address is already/i.test(message)) {
     return DUPLICATE_EMAIL_SIGNUP_MESSAGE;
+  }
+  if (/rate limit|too many requests|email.*limit/i.test(message)) {
+    return 'Too many emails sent. Wait a few minutes and try again.';
+  }
+  return message;
+}
+
+export function isDuplicateSignUpError(message: string): boolean {
+  return formatSignUpError(message) === DUPLICATE_EMAIL_SIGNUP_MESSAGE;
+}
+
+export function formatResendVerificationError(message: string): string {
+  if (/already confirmed|already verified|user already registered/i.test(message)) {
+    return 'This email is already verified. Log in with your password instead.';
   }
   if (/rate limit|too many requests|email.*limit/i.test(message)) {
     return 'Too many emails sent. Wait a few minutes and try again.';

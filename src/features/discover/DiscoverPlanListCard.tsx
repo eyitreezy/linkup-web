@@ -15,6 +15,7 @@ import { derivePresenceUi, type PresenceUi } from '@/lib/presence/hostPresenceSt
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { moodDiscoverMeta } from '@/lib/plans/moodDiscoverUi';
 import { planHeroUri } from '@/lib/plans/planHero';
+import { publicProfileHref } from '@/lib/profile/profileRoutes';
 import type { PlanFeedRow } from '@/services/plans.service';
 import type { DbProfile } from '@/types/database';
 import Link from 'next/link';
@@ -63,6 +64,7 @@ export function DiscoverPlanListCard({
   const isCreatorSpotlighted =
     !boosted && !isPlatinum && isCreatorSpotlightActive(plan.creator?.spotlight_until);
   const isOwn = viewerUserId != null && plan.creator_id === viewerUserId;
+  const hostProfileHref = publicProfileHref(plan.creator_id, viewerUserId);
   const showPresence = !isOwn;
   const presenceUi = useMemo(
     () =>
@@ -90,12 +92,11 @@ export function DiscoverPlanListCard({
     suggestedShareCents != null ? formatNGN(grossAmountCents(suggestedShareCents)) : null;
 
   return (
-    <Link
-      href={`/plan/${plan.id}`}
-      className="group flex w-full min-w-0 max-w-full flex-col overflow-hidden rounded-2xl border border-primary/10 bg-white shadow-[0_6px_20px_rgba(42,31,85,0.07)] transition hover:border-primary/25 hover:shadow-[0_10px_28px_rgba(108,99,255,0.12)] sm:flex-row sm:items-stretch"
-    >
-      {/* Hero — full width on mobile, left rail on sm+ */}
-      <div className="relative aspect-[16/10] w-full shrink-0 sm:aspect-auto sm:w-[38%] sm:max-w-[220px] sm:min-h-[128px] md:w-[40%] md:max-w-[240px]">
+    <article className="group flex w-full min-w-0 max-w-full flex-col overflow-hidden rounded-2xl border border-primary/10 bg-white shadow-[0_6px_20px_rgba(42,31,85,0.07)] transition hover:border-primary/25 hover:shadow-[0_10px_28px_rgba(108,99,255,0.12)] sm:flex-row sm:items-stretch">
+      <Link
+        href={`/plan/${plan.id}`}
+        className="relative aspect-[16/10] w-full shrink-0 sm:aspect-auto sm:w-[38%] sm:max-w-[220px] sm:min-h-[128px] md:w-[40%] md:max-w-[240px]"
+      >
         <div className="absolute inset-0 bg-gradient-to-br from-[#EDE8FF] to-[#FFF0F5]" />
         {hero ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -120,35 +121,42 @@ export function DiscoverPlanListCard({
             <BoostPill variant="mini" />
           </span>
         ) : null}
-      </div>
+      </Link>
 
-      {/* Body */}
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-2 p-3.5 sm:gap-2.5 sm:px-4 sm:py-3.5">
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <h3 className="line-clamp-2 font-display text-[15px] font-extrabold leading-snug text-foreground group-hover:text-primary sm:text-base">
-              {plan.title}
-            </h3>
-            <p className="mt-0.5 truncate text-[12px] font-semibold text-muted">
-              {plan.location_label ?? 'Location TBD'}
-            </p>
+        <Link href={`/plan/${plan.id}`} className="block">
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <h3 className="line-clamp-2 font-display text-[15px] font-extrabold leading-snug text-foreground group-hover:text-primary sm:text-base">
+                {plan.title}
+              </h3>
+              <p className="mt-0.5 truncate text-[12px] font-semibold text-muted">
+                {plan.location_label ?? 'Location TBD'}
+              </p>
+            </div>
+            {verified ? (
+              <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-500/12 px-1.5 py-0.5 text-[9px] font-extrabold text-emerald-700">
+                <IoShieldCheckmark size={10} />
+              </span>
+            ) : null}
           </div>
-          {verified ? (
-            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-500/12 px-1.5 py-0.5 text-[9px] font-extrabold text-emerald-700">
-              <IoShieldCheckmark size={10} />
-            </span>
-          ) : null}
-        </div>
+        </Link>
 
         <div className="flex min-w-0 items-center gap-2">
-          <AvatarWithPresence
-            uri={plan.creator?.avatar_url}
-            name={name}
-            size={34}
-            presence={presenceUi}
-            showDot={showPresence && !!presenceUi?.dot}
-          />
-          <div className="min-w-0 flex-1">
+          <Link
+            href={hostProfileHref}
+            className="shrink-0 rounded-full ring-offset-2 transition hover:ring-2 hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={`View ${name}'s profile`}
+          >
+            <AvatarWithPresence
+              uri={plan.creator?.avatar_url}
+              name={name}
+              size={34}
+              presence={presenceUi}
+              showDot={showPresence && !!presenceUi?.dot}
+            />
+          </Link>
+          <Link href={`/plan/${plan.id}`} className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
               <p className="truncate text-[13px] font-extrabold text-foreground">{name}</p>
               {isPlatinum ? <TierBadge tier="PLATINUM" size="sm" /> : null}
@@ -172,45 +180,51 @@ export function DiscoverPlanListCard({
                 </span>
               ) : null}
             </div>
-          </div>
+          </Link>
         </div>
 
-        {moodMeta.showMood ? (
-          <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-secondary/15 bg-secondary/5 px-2 py-1">
-            {moodMeta.urgencyLabel ? (
-              <span className="text-[10px] font-extrabold text-secondary">{moodMeta.urgencyLabel}</span>
-            ) : null}
-            {moodMeta.moodTypeLabel ? (
-              <span className="text-[10px] font-extrabold lowercase text-primary">{moodMeta.moodTypeLabel}</span>
-            ) : null}
-            {moodMeta.moodExpiresAt ? <MoodPlanCountdown expiresAtIso={moodMeta.moodExpiresAt} /> : null}
-          </div>
-        ) : (
-          <p className="line-clamp-2 text-[12px] font-semibold leading-snug text-muted sm:line-clamp-1">
-            {plan.description?.trim() || 'Tap for full details'}
-          </p>
-        )}
+        <Link href={`/plan/${plan.id}`} className="block">
+          {moodMeta.showMood ? (
+            <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-secondary/15 bg-secondary/5 px-2 py-1">
+              {moodMeta.urgencyLabel ? (
+                <span className="text-[10px] font-extrabold text-secondary">{moodMeta.urgencyLabel}</span>
+              ) : null}
+              {moodMeta.moodTypeLabel ? (
+                <span className="text-[10px] font-extrabold lowercase text-primary">{moodMeta.moodTypeLabel}</span>
+              ) : null}
+              {moodMeta.moodExpiresAt ? <MoodPlanCountdown expiresAtIso={moodMeta.moodExpiresAt} /> : null}
+            </div>
+          ) : (
+            <p className="line-clamp-2 text-[12px] font-semibold leading-snug text-muted sm:line-clamp-1">
+              {plan.description?.trim() || 'Tap for full details'}
+            </p>
+          )}
 
-        <div className="flex flex-col items-end gap-0.5 border-t border-border/50 pt-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-          <div className="flex w-full flex-col items-start sm:w-auto">
-            {suggestedShareGrossLabel ? (
-              <span className="shrink-0 text-[13px] font-extrabold text-primary">
-                {suggestedShareGrossLabel}
-                <span className="font-semibold text-muted"> / person</span>
-              </span>
-            ) : priceGrossLabel ? (
-              <span className="shrink-0 text-[13px] font-extrabold text-primary">{priceGrossLabel}</span>
-            ) : (
-              <span className="shrink-0 text-[13px] font-extrabold text-primary">Free to join</span>
-            )}
+          <div className="mt-2 flex flex-col items-end gap-0.5 border-t border-border/50 pt-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+            <div className="flex w-full flex-col items-start sm:w-auto">
+              {suggestedShareGrossLabel ? (
+                <span className="shrink-0 text-[13px] font-extrabold text-primary">
+                  {suggestedShareGrossLabel}
+                  <span className="font-semibold text-muted"> / person</span>
+                </span>
+              ) : priceGrossLabel ? (
+                <span className="shrink-0 text-[13px] font-extrabold text-primary">{priceGrossLabel}</span>
+              ) : (
+                <span className="shrink-0 text-[13px] font-extrabold text-primary">Free to join</span>
+              )}
+            </div>
+            <span className="min-w-0 truncate text-right text-[11px] font-semibold text-muted">{formatWhen(plan)}</span>
           </div>
-          <span className="min-w-0 truncate text-right text-[11px] font-semibold text-muted">{formatWhen(plan)}</span>
-        </div>
+        </Link>
       </div>
 
-      <div className="hidden w-9 shrink-0 items-center justify-center border-l border-border/40 bg-[#FAFAFF]/80 text-muted group-hover:text-primary sm:flex">
+      <Link
+        href={`/plan/${plan.id}`}
+        className="hidden w-9 shrink-0 items-center justify-center border-l border-border/40 bg-[#FAFAFF]/80 text-muted group-hover:text-primary sm:flex"
+        aria-hidden
+      >
         <IoChevronForward size={18} className="opacity-50 group-hover:opacity-100" />
-      </div>
-    </Link>
+      </Link>
+    </article>
   );
 }

@@ -1,3 +1,4 @@
+import { ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
 import { ageFromBirthDate, draftFromProfile } from '@/lib/onboarding/hydrate';
 import { validatePromptAnswers } from '@/lib/onboarding/promptAnswers';
 import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
@@ -59,4 +60,32 @@ export function getOnboardingFinishBlocker(draft: OnboardingDraft): string | nul
   }
 
   return null;
+}
+
+/** Step index (0-based) where the user should go to resolve a finish blocker. */
+export function getOnboardingFinishBlockerStep(draft: OnboardingDraft): number {
+  if (
+    draft.displayName.trim().length < 1 ||
+    !draft.adultConfirmed ||
+    ageFromBirthDate(draft.birthDate) < 18 ||
+    profileMediaValidationMessage(draft.profileMedia) ||
+    !profileMediaMeetsMinimums(draft.profileMedia)
+  ) {
+    return 0;
+  }
+
+  if (
+    draft.interests.length < 1 ||
+    draft.languages.length < 1 ||
+    draft.meetingIntent == null ||
+    validatePromptAnswers(draft.promptAnswers)
+  ) {
+    return 1;
+  }
+
+  if (!hasValidProfileLocation(draft)) {
+    return 2;
+  }
+
+  return ONBOARDING_TOTAL_STEPS - 1;
 }

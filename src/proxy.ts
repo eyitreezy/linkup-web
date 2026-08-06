@@ -65,7 +65,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith('/auth/callback') || pathname.startsWith('/auth/confirm')) {
+  if (pathname.startsWith('/auth/callback') || pathname.startsWith('/auth/confirm') || pathname.startsWith('/auth/recovery')) {
     return NextResponse.next();
   }
 
@@ -127,7 +127,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  if (isAuthPath(pathname) && user) {
+  if (isAuthPath(pathname) && user && pathname !== '/reset-password' && !pathname.startsWith('/reset-password/')) {
     const destination = await resolvePostAuthDestinationForUserId(supabase, user.id);
     return NextResponse.redirect(new URL(destination, request.url));
   }

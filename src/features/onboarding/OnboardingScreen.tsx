@@ -9,7 +9,7 @@ import { ProfileMediaManager } from '@/features/profile/ProfileMediaManager';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
 import { HINGE_PROMPTS, INTEREST_TAGS, LANGUAGE_OPTIONS, ONBOARDING_STEP_LABELS, ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
 import { validatePromptAnswers } from '@/lib/onboarding/promptAnswers';
-import { getOnboardingFinishBlocker, mergeDraftForFinishCheck } from '@/lib/onboarding/validation';
+import { getOnboardingFinishBlocker, getOnboardingFinishBlockerStep, mergeDraftForFinishCheck } from '@/lib/onboarding/validation';
 import { ProfilePromptEditor } from '@/components/profile/ProfilePromptEditor';
 import { ageFromBirthDate, draftFromProfile } from '@/lib/onboarding/hydrate';
 import { autosaveOnboardingProgress, finalizeOnboarding, saveOnboardingStep } from '@/lib/onboarding/persist';
@@ -297,8 +297,23 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     setStep(nextStep);
   }
 
+  const finishBlockerStep = useMemo(() => {
+    if (step !== ONBOARDING_TOTAL_STEPS - 1) return null;
+    if (getOnboardingFinishBlocker(finishDraft) === null) return null;
+    return getOnboardingFinishBlockerStep(finishDraft);
+  }, [step, finishDraft]);
+
   async function handleContinue() {
-    if (!user?.id || !canContinue) return;
+    if (!user?.id) return;
+
+    if (!canContinue) {
+      const blocker = step === ONBOARDING_TOTAL_STEPS - 1 ? getOnboardingFinishBlocker(finishDraft) : continueHint;
+      if (blocker) setError(blocker);
+      if (finishBlockerStep != null && finishBlockerStep !== step) {
+        goToStep(finishBlockerStep);
+      }
+      return;
+    }
     setSaving(true);
     setError(null);
     const savedPreferences = preferencesRef.current ?? data?.profile?.preferences ?? null;
@@ -351,22 +366,31 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     }
     preferencesRef.current = flushResult.preferences;
 
+    let draftForFinalize = finishDraft;
     if (flushResult.mediaUploaded) {
       const client = createClient();
       const bundle = await fetchUserProfileBundle(client, user.id);
       const video = await fetchProfileVideo(client, user.id);
       videoMetaRef.current = { id: video?.id, storagePath: video?.storagePath };
       if (bundle.profile) {
+        const refreshedMedia = mediaDraftFromProfile(bundle.profile, video);
+        draftForFinalize = mergeDraftForFinishCheck(
+          { ...draft, profileMedia: refreshedMedia },
+          bundle.profile,
+          video
+        );
         setDraft((d) => ({
           ...d,
-          profileMedia: mediaDraftFromProfile(bundle.profile, video),
+          profileMedia: refreshedMedia,
         }));
       }
     }
 
+    saveOnboardingSessionDraft(user.id, step, maxReachedStep, draftForFinalize);
+
     const { error: err } = await finalizeOnboarding({
       userId: user.id,
-      draft,
+      draft: draftForFinalize,
       existingPreferences: flushResult.preferences,
       existingVideoMediaId: videoMetaRef.current.id ?? data?.video?.id,
       existingVideoStoragePath: videoMetaRef.current.storagePath ?? data?.video?.storagePath,
@@ -611,14 +635,23 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       ) : null}
 
       {!canContinue && continueHint ? (
-        <p className="rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2.5 text-[13px] font-semibold text-amber-900">
-          {continueHint}
-        </p>
+        <div className="rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2.5">
+          <p className="text-[13px] font-semibold text-amber-900">{continueHint}</p>
+          {finishBlockerStep != null && finishBlockerStep !== step ? (
+            <button
+              type="button"
+              onClick={() => goToStep(finishBlockerStep)}
+              className="mt-2 text-[13px] font-extrabold text-primary underline hover:no-underline"
+            >
+              Go to step {finishBlockerStep + 1}: {ONBOARDING_STEP_LABELS[finishBlockerStep]}
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       <button
         type="button"
-        disabled={saving || !canContinue}
+        disabled={saving}
         onClick={() => void handleContinue()}
         className="w-full min-h-[48px] rounded-full linkup-gradient-primary font-extrabold text-white shadow-md disabled:opacity-50"
       >
