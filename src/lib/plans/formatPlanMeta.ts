@@ -38,6 +38,26 @@ export function formatPlanAppFee(plan: DbPlan): string | null {
   return `₦${v}`;
 }
 
+export function formatPlanCreated(plan: DbPlan): string {
+  const created = new Date(plan.created_at);
+  const now = new Date();
+  const diffMs = now.getTime() - created.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 0) return 'Created today';
+  if (diffDays === 1) return 'Created yesterday';
+  if (diffDays < 7) return `Created ${diffDays} days ago`;
+
+  return (
+    'Created · ' +
+    created.toLocaleDateString(DISPLAY_LOCALE, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
+  );
+}
+
 export function formatIsoDateTime(iso: string | null | undefined, fallback?: string): string {
   const raw = iso ?? fallback;
   if (!raw) return 'To be scheduled';

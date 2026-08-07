@@ -1,6 +1,6 @@
 import { hasValidProfileLocation, profileLocationFromDraft } from '@/lib/profile/profileLocation';
 import { persistProfileMediaDraft } from '@/lib/profile/media/persist';
-import { profileMediaMeetsMinimums, profileMediaValidationMessage } from '@/lib/profile/media/validation';
+import { profileMediaMeetsMinimums } from '@/lib/profile/media/validation';
 import { draftFromProfile } from '@/lib/onboarding/hydrate';
 import { createClient } from '@/lib/supabase/client';
 import { fetchProfileVideo } from '@/services/profileMedia.service';
@@ -9,7 +9,7 @@ import type { DbProfile } from '@/types/database';
 import type { ProfilePreferences } from '@/types/database';
 import { preferencesFromDraft, type OnboardingDraft } from '@/types/onboarding';
 import { ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
-import { getOnboardingFinishBlocker } from '@/lib/onboarding/validation';
+import { getOnboardingFinishBlocker, getOnboardingStepBlocker } from '@/lib/onboarding/validation';
 import { markSoftKycPromptPending } from '@/lib/verification/softPromptStorage';
 
 function birthIso(d: Date): string {
@@ -154,12 +154,8 @@ export async function saveOnboardingStep(args: {
   };
 
   if (stepIndex === 0) {
-    if (!draft.adultConfirmed) return { error: 'Confirm you are 18 or older to continue.' };
-    const msg = profileMediaValidationMessage(draft.profileMedia);
-    if (msg) return { error: msg };
-    if (!profileMediaMeetsMinimums(draft.profileMedia)) {
-      return { error: msg ?? 'Add at least 3 photos and 1 profile video.' };
-    }
+    const stepBlocker = getOnboardingStepBlocker(draft, 0);
+    if (stepBlocker) return { error: stepBlocker };
     try {
       const media = await persistProfileMediaDraft({
         userId,
@@ -176,12 +172,16 @@ export async function saveOnboardingStep(args: {
     }
   }
 
-  if (stepIndex >= 1) {
+  if (stepIndex === 1) {
+    const stepBlocker = getOnboardingStepBlocker(draft, 1);
+    if (stepBlocker) return { error: stepBlocker };
     patch.bio = draft.bio.trim() || null;
     patch.gender = draft.selfGender;
   }
 
-  if (stepIndex >= 2 && hasValidProfileLocation(draft)) {
+  if (stepIndex >= 2) {
+    const stepBlocker = getOnboardingStepBlocker(draft, 2);
+    if (stepBlocker) return { error: stepBlocker };
     Object.assign(patch, profileLocationFromDraft(draft));
   }
 
@@ -197,28 +197,13 @@ export async function saveOnboardingStep(args: {
 }
 
 async function resolveDraftForFinalize(
-  userId: string,
+  _userId: string,
   draft: OnboardingDraft
 ): Promise<{ draft: OnboardingDraft; error: string | null }> {
-  const client = createClient();
-  const bundle = await fetchUserProfileBundle(client, userId);
-  const video = await fetchProfileVideo(client, userId);
-  const fromDb = draftFromProfile(bundle.profile, video);
+  const blocker = getOnboardingFinishBlocker(draft);
+  if (blocker) return { draft, error: blocker };
 
-  const merged: OnboardingDraft = {
-    ...fromDb,
-    ...draft,
-    adultConfirmed: draft.adultConfirmed || fromDb.adultConfirmed,
-    profileMedia: profileMediaMeetsMinimums(draft.profileMedia) ? draft.profileMedia : fromDb.profileMedia,
-    locationLabel: hasValidProfileLocation(draft) ? draft.locationLabel : fromDb.locationLabel,
-    locationLatitude: hasValidProfileLocation(draft) ? draft.locationLatitude : fromDb.locationLatitude,
-    locationLongitude: hasValidProfileLocation(draft) ? draft.locationLongitude : fromDb.locationLongitude,
-  };
-
-  const blocker = getOnboardingFinishBlocker(merged);
-  if (blocker) return { draft: merged, error: blocker };
-
-  return { draft: merged, error: null };
+  return { draft, error: null };
 }
 
 export async function finalizeOnboarding(args: {
@@ -243,6 +228,9 @@ export async function finalizeOnboarding(args: {
       existingVideoStoragePath: args.existingVideoStoragePath,
     });
   } catch (e) {
+    if (!profileMediaMeetsMinimums(draft.profileMedia)) {
+      return { error: e instanceof Error ? e.message : 'Media upload failed' };
+    }
     const bundle = await fetchUserProfileBundle(client, args.userId);
     const profile = bundle.profile as DbProfile | null;
     const fallbackVideo = await fetchProfileVideo(client, args.userId);

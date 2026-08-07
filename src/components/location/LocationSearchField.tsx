@@ -30,6 +30,7 @@ export function LocationSearchField({
   const listboxId = useId();
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -133,9 +134,14 @@ export function LocationSearchField({
   async function pick(s: LocationSuggestion) {
     setOpen(false);
     setSearched(false);
-    const resolved = await resolveGooglePlaceSuggestion(s);
-    onChange(resolved.label);
-    onSelect?.(resolved);
+    setResolveError(null);
+    try {
+      const resolved = await resolveGooglePlaceSuggestion(s);
+      onChange(resolved.label);
+      onSelect?.(resolved);
+    } catch (e) {
+      setResolveError(e instanceof Error ? e.message : 'Could not use that location.');
+    }
   }
 
   const showPanel = open && canSearch && (loading || searched);
@@ -188,6 +194,7 @@ export function LocationSearchField({
           ref={inputRef}
           value={value}
           onChange={(e) => {
+            setResolveError(null);
             onChange(e.target.value);
             if (e.target.value.trim().length >= LOCATION_SUGGEST_MIN_CHARS) {
               setOpen(true);
@@ -212,6 +219,9 @@ export function LocationSearchField({
           className="w-full rounded-2xl border border-border bg-[#F8F9FC] px-4 py-3.5 text-[15px] font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
         />
       </label>
+      {resolveError ? (
+        <p className="mt-1.5 text-[12px] font-semibold text-red-600">{resolveError}</p>
+      ) : null}
       {showTypeMoreHint ? (
         <p className="mt-1.5 text-[12px] font-semibold text-muted">
           Type at least {LOCATION_SUGGEST_MIN_CHARS} characters to see places.

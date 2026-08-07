@@ -8,14 +8,14 @@ export type MoodReach = 'city' | 'city_adjacent' | 'city_widest' | 'all_cities';
 export const MOOD_REACH_KM: Record<MoodReach, number | null> = {
   city: 25,
   city_adjacent: 50,
-  city_widest: 100,
+  city_widest: 20,
   all_cities: null,
 };
 
 export const MOOD_REACH_LABELS: Record<MoodReach, string> = {
   city: 'City-wide · 25km',
   city_adjacent: 'City + nearby · 50km',
-  city_widest: 'Widest reach · 100km',
+  city_widest: 'Widest reach · 20km',
   all_cities: 'All cities',
 };
 

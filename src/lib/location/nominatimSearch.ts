@@ -1,3 +1,4 @@
+import { NOMINATIM_AFRICA_COUNTRYCODES } from '@/lib/location/africaCountries';
 import type { LocationSuggestion } from '@/lib/location/types';
 
 type NominatimResult = {
@@ -5,11 +6,13 @@ type NominatimResult = {
   lat?: string;
   lon?: string;
   place_id?: number;
+  type?: string;
+  class?: string;
 };
 
-const NOMINATIM_USER_AGENT = 'LinkUp-Web/1.0 (https://linkup.app; onboarding location search)';
+const NOMINATIM_USER_AGENT = 'LinkUp-Web/1.0 (https://linkup.app; location search)';
 
-/** OpenStreetMap Nominatim — free fallback when Google Places web service is unavailable. */
+/** OpenStreetMap Nominatim — Africa-only fallback with POI + address support. */
 export async function searchNominatimSuggestions(
   query: string,
   limit = 8
@@ -22,6 +25,7 @@ export async function searchNominatimSuggestions(
     format: 'json',
     limit: String(Math.min(Math.max(limit, 1), 10)),
     addressdetails: '0',
+    countrycodes: NOMINATIM_AFRICA_COUNTRYCODES,
   });
 
   try {

@@ -1,3 +1,4 @@
+import { isCoordinateInAfrica } from '@/lib/location/africaCountries';
 import { searchNominatimSuggestions } from '@/lib/location/nominatimSearch';
 import { getGoogleMapsServerApiKey, getGoogleMapsWebApiKey } from '@/lib/maps/config';
 import { NextResponse } from 'next/server';
@@ -10,12 +11,16 @@ type GoogleAutocompleteResponse = {
 };
 
 async function googlePredictions(input: string, key: string) {
-  const url =
-    `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
-    `?input=${encodeURIComponent(input)}` +
-    `&key=${encodeURIComponent(key)}`;
+  const params = new URLSearchParams({
+    input,
+    key,
+    location: '6.5244,3.3792',
+    radius: '8000000',
+  });
 
-  const res = await fetch(url);
+  const res = await fetch(
+    `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`
+  );
   const json = (await res.json()) as GoogleAutocompleteResponse;
   if (json.status !== 'OK' || !json.predictions?.length) return [];
   return json.predictions;
@@ -53,8 +58,9 @@ export async function GET(request: Request) {
   }
 
   const nominatim = await searchNominatimSuggestions(input, 8);
+  const filtered = nominatim.filter((row) => isCoordinateInAfrica(row.latitude, row.longitude));
   return toPayload(
-    nominatim.map((row) => ({
+    filtered.map((row) => ({
       description: row.label,
       place_id: row.placeId ?? row.label,
       latitude: row.latitude,

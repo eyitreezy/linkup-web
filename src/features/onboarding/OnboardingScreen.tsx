@@ -8,10 +8,9 @@ import { ToggleRow } from '@/components/settings/ToggleRow';
 import { ProfileMediaManager } from '@/features/profile/ProfileMediaManager';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
 import { HINGE_PROMPTS, INTEREST_TAGS, LANGUAGE_OPTIONS, ONBOARDING_STEP_LABELS, ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
-import { validatePromptAnswers } from '@/lib/onboarding/promptAnswers';
-import { getOnboardingFinishBlocker, getOnboardingFinishBlockerStep, mergeDraftForFinishCheck } from '@/lib/onboarding/validation';
 import { ProfilePromptEditor } from '@/components/profile/ProfilePromptEditor';
-import { ageFromBirthDate, draftFromProfile } from '@/lib/onboarding/hydrate';
+import { draftFromProfile } from '@/lib/onboarding/hydrate';
+import { getOnboardingFinishBlocker, getOnboardingFinishBlockerStep, getOnboardingStepBlocker } from '@/lib/onboarding/validation';
 import { autosaveOnboardingProgress, finalizeOnboarding, saveOnboardingStep } from '@/lib/onboarding/persist';
 import {
   clearOnboardingSessionDraft,
@@ -20,8 +19,6 @@ import {
 } from '@/lib/onboarding/sessionDraft';
 import { linkInvitationAfterSignup } from '@/lib/plans/planInvitations';
 import { mediaDraftFromProfile } from '@/lib/profile/media/draft';
-import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
-import { profileMediaMeetsMinimums, profileMediaValidationMessage } from '@/lib/profile/media/validation';
 import { createClient } from '@/lib/supabase/client';
 import { fetchProfileVideo } from '@/services/profileMedia.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
@@ -57,6 +54,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
   const [saving, setSaving] = useState(false);
   const [autosaving, setAutosaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [validationHighlightStep, setValidationHighlightStep] = useState<number | null>(null);
   const preferencesRef = useRef<ProfilePreferences | null>(null);
   const videoMetaRef = useRef<{ id?: string; storagePath?: string }>({});
   const hydratedUserRef = useRef<string | null>(null);
@@ -231,42 +229,19 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     };
   }, [draft, step, user?.id, saving]);
 
-  const finishDraft = useMemo(() => {
-    if (!data?.profile) return draft;
-    return mergeDraftForFinishCheck(draft, data.profile, data.video ?? null);
-  }, [draft, data?.profile, data?.video]);
+  const finishBlocker = useMemo(() => getOnboardingFinishBlocker(draft), [draft]);
 
   const canContinue = useMemo(() => {
-    if (step === 0) {
-      const age = ageFromBirthDate(draft.birthDate);
-      return (
-        draft.displayName.trim().length >= 1 &&
-        draft.adultConfirmed &&
-        age >= 18 &&
-        profileMediaMeetsMinimums(draft.profileMedia)
-      );
+    if (step === ONBOARDING_TOTAL_STEPS - 1) {
+      return finishBlocker === null;
     }
-    if (step === 1) {
-      return (
-        draft.interests.length >= 1 &&
-        draft.languages.length >= 1 &&
-        draft.meetingIntent != null &&
-        validatePromptAnswers(draft.promptAnswers) === null
-      );
-    }
-    if (step === 2) return hasValidProfileLocation(draft);
-    return getOnboardingFinishBlocker(finishDraft) === null;
-  }, [step, draft, finishDraft]);
+    return getOnboardingStepBlocker(draft, step) === null;
+  }, [step, draft, finishBlocker]);
 
   const continueHint = useMemo(() => {
-    if (step === 0) {
-      if (!draft.adultConfirmed) return 'Confirm you are 18+ to continue.';
-      return profileMediaValidationMessage(draft.profileMedia);
-    }
-    if (step === 1) return validatePromptAnswers(draft.promptAnswers) ?? 'Add interests, languages, intent, and at least one prompt.';
-    if (step === 2) return 'Pick your location from search results.';
-    return getOnboardingFinishBlocker(finishDraft);
-  }, [step, draft, finishDraft]);
+    if (step === ONBOARDING_TOTAL_STEPS - 1) return finishBlocker;
+    return getOnboardingStepBlocker(draft, step);
+  }, [step, draft, finishBlocker]);
 
   useEffect(() => {
     if (invitationToken?.trim()) {
@@ -300,25 +275,32 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
   function goToStep(nextStep: number) {
     if (nextStep > maxReachedStep || nextStep < 0 || nextStep >= ONBOARDING_TOTAL_STEPS) return;
     skipAutosaveOnceRef.current = true;
+    setValidationHighlightStep(null);
     setStep(nextStep);
   }
 
   const finishBlockerStep = useMemo(() => {
-    if (step !== ONBOARDING_TOTAL_STEPS - 1) return null;
-    if (getOnboardingFinishBlocker(finishDraft) === null) return null;
-    return getOnboardingFinishBlockerStep(finishDraft);
-  }, [step, finishDraft]);
+    if (finishBlocker === null) return null;
+    return getOnboardingFinishBlockerStep(draft);
+  }, [draft, finishBlocker]);
 
   async function handleContinue() {
     if (!user?.id) return;
 
-    if (!canContinue) {
-      const blocker = step === ONBOARDING_TOTAL_STEPS - 1 ? getOnboardingFinishBlocker(finishDraft) : continueHint;
-      if (blocker) setError(blocker);
+    const stepBlocker = step === ONBOARDING_TOTAL_STEPS - 1 ? finishBlocker : getOnboardingStepBlocker(draft, step);
+    if (stepBlocker) {
+      setError(stepBlocker);
+      const redirectStep =
+        step === ONBOARDING_TOTAL_STEPS - 1 ? getOnboardingFinishBlockerStep(draft) : step;
+      setValidationHighlightStep(redirectStep);
+      if (step === ONBOARDING_TOTAL_STEPS - 1 && redirectStep !== step) {
+        goToStep(redirectStep);
+      }
       return;
     }
     setSaving(true);
     setError(null);
+    setValidationHighlightStep(null);
     const savedPreferences = preferencesRef.current ?? data?.profile?.preferences ?? null;
 
     if (step < ONBOARDING_TOTAL_STEPS - 1) {
@@ -371,7 +353,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     }
     preferencesRef.current = flushResult.preferences;
 
-    let draftForFinalize = finishDraft;
+    let draftForFinalize = draft;
     if (flushResult.mediaUploaded) {
       const client = createClient();
       const bundle = await fetchUserProfileBundle(client, user.id);
@@ -379,11 +361,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       videoMetaRef.current = { id: video?.id, storagePath: video?.storagePath };
       if (bundle.profile) {
         const refreshedMedia = mediaDraftFromProfile(bundle.profile, video);
-        draftForFinalize = mergeDraftForFinishCheck(
-          { ...draft, profileMedia: refreshedMedia },
-          bundle.profile,
-          video
-        );
+        draftForFinalize = { ...draft, profileMedia: refreshedMedia };
         setDraft((d) => ({
           ...d,
           profileMedia: refreshedMedia,
@@ -392,6 +370,17 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     }
 
     saveOnboardingSessionDraft(user.id, step, maxReachedStep, draftForFinalize);
+
+    const finalizeBlocker = getOnboardingFinishBlocker(draftForFinalize);
+    if (finalizeBlocker) {
+      autosaveReadyRef.current = true;
+      setSaving(false);
+      setError(finalizeBlocker);
+      const redirectStep = getOnboardingFinishBlockerStep(draftForFinalize);
+      setValidationHighlightStep(redirectStep);
+      if (redirectStep !== step) goToStep(redirectStep);
+      return;
+    }
 
     const { error: err } = await finalizeOnboarding({
       userId: user.id,
@@ -404,6 +393,9 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     if (err) {
       autosaveReadyRef.current = true;
       setError(err);
+      const redirectStep = getOnboardingFinishBlockerStep(draftForFinalize);
+      setValidationHighlightStep(redirectStep);
+      if (redirectStep !== step) goToStep(redirectStep);
       return;
     }
 
@@ -442,13 +434,15 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
         {ONBOARDING_STEP_LABELS.map((label, i) => {
           const active = i === step;
           const reachable = i <= maxReachedStep;
+          const needsAttention = validationHighlightStep === i;
           const className = cn(
             'shrink-0 rounded-full px-3 py-1.5 text-[11px] font-extrabold min-[400px]:text-[12px]',
             active
               ? 'linkup-gradient-primary text-white shadow-sm'
               : reachable
                 ? 'border border-primary/30 bg-white text-foreground hover:border-primary/50'
-                : 'cursor-not-allowed border border-border bg-white/80 text-muted opacity-60'
+                : 'cursor-not-allowed border border-border bg-white/80 text-muted opacity-60',
+            needsAttention && 'ring-2 ring-amber-400 ring-offset-2'
           );
 
           if (!reachable) {
@@ -479,7 +473,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       ) : null}
 
       {step === 0 ? (
-        <FormCard>
+        <FormCard className={validationHighlightStep === 0 ? 'ring-2 ring-amber-400 ring-offset-2' : undefined}>
           <PremiumSectionHead title="Photos & video" />
           <label className="mt-3 block text-[13px] font-extrabold">Display name</label>
           <input
@@ -511,7 +505,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       ) : null}
 
       {step === 1 ? (
-        <>
+        <div className={cn('space-y-6', validationHighlightStep === 1 && 'rounded-3xl ring-2 ring-amber-400 ring-offset-2 p-1')}>
           <FormCard>
             <PremiumSectionHead title="Bio" />
             <textarea
@@ -574,11 +568,11 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
               showValidation
             />
           </FormCard>
-        </>
+        </div>
       ) : null}
 
       {step === 2 ? (
-        <FormCard>
+        <FormCard className={validationHighlightStep === 2 ? 'ring-2 ring-amber-400 ring-offset-2' : undefined}>
           <PremiumSectionHead title="Location" />
           <LocationSearchField
             value={draft.locationLabel}
@@ -603,7 +597,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       ) : null}
 
       {step === 3 ? (
-        <FormCard>
+        <FormCard className={validationHighlightStep === 3 ? 'ring-2 ring-amber-400 ring-offset-2' : undefined}>
           <PremiumSectionHead title="Discovery preferences" />
           <ToggleRow
             label="Public profile"

@@ -20,6 +20,7 @@ const ACTIVITY: NotificationEventType[] = [
   'message',
   'meet_type_approved',
   'meet_type_rejected',
+  'mood_plan_nearby',
 ];
 
 const PAYMENTS: NotificationEventType[] = [

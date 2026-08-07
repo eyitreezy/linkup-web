@@ -771,6 +771,7 @@ export type NotificationEventType =
   | 'plan_invitation_accepted'
   | 'plan_invitation_declined'
   | 'plan_invitation_expired'
+  | 'mood_plan_nearby'
   | 'escrow_funded_bank_transfer'
   | 'refund_initiated'
   | string;

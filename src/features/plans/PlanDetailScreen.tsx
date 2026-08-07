@@ -47,7 +47,7 @@ import { daysUntilIso, isPlanActiveWindowExpiringSoon } from '@/lib/plans/planAc
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
 import { planShareCity, planSharePriceLabel } from '@/lib/plans/planSharePreview';
-import { formatPlanAppFee, formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
+import { formatPlanAppFee, formatPlanCreated, formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { countPendingInvitations, getPlanAvailableSlots } from '@/lib/plans/planInvitations';
 import { usePermission } from '@/hooks/usePermission';
 import { extendMoodPlan } from '@/lib/plans/moodPlanCooldown';
@@ -474,6 +474,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
   }
 
   const when = formatPlanWhen(plan);
+  const created = formatPlanCreated(plan);
   const price = formatPlanPrice(plan) ?? 'Open to offers';
   const appFee = formatPlanAppFee(plan);
   const viewerCoords = resolveDiscoverViewerCoords(
@@ -598,6 +599,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
           <dl className="grid gap-3 sm:grid-cols-2">
             <MetaItem icon={IoCalendarOutline} label="When" value={when} />
             <MetaItem icon={IoLocationOutline} label="Where" value={plan.location_label ?? 'TBD'} />
+            <MetaItem icon={IoTimeOutline} label="Created" value={created} />
             <MetaItem icon={IoPricetagOutline} label="Price" value={price} />
             {appFee ? (
               <MetaItem

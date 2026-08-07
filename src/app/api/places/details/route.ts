@@ -1,3 +1,4 @@
+import { isCoordinateInAfrica } from '@/lib/location/africaCountries';
 import { getGoogleMapsServerApiKey, getGoogleMapsWebApiKey } from '@/lib/maps/config';
 import { NextResponse } from 'next/server';
 
@@ -16,12 +17,16 @@ export async function GET(request: Request) {
   const url =
     `https://maps.googleapis.com/maps/api/place/details/json` +
     `?place_id=${encodeURIComponent(placeId)}` +
-    `&fields=formatted_address,geometry` +
+    `&fields=formatted_address,geometry,address_components` +
     `&key=${encodeURIComponent(key)}`;
 
   try {
     const res = await fetch(url);
     const json = await res.json();
+    const loc = json?.result?.geometry?.location;
+    if (loc && !isCoordinateInAfrica(loc.lat, loc.lng)) {
+      return NextResponse.json({ status: 'ZERO_RESULTS', result: null }, { status: 200 });
+    }
     return NextResponse.json(json);
   } catch {
     return NextResponse.json({ status: 'NETWORK_ERROR', result: null }, { status: 200 });

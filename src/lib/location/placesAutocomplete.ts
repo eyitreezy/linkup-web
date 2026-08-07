@@ -3,6 +3,10 @@
  * Order: server API (Nominatim fallback) → browser Google Places (optional, timed).
  */
 import { withTimeout } from '@/lib/async/withTimeout';
+import {
+  AFRICA_LOCATION_REJECTED_MESSAGE,
+  isCoordinateInAfrica,
+} from '@/lib/location/africaCountries';
 import { safeFetch } from '@/lib/fetch/safeFetch';
 import {
   clientPlaceDetails,
@@ -104,22 +108,28 @@ export async function searchGooglePlaceSuggestions(
 export async function resolveGooglePlaceSuggestion(
   suggestion: LocationSuggestion
 ): Promise<LocationSuggestion> {
+  let resolved = suggestion;
+
   if (suggestion.latitude !== 0 && suggestion.longitude !== 0) {
-    return suggestion;
-  }
-  if (!suggestion.placeId || suggestion.placeId.startsWith('osm:')) {
-    return suggestion;
+    resolved = suggestion;
+  } else if (suggestion.placeId && !suggestion.placeId.startsWith('osm:')) {
+    if (typeof window !== 'undefined') {
+      const clientResolved = await withTimeout(
+        clientPlaceDetails(suggestion.placeId),
+        CLIENT_GOOGLE_TIMEOUT_MS,
+        null
+      );
+      if (clientResolved) resolved = clientResolved;
+    }
+    if (resolved.latitude === 0 && resolved.longitude === 0) {
+      const serverResolved = await serverPlaceDetails(suggestion.placeId);
+      if (serverResolved) resolved = serverResolved;
+    }
   }
 
-  if (typeof window !== 'undefined') {
-    const resolved = await withTimeout(
-      clientPlaceDetails(suggestion.placeId),
-      CLIENT_GOOGLE_TIMEOUT_MS,
-      null
-    );
-    if (resolved) return resolved;
+  if (!isCoordinateInAfrica(resolved.latitude, resolved.longitude)) {
+    throw new Error(AFRICA_LOCATION_REJECTED_MESSAGE);
   }
 
-  const serverResolved = await serverPlaceDetails(suggestion.placeId);
-  return serverResolved ?? suggestion;
+  return resolved;
 }
