@@ -1,6 +1,6 @@
 import { hasValidProfileLocation, profileLocationFromDraft } from '@/lib/profile/profileLocation';
 import { persistProfileMediaDraft } from '@/lib/profile/media/persist';
-import { profileMediaMeetsMinimums } from '@/lib/profile/media/validation';
+import { hasProfileVideo, profileMediaMeetsMinimums } from '@/lib/profile/media/validation';
 import { draftFromProfile } from '@/lib/onboarding/hydrate';
 import { createClient } from '@/lib/supabase/client';
 import { fetchProfileVideo } from '@/services/profileMedia.service';
@@ -29,11 +29,11 @@ function mergedPreferences(
   };
 }
 
-function draftNeedsMediaUpload(draft: OnboardingDraft): boolean {
-  if (!profileMediaMeetsMinimums(draft.profileMedia)) return false;
-  const hasLocalPhoto = draft.profileMedia.photos.some((p) => p.localFile);
-  const hasLocalVideo = Boolean(draft.profileMedia.video?.localFile);
-  return hasLocalPhoto || hasLocalVideo;
+function draftNeedsMediaUpload(draft: OnboardingDraft, existingVideoMediaId?: string): boolean {
+  if (draft.profileMedia.photos.some((p) => p.localFile)) return true;
+  if (draft.profileMedia.video?.localFile) return true;
+  if (existingVideoMediaId && !hasProfileVideo(draft.profileMedia)) return true;
+  return profileMediaMeetsMinimums(draft.profileMedia);
 }
 
 /** Debounced progress save — keeps onboarding data across refresh without requiring Continue. */
@@ -84,7 +84,7 @@ export async function autosaveOnboardingProgress(args: {
   }
 
   let mediaUploaded = false;
-  if (draftNeedsMediaUpload(draft)) {
+  if (draftNeedsMediaUpload(draft, args.existingVideoMediaId)) {
     try {
       const media = await persistProfileMediaDraft({
         userId,

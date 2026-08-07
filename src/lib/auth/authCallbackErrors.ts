@@ -5,10 +5,10 @@ export function isPkceVerifierError(message: string): boolean {
 
 export function formatAuthCallbackError(message: string): string {
   if (isPkceVerifierError(message)) {
-    return 'Your email is confirmed. Sign in with your email and password on this device.';
+    return 'Your email is confirmed. Sign in with your email and password on your device.';
   }
   return message;
 }
 
 export const EMAIL_CONFIRMED_LOGIN_MESSAGE =
-  'Your email is confirmed. Sign in with your email and password on this device.';
+  'Your email is confirmed. Sign in with your email and password on your device.';

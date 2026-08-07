@@ -18,7 +18,7 @@ import {
   saveOnboardingSessionDraft,
 } from '@/lib/onboarding/sessionDraft';
 import { linkInvitationAfterSignup } from '@/lib/plans/planInvitations';
-import { mediaDraftFromProfile } from '@/lib/profile/media/draft';
+import { mediaDraftFromProfile, mergeProfileMediaDraftFromDb } from '@/lib/profile/media/draft';
 import { createClient } from '@/lib/supabase/client';
 import { fetchProfileVideo } from '@/services/profileMedia.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
@@ -215,9 +215,10 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
           const video = await fetchProfileVideo(client, user.id);
           videoMetaRef.current = { id: video?.id, storagePath: video?.storagePath };
           if (bundle.profile) {
+            const fromDb = mediaDraftFromProfile(bundle.profile, video);
             setDraft((d) => ({
               ...d,
-              profileMedia: mediaDraftFromProfile(bundle.profile, video),
+              profileMedia: mergeProfileMediaDraftFromDb(d.profileMedia, fromDb),
             }));
           }
         }
@@ -339,7 +340,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
 
     const flushResult = await autosaveOnboardingProgress({
       userId: user.id,
-      draft,
+      draft: draftRef.current,
       stepIndex: step,
       existingPreferences: savedPreferences,
       existingVideoMediaId: videoMetaRef.current.id ?? data?.video?.id,
@@ -353,30 +354,32 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     }
     preferencesRef.current = flushResult.preferences;
 
-    let draftForFinalize = draft;
+    let finalizeDraft = draftRef.current;
+
     if (flushResult.mediaUploaded) {
       const client = createClient();
       const bundle = await fetchUserProfileBundle(client, user.id);
       const video = await fetchProfileVideo(client, user.id);
       videoMetaRef.current = { id: video?.id, storagePath: video?.storagePath };
       if (bundle.profile) {
-        const refreshedMedia = mediaDraftFromProfile(bundle.profile, video);
-        draftForFinalize = { ...draft, profileMedia: refreshedMedia };
-        setDraft((d) => ({
-          ...d,
-          profileMedia: refreshedMedia,
-        }));
+        const fromDb = mediaDraftFromProfile(bundle.profile, video);
+        finalizeDraft = {
+          ...finalizeDraft,
+          profileMedia: mergeProfileMediaDraftFromDb(finalizeDraft.profileMedia, fromDb),
+        };
+        draftRef.current = finalizeDraft;
+        setDraft(finalizeDraft);
       }
     }
 
-    saveOnboardingSessionDraft(user.id, step, maxReachedStep, draftForFinalize);
+    saveOnboardingSessionDraft(user.id, step, maxReachedStep, finalizeDraft);
 
-    const finalizeBlocker = getOnboardingFinishBlocker(draftForFinalize);
+    const finalizeBlocker = getOnboardingFinishBlocker(finalizeDraft);
     if (finalizeBlocker) {
       autosaveReadyRef.current = true;
       setSaving(false);
       setError(finalizeBlocker);
-      const redirectStep = getOnboardingFinishBlockerStep(draftForFinalize);
+      const redirectStep = getOnboardingFinishBlockerStep(finalizeDraft);
       setValidationHighlightStep(redirectStep);
       if (redirectStep !== step) goToStep(redirectStep);
       return;
@@ -384,7 +387,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
 
     const { error: err } = await finalizeOnboarding({
       userId: user.id,
-      draft: draftForFinalize,
+      draft: finalizeDraft,
       existingPreferences: flushResult.preferences,
       existingVideoMediaId: videoMetaRef.current.id ?? data?.video?.id,
       existingVideoStoragePath: videoMetaRef.current.storagePath ?? data?.video?.storagePath,
@@ -393,7 +396,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     if (err) {
       autosaveReadyRef.current = true;
       setError(err);
-      const redirectStep = getOnboardingFinishBlockerStep(draftForFinalize);
+      const redirectStep = getOnboardingFinishBlockerStep(finalizeDraft);
       setValidationHighlightStep(redirectStep);
       if (redirectStep !== step) goToStep(redirectStep);
       return;

@@ -39,6 +39,37 @@ export function mediaDraftFromProfile(
   });
 }
 
+export function mergeProfileMediaDraftFromDb(
+  local: ProfileMediaDraft,
+  fromDb: ProfileMediaDraft
+): ProfileMediaDraft {
+  const usedDbPhotoUrls = new Set<string>();
+  const mergedPhotos = local.photos.map((p) => {
+    if (p.url || !p.localFile) return p;
+    const match = fromDb.photos.find((db) => db.url && !usedDbPhotoUrls.has(db.url));
+    if (!match?.url) return p;
+    usedDbPhotoUrls.add(match.url);
+    return { ...p, url: match.url, localFile: undefined };
+  });
+
+  let video = local.video;
+  if (local.video === null) {
+    video = null;
+  } else if (local.video?.localFile && !local.video.url && fromDb.video?.url) {
+    video = {
+      ...local.video,
+      id: fromDb.video.id,
+      url: fromDb.video.url,
+      storagePath: fromDb.video.storagePath,
+      thumbnailUrl: fromDb.video.thumbnailUrl,
+      durationSeconds: fromDb.video.durationSeconds,
+      localFile: undefined,
+    };
+  }
+
+  return ensurePrimaryPhoto({ photos: mergedPhotos, video });
+}
+
 export function setPrimaryPhoto(media: ProfileMediaDraft, clientId: string): ProfileMediaDraft {
   return {
     ...media,

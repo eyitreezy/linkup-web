@@ -2,7 +2,13 @@ import { ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
 import { ageFromBirthDate } from '@/lib/onboarding/hydrate';
 import { validatePromptAnswers } from '@/lib/onboarding/promptAnswers';
 import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
-import { profileMediaMeetsMinimums, profileMediaValidationMessage } from '@/lib/profile/media/validation';
+import {
+  hasProfileVideo,
+  profileMediaMeetsMinimums,
+  profileMediaValidationMessage,
+  activePhotoCount,
+} from '@/lib/profile/media/validation';
+import { PROFILE_MEDIA_MIN_PHOTOS } from '@/lib/profile/media/constants';
 import type { OnboardingDraft } from '@/types/onboarding';
 
 /** Strict validation against the current in-memory draft only — no DB fallbacks. */
@@ -49,8 +55,9 @@ export function getOnboardingFinishBlockerStep(draft: OnboardingDraft): number {
     draft.displayName.trim().length < 1 ||
     !draft.adultConfirmed ||
     ageFromBirthDate(draft.birthDate) < 18 ||
-    profileMediaValidationMessage(draft.profileMedia) ||
-    !profileMediaMeetsMinimums(draft.profileMedia)
+    activePhotoCount(draft.profileMedia) < PROFILE_MEDIA_MIN_PHOTOS ||
+    !hasProfileVideo(draft.profileMedia) ||
+    profileMediaValidationMessage(draft.profileMedia)
   ) {
     return 0;
   }
@@ -76,11 +83,14 @@ export function getOnboardingStepBlocker(draft: OnboardingDraft, stepIndex: numb
     if (draft.displayName.trim().length < 1) return 'Add a display name to continue.';
     if (!draft.adultConfirmed) return 'Confirm you are 18+ to continue.';
     if (ageFromBirthDate(draft.birthDate) < 18) return 'You must be 18 or older.';
+    if (activePhotoCount(draft.profileMedia) < PROFILE_MEDIA_MIN_PHOTOS) {
+      return `Add at least ${PROFILE_MEDIA_MIN_PHOTOS} profile photos (${activePhotoCount(draft.profileMedia)}/${PROFILE_MEDIA_MIN_PHOTOS}).`;
+    }
+    if (!hasProfileVideo(draft.profileMedia)) {
+      return profileMediaValidationMessage(draft.profileMedia) ?? 'Add 1 profile video to continue.';
+    }
     const mediaMsg = profileMediaValidationMessage(draft.profileMedia);
     if (mediaMsg) return mediaMsg;
-    if (!profileMediaMeetsMinimums(draft.profileMedia)) {
-      return 'You need at least 3 profile photos and 1 profile video to continue.';
-    }
     return null;
   }
 

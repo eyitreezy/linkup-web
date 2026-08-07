@@ -83,7 +83,7 @@ export function ProfilePromptEditor({ answers, onChange, className, showValidati
         <PremiumSectionHead title="Prompts" />
         <p className="mt-1 text-[13px] font-semibold leading-relaxed text-muted">
           <span className="font-extrabold text-foreground">At least {MIN_REQUIRED_PROMPT_ANSWERS} required.</span>{' '}
-          Add up to {MAX_PROFILE_PROMPTS} prompts — {filledCount} answered
+          Add up to {MAX_PROFILE_PROMPTS} prompts. {filledCount} answered
           {answers.length > 0 ? ` · ${answers.length} selected` : ''}.
         </p>
       </div>
@@ -200,7 +200,7 @@ export function ProfilePromptEditor({ answers, onChange, className, showValidati
           {validationMessage}
         </p>
       ) : filledCount >= MIN_REQUIRED_PROMPT_ANSWERS ? (
-        <p className="text-[12px] font-semibold text-emerald-700">Prompts look good — you can add more or continue.</p>
+        <p className="text-[12px] font-semibold text-emerald-700">Prompts look good. You can add more or continue.</p>
       ) : null}
     </div>
   );

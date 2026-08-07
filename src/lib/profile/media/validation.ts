@@ -28,7 +28,7 @@ export function profileMediaValidationMessage(media: ProfileMediaDraft): string 
     return `Add at least ${PROFILE_MEDIA_MIN_PHOTOS} profile photos (${photos}/${PROFILE_MEDIA_MIN_PHOTOS}).`;
   }
   if (!video) {
-    return `Add ${PROFILE_MEDIA_MIN_VIDEOS} profile video — a short clip helps hosts and guests trust who you are.`;
+    return `Add ${PROFILE_MEDIA_MIN_VIDEOS} profile video. A short clip helps hosts and guests trust who you are.`;
   }
   if (photos > PROFILE_MEDIA_MAX_PHOTOS) {
     return `You can keep up to ${PROFILE_MEDIA_MAX_PHOTOS} photos.`;

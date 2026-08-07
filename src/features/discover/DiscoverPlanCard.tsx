@@ -94,7 +94,7 @@ export function DiscoverPlanCard({
         <div className="mt-3 flex items-center gap-2.5">
           <Link
             href={hostProfileHref}
-            className="relative shrink-0 rounded-full ring-offset-2 transition hover:ring-2 hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="relative shrink-0 overflow-hidden rounded-[1000px] ring-offset-2 transition hover:ring-2 hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label={`View ${name}'s profile`}
           >
             <AvatarWithPresence
