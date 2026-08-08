@@ -82,14 +82,15 @@ export function FlexibleHourSelector({
         aria-label={`${label} slider`}
       />
       {presets?.length ? (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" role="group" aria-label={`${label} quick presets`}>
           {presets.map((preset) => (
             <button
               key={preset}
               type="button"
               onClick={() => onChange(clamp(preset))}
+              aria-pressed={value === preset}
               className={cn(
-                'rounded-full px-3 py-1.5 text-[12px] font-extrabold transition',
+                'min-h-[44px] rounded-full px-3 py-1.5 text-[12px] font-extrabold transition',
                 value === preset ? 'linkup-gradient-primary text-white' : 'bg-primary/10 text-primary'
               )}
             >

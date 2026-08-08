@@ -5,7 +5,8 @@ import { FormCard } from '@/components/settings/FormCard';
 import { SettingsPageHeader } from '@/components/settings/SettingsPageHeader';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
 import { usePermission } from '@/hooks/usePermission';
-import { TRAVEL_QUICK_PRESETS } from '@/lib/travel/travelPresets';
+import { travelPresetsForProfile } from '@/lib/travel/travelPresets';
+import { getRecentTravelCities, recordTravelCity, type RecentTravelCity } from '@/lib/travel/recentTravelCities';
 import { createClient } from '@/lib/supabase/client';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { useAuthStore } from '@/stores/auth-store';
@@ -13,10 +14,8 @@ import type { ProfilePreferences } from '@/types/database';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
-import { IoAirplane, IoCheckmarkCircle, IoCloseCircle } from 'react-icons/io5';
-
-const PRESETS = TRAVEL_QUICK_PRESETS;
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { IoAirplane, IoCheckmarkCircle, IoCloseCircle, IoTimeOutline } from 'react-icons/io5';
 
 const PAYWALL_POINTS = [
   'Browse meetups as if you were visiting another city.',
@@ -37,6 +36,11 @@ export function TravelModeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [saving, setSaving] = useState(false);
+  const [recentCities, setRecentCities] = useState<RecentTravelCity[]>([]);
+
+  useEffect(() => {
+    setRecentCities(getRecentTravelCities());
+  }, []);
 
   const { data, isLoading } = useQuery({
     queryKey: ['profile-bundle', user?.id],
@@ -48,6 +52,7 @@ export function TravelModeScreen() {
   });
 
   const profile = data?.profile ?? null;
+  const presets = useMemo(() => travelPresetsForProfile(profile), [profile]);
   const { allowed: travelAllowed, loading: travelPermLoading } = usePermission('discover.travel_mode');
   const tm = profile?.preferences?.travel_mode;
 
@@ -60,14 +65,24 @@ export function TravelModeScreen() {
       if (!user?.id) return;
       setSaving(true);
       const client = createClient();
+      const payload = next
+        ? {
+            label: next.label,
+            latitude: next.latitude,
+            longitude: next.longitude,
+            set_at: new Date().toISOString(),
+          }
+        : null;
       const prefs: ProfilePreferences = {
         ...(profile?.preferences ?? {}),
-        travel_mode: next,
+        travel_mode: payload,
       };
       const { error } = await client.from('profiles').update({ preferences: prefs }).eq('user_id', user.id);
       setSaving(false);
       if (error) setFeedback({ kind: 'error', message: error.message });
       else {
+        if (next) recordTravelCity(next);
+        setRecentCities(getRecentTravelCities());
         await queryClient.invalidateQueries({ queryKey: ['profile-bundle'] });
         await queryClient.invalidateQueries({ queryKey: ['discover'] });
         setFeedback(next ? { kind: 'saved', label: next.label } : { kind: 'cleared' });
@@ -151,9 +166,44 @@ export function TravelModeScreen() {
         </div>
       ) : null}
 
+      {recentCities.filter((c) => c.label !== tm?.label).length > 0 ? (
+        <div>
+          <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-muted">
+            Recently visited
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {recentCities
+              .filter((c) => c.label !== tm?.label)
+              .slice(0, 3)
+              .map((city) => (
+                <button
+                  key={city.label}
+                  type="button"
+                  disabled={saving}
+                  onClick={() => {
+                    setSearchQuery(city.label);
+                    void save({
+                      label: city.label,
+                      latitude: city.latitude,
+                      longitude: city.longitude,
+                    });
+                  }}
+                  className="flex min-h-[48px] items-center justify-between rounded-2xl border border-border bg-white px-4 py-3 text-left text-[13px] font-extrabold text-foreground transition hover:border-primary/40 disabled:opacity-50"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <IoTimeOutline size={14} className="shrink-0 text-muted" />
+                    <span className="truncate">{city.label.split(',')[0].trim()}</span>
+                  </div>
+                  <span className="ml-2 shrink-0 text-[11px] font-bold text-primary">Use</span>
+                </button>
+              ))}
+          </div>
+        </div>
+      ) : null}
+
       <PremiumSectionHead title="Quick presets" />
       <div className="grid gap-2 sm:grid-cols-2">
-        {PRESETS.map((p) => (
+        {presets.map((p) => (
           <button
             key={p.label}
             type="button"
@@ -192,11 +242,11 @@ export function TravelModeScreen() {
       </FormCard>
 
       {tm ? (
-        <div className="space-y-3 pt-2">
+        <div className="flex gap-3 pt-2">
           <button
             type="button"
             onClick={() => router.push('/discover')}
-            className="w-full min-h-[52px] rounded-full linkup-gradient-primary text-[15px] font-extrabold text-white shadow-md"
+            className="min-h-[52px] flex-1 rounded-full linkup-gradient-primary text-[15px] font-extrabold text-white shadow-md"
           >
             Go to Discover
           </button>
@@ -207,7 +257,7 @@ export function TravelModeScreen() {
               setSearchQuery('');
               void save(null);
             }}
-            className="w-full min-h-[48px] rounded-full border border-border bg-white text-[14px] font-extrabold text-muted transition hover:border-red-200 hover:text-red-700 disabled:opacity-50"
+            className="min-h-[52px] flex-1 rounded-full border border-border bg-white text-[14px] font-extrabold text-muted transition hover:border-red-200 hover:text-red-700 disabled:opacity-50"
           >
             Turn off travel mode
           </button>

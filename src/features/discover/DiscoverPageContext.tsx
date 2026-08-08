@@ -16,7 +16,7 @@ import type { DbProfile } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { useAuthStore } from '@/stores/auth-store';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createContext,
   useCallback,
@@ -54,12 +54,19 @@ type DiscoverPageContextValue = {
   hasDeviceLocation: boolean;
   applyFilters: (next: FeedFilterState, nextMood: DiscoveryMood) => void;
   clearMeetTypeFilter: () => void;
+  clearTravelMode: () => Promise<void>;
+  isTravelModeActive: boolean;
+  travelCityLabel: string | null;
+  isTravelModeStale: boolean;
 };
 
 const DiscoverPageContext = createContext<DiscoverPageContextValue | null>(null);
 
+const TRAVEL_STALE_DAYS = 7;
+
 export function DiscoverPageProvider({ children }: { children: ReactNode }) {
   const user = useAuthStore((s) => s.user);
+  const queryClient = useQueryClient();
   const [mood, setMood] = useState<DiscoveryMood>('all');
   const [filter, setFilter] = useState<FeedFilterState | null>(null);
   const [meetTypeFilter, setMeetTypeFilter] = useState<MeetTypeFilter | null>(null);
@@ -177,6 +184,35 @@ export function DiscoverPageProvider({ children }: { children: ReactNode }) {
 
   const clearMeetTypeFilter = useCallback(() => setMeetTypeFilter(null), []);
 
+  const isTravelModeActive =
+    travelModeAllowed &&
+    !!(profileQuery.data?.profile?.preferences?.travel_mode?.label?.trim());
+
+  const travelCityLabel = isTravelModeActive
+    ? (profileQuery.data?.profile?.preferences?.travel_mode?.label ?? null)
+    : null;
+
+  const isTravelModeStale = useMemo(() => {
+    const setAt = profileQuery.data?.profile?.preferences?.travel_mode?.set_at;
+    if (!setAt) return false;
+    const diffMs = Date.now() - new Date(setAt).getTime();
+    return diffMs > TRAVEL_STALE_DAYS * 24 * 60 * 60 * 1000;
+  }, [profileQuery.data?.profile?.preferences?.travel_mode]);
+
+  const clearTravelMode = useCallback(async () => {
+    if (!user?.id) return;
+    const client = createClient();
+    const prefs = {
+      ...(profileQuery.data?.profile?.preferences ?? {}),
+      travel_mode: null,
+    };
+    await client.from('profiles').update({ preferences: prefs }).eq('user_id', user.id);
+    await Promise.all([
+      profileQuery.refetch(),
+      queryClient.invalidateQueries({ queryKey: ['discover'] }),
+    ]);
+  }, [user?.id, profileQuery, queryClient]);
+
   const applyFilters = useCallback(
     (next: FeedFilterState, nextMood: DiscoveryMood) => {
       const maxDistanceKm = clampMaxDistanceKm(next.maxDistanceKm, effectiveTier);
@@ -243,6 +279,10 @@ export function DiscoverPageProvider({ children }: { children: ReactNode }) {
       hasDeviceLocation: deviceCoords != null,
       applyFilters,
       clearMeetTypeFilter,
+      clearTravelMode,
+      isTravelModeActive,
+      travelCityLabel,
+      isTravelModeStale,
     }),
     [
       mood,
@@ -268,6 +308,10 @@ export function DiscoverPageProvider({ children }: { children: ReactNode }) {
       requestDeviceLocation,
       applyFilters,
       clearMeetTypeFilter,
+      clearTravelMode,
+      isTravelModeActive,
+      travelCityLabel,
+      isTravelModeStale,
     ]
   );
 

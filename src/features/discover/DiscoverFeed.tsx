@@ -1,6 +1,7 @@
 'use client';
 
 import { FirstSessionModalQueue } from '@/components/discover/FirstSessionModalQueue';
+import { TravelModeBanner } from '@/components/discover/TravelModeBanner';
 import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { AppPagination } from '@/components/ui/AppPagination';
@@ -45,6 +46,7 @@ import {
   IoHeart,
   IoHeartOutline,
   IoNavigateOutline,
+  IoAirplane,
 } from 'react-icons/io5';
 
 const VIEW_STORAGE_KEY = 'linkup_discover_view_mode';
@@ -112,6 +114,10 @@ export function DiscoverFeed() {
     hasDeviceLocation,
     applyFilters,
     clearMeetTypeFilter,
+    clearTravelMode,
+    isTravelModeActive,
+    travelCityLabel,
+    isTravelModeStale,
     profileLoading,
   } = useDiscoverPage();
   const { subscriptionState } = useSubscriptionContext();
@@ -396,8 +402,18 @@ export function DiscoverFeed() {
     }
   };
 
+  const travelCityShort = travelCityLabel?.split(',')[0].trim() ?? null;
+
   const feedContent = (
     <>
+      {isTravelModeActive && travelCityShort ? (
+        <TravelModeBanner
+          cityLabel={travelCityShort}
+          isStale={isTravelModeStale}
+          onTurnOff={() => void clearTravelMode()}
+        />
+      ) : null}
+
       {error ? (
         <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] font-semibold text-red-700">
           {error instanceof Error
@@ -431,6 +447,27 @@ export function DiscoverFeed() {
           )}
         </div>
       ) : filteredWithPresence.length === 0 && !showInitialLoading && !error ? (
+        isTravelModeActive && travelCityShort ? (
+          <div className="flex flex-col items-center gap-4 py-16 text-center">
+            <IoAirplane size={40} className="text-muted/40" />
+            <div>
+              <p className="text-[16px] font-extrabold text-foreground">
+                No plans in {travelCityShort} yet
+              </p>
+              <p className="mt-1 text-[13px] font-semibold text-muted">
+                There are no active plans in this area right now. Check back later or browse your home
+                city.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void clearTravelMode()}
+              className="rounded-full border border-border bg-white px-5 py-2.5 text-[13px] font-extrabold text-foreground transition hover:border-primary/30 hover:text-primary"
+            >
+              Turn off travel mode
+            </button>
+          </div>
+        ) : (
         <AppEmptyState
           emoji="🔍"
           title="Nothing matches right now"
@@ -467,6 +504,7 @@ export function DiscoverFeed() {
           }}
           secondaryAction={{ label: 'Create a plan', href: '/plan/create', variant: 'secondary' }}
         />
+        )
       ) : effectiveView === 'swipe' ? (
         <DiscoverSwipeSection
           plans={standardRows}

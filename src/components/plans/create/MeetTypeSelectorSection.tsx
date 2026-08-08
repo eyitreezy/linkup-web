@@ -209,110 +209,147 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
     }
   }
 
+  const POPULAR_SLUGS = ['mood', 'dinner', 'dinner-date', 'casual', 'hangout', 'gym-buddy', 'gym'];
+  const SOCIAL_SLUGS = [
+    'group',
+    'brunch-meet',
+    'street-food',
+    'cook-together-experience',
+    'lounge-drinks',
+    'live-event',
+    'game-night',
+    'run-club',
+    'spa-wellness',
+    'sports-companion',
+  ];
+
+  const popularTypes = (meetTypes ?? []).filter((mt) => POPULAR_SLUGS.includes(mt.slug ?? ''));
+  const socialTypes = (meetTypes ?? []).filter((mt) => SOCIAL_SLUGS.includes(mt.slug ?? ''));
+  const extendedTypes = (meetTypes ?? []).filter(
+    (mt) =>
+      !POPULAR_SLUGS.includes(mt.slug ?? '') &&
+      !SOCIAL_SLUGS.includes(mt.slug ?? '') &&
+      !canUserManageMeetType(mt, user?.id)
+  );
+  const customTypes = (meetTypes ?? []).filter((mt) => canUserManageMeetType(mt, user?.id));
+
+  function escrowPatternLabel(pattern: string | null | undefined): string {
+    if (pattern === 'A') return 'Host funds';
+    if (pattern === 'B') return 'Split 50/50';
+    if (pattern === 'C') return 'Guest funds';
+    return '';
+  }
+
+  const selectedMeetType = (meetTypes ?? []).find((mt) => mt.id === meetTypeId) ?? null;
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div>
         <p className="text-[12px] font-extrabold uppercase tracking-wide text-muted">Meet type</p>
-        <p className="mt-1 text-[13px] font-semibold text-muted">
-          Pick a vibe or add your own. Edit or remove custom types with the icons on each chip.
-        </p>
+        <p className="mt-0.5 text-[13px] font-semibold text-muted">Pick a vibe for your meetup.</p>
       </div>
 
       {isLoading ? (
-        <div className="h-10 animate-pulse rounded-2xl bg-[#EDE8FF]/60" />
+        <div className="space-y-3">
+          {[80, 64, 48].map((w) => (
+            <div
+              key={w}
+              className="h-10 animate-pulse rounded-2xl bg-[#EDE8FF]/60"
+              style={{ width: `${w}%` }}
+            />
+          ))}
+        </div>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {(meetTypes ?? []).map((mt) => {
-            const selected = meetTypeId === mt.id;
-            const pending = isPendingMeetType(mt, user?.id);
-            const custom = canUserManageMeetType(mt, user?.id) && !pending;
-            return (
-              <div
-                key={mt.id}
-                className={cn(
-                  'inline-flex items-center overflow-hidden rounded-full transition',
-                  selected
-                    ? 'linkup-gradient-primary shadow-sm'
-                    : 'border border-border bg-white hover:border-primary/30',
-                  custom && !selected && 'border-dashed border-primary/35 bg-[#EDE8FF]/30',
-                  pending && 'cursor-not-allowed opacity-45'
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => handleSelect(mt)}
-                  className={cn(
-                    'inline-flex items-center gap-2 px-4 py-2 text-[13px] font-extrabold',
-                    selected ? 'text-white' : 'text-foreground',
-                    pending && 'cursor-not-allowed'
-                  )}
-                >
-                  <MeetTypeIcon icon={mt.icon} selected={selected} size={15} />
-                  {mt.name}
-                  {pending ? (
-                    <span
-                      className={cn(
-                        'rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide',
-                        selected ? 'bg-white/25 text-white' : 'bg-amber-500/15 text-amber-900'
-                      )}
-                    >
-                      Pending
+        <div className="space-y-4">
+          {popularTypes.length > 0 ? (
+            <MeetTypeRow
+              label="Popular"
+              types={popularTypes}
+              selectedId={meetTypeId}
+              userId={user?.id}
+              isAdmin={isAdmin}
+              onSelect={handleSelect}
+              onEdit={openEditModal}
+              onDelete={(mt) => setDeleteTarget(mt)}
+            />
+          ) : null}
+
+          {socialTypes.length > 0 ? (
+            <MeetTypeRow
+              label="Social & activities"
+              types={socialTypes}
+              selectedId={meetTypeId}
+              userId={user?.id}
+              isAdmin={isAdmin}
+              onSelect={handleSelect}
+              onEdit={openEditModal}
+              onDelete={(mt) => setDeleteTarget(mt)}
+            />
+          ) : null}
+
+          {extendedTypes.length > 0 ? (
+            <MeetTypeRow
+              label="More"
+              types={extendedTypes}
+              selectedId={meetTypeId}
+              userId={user?.id}
+              isAdmin={isAdmin}
+              onSelect={handleSelect}
+              onEdit={openEditModal}
+              onDelete={(mt) => setDeleteTarget(mt)}
+            />
+          ) : null}
+
+          {customTypes.length > 0 ? (
+            <MeetTypeRow
+              label="Your types"
+              types={customTypes}
+              selectedId={meetTypeId}
+              userId={user?.id}
+              isAdmin={isAdmin}
+              onSelect={handleSelect}
+              onEdit={openEditModal}
+              onDelete={(mt) => setDeleteTarget(mt)}
+            />
+          ) : null}
+
+          {selectedMeetType ? (
+            <div className="flex items-center gap-3 rounded-2xl border border-primary/15 bg-[#EDE8FF]/30 px-4 py-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm">
+                <MeetTypeIcon icon={selectedMeetType.icon} selected={false} size={22} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[14px] font-extrabold text-foreground">{selectedMeetType.name}</p>
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                  {selectedMeetType.default_duration_minutes ? (
+                    <span className="text-[12px] font-semibold text-muted">
+                      {selectedMeetType.default_duration_minutes >= 60
+                        ? `${selectedMeetType.default_duration_minutes / 60}h default`
+                        : `${selectedMeetType.default_duration_minutes}min default`}
                     </span>
                   ) : null}
-                </button>
-                {custom && !isAdmin ? (
-                  <span
-                    className={cn(
-                      'flex items-center gap-0.5 border-l pr-1.5 pl-0.5',
-                      selected ? 'border-white/25' : 'border-primary/15'
-                    )}
-                  >
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditModal(mt);
-                      }}
-                      className={cn(
-                        'flex h-7 w-7 items-center justify-center rounded-full transition',
-                        selected
-                          ? 'text-white/90 hover:bg-white/20'
-                          : 'text-primary hover:bg-primary/10'
-                      )}
-                      aria-label={`Edit ${mt.name}`}
-                    >
-                      <IoPencil size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTarget(mt);
-                      }}
-                      className={cn(
-                        'flex h-7 w-7 items-center justify-center rounded-full transition',
-                        selected
-                          ? 'text-white/90 hover:bg-white/20'
-                          : 'text-red-600 hover:bg-red-50'
-                      )}
-                      aria-label={`Delete ${mt.name}`}
-                    >
-                      <IoTrashOutline size={14} />
-                    </button>
-                  </span>
-                ) : null}
+                  {escrowPatternLabel(selectedMeetType.default_pattern) ? (
+                    <span className="text-[12px] font-semibold text-muted">
+                      {escrowPatternLabel(selectedMeetType.default_pattern)}
+                    </span>
+                  ) : null}
+                </div>
               </div>
-            );
-          })}
+              <div className="shrink-0 rounded-full linkup-gradient-primary px-3 py-1">
+                <span className="text-[11px] font-extrabold text-white">Selected</span>
+              </div>
+            </div>
+          ) : null}
+
           {!isAdmin ? (
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-primary/50 bg-[#EDE8FF]/25 px-4 py-2 text-[13px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/50"
-          >
-            <IoAddCircleOutline size={18} />
-            New
-          </button>
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-2xl border border-dashed border-primary/40 bg-[#EDE8FF]/20 py-3 text-[13px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/40"
+            >
+              <IoAddCircleOutline size={18} />
+              Add your own meet type
+            </button>
           ) : null}
         </div>
       )}
@@ -450,6 +487,100 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
         buttonLabel="Got it"
         onClose={() => setDeleteBlockedMsg(null)}
       />
+    </div>
+  );
+}
+
+interface MeetTypeRowProps {
+  label: string;
+  types: DbMeetType[];
+  selectedId: string | null;
+  userId: string | undefined;
+  isAdmin: boolean;
+  onSelect: (mt: DbMeetType) => void;
+  onEdit: (mt: DbMeetType) => void;
+  onDelete: (mt: DbMeetType) => void;
+}
+
+function MeetTypeRow({
+  label,
+  types,
+  selectedId,
+  userId,
+  isAdmin,
+  onSelect,
+  onEdit,
+  onDelete,
+}: MeetTypeRowProps) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted/70">{label}</p>
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+        {types.map((mt) => {
+          const selected = selectedId === mt.id;
+          const pending = isPendingMeetType(mt, userId);
+          const canManage = canUserManageMeetType(mt, userId) && !isAdmin;
+
+          return (
+            <div key={mt.id} className={cn('group relative shrink-0', pending && 'opacity-60')}>
+              <button
+                type="button"
+                onClick={() => onSelect(mt)}
+                disabled={pending}
+                className={cn(
+                  'flex min-h-[44px] items-center gap-2 rounded-full px-4 py-2 text-[13px] font-extrabold transition',
+                  selected
+                    ? 'linkup-gradient-primary text-white shadow-sm'
+                    : 'border border-border bg-white text-foreground hover:border-primary/40 hover:bg-[#EDE8FF]/20',
+                  canManage && !selected && 'border-dashed border-primary/35 bg-[#EDE8FF]/20',
+                  pending && 'cursor-not-allowed'
+                )}
+              >
+                <span
+                  className={cn(
+                    'flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
+                    selected ? 'bg-white/20' : 'bg-[#EDE8FF]/60'
+                  )}
+                >
+                  <MeetTypeIcon icon={mt.icon} selected={selected} size={14} />
+                </span>
+                {mt.name}
+                {pending ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-700">
+                    Pending
+                  </span>
+                ) : null}
+              </button>
+              {canManage ? (
+                <div className="absolute -right-1 -top-1 hidden items-center gap-0.5 group-hover:flex">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit(mt);
+                    }}
+                    className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-white shadow-sm text-primary hover:bg-[#EDE8FF]/40"
+                    aria-label={`Edit ${mt.name}`}
+                  >
+                    <IoPencil size={11} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(mt);
+                    }}
+                    className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-white shadow-sm text-red-500 hover:bg-red-50"
+                    aria-label={`Delete ${mt.name}`}
+                  >
+                    <IoTrashOutline size={11} />
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

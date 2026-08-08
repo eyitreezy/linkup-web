@@ -24,6 +24,7 @@ import {
 import { validateMultiCitySelection } from '@/lib/plans/nigerianCities';
 import {
   MEETUP_DURATION_QUICK_PRESETS,
+  MEETUP_DURATION_MAX_MINUTES,
   MOOD_LISTING_QUICK_PRESETS,
   shouldShowWeekendVisibilityText,
 } from '@/lib/plans/moodPlanUiHelpers';
@@ -483,7 +484,7 @@ export function CreatePlanScreen() {
           label={isMoodPlan ? 'Meetup duration' : 'Duration'}
           value={durationMinutes ?? 60}
           min={15}
-          max={360}
+          max={MEETUP_DURATION_MAX_MINUTES}
           step={15}
           unit="minutes"
           presets={MEETUP_DURATION_QUICK_PRESETS}

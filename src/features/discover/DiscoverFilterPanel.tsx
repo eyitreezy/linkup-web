@@ -11,6 +11,7 @@ import {
   type FeedFilterState,
 } from '@/lib/discovery/feedFilters';
 import type { DiscoveryMood } from '@/lib/discovery/moodFilter';
+import { useDiscoverPageOptional } from '@/features/discover/DiscoverPageContext';
 import { cn } from '@/utils/cn';
 import { TierBadge } from '@/components/subscription/TierBadge';
 import { useGatedAction, useUpgradeGate } from '@/contexts/UpgradeGateContext';
@@ -23,8 +24,9 @@ import {
 import { TIER_META } from '@/lib/subscription/constants';
 import type { SubscriptionTier } from '@/lib/subscription/types';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { IoFunnel, IoLockClosed } from 'react-icons/io5';
+import { IoAirplane, IoFunnel, IoLockClosed } from 'react-icons/io5';
 
 const MOODS: { id: DiscoveryMood; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -70,6 +72,14 @@ export function DiscoverFilterPanel({
   onApplied,
   className,
 }: Props) {
+  const router = useRouter();
+  const discoverCtx = useDiscoverPageOptional();
+  const travelModeAllowed = discoverCtx?.travelModeAllowed ?? false;
+  const travelModeActive = discoverCtx?.isTravelModeActive ?? false;
+  const travelCityLabel = discoverCtx?.travelCityLabel ?? null;
+  const clearTravelMode = discoverCtx?.clearTravelMode;
+  const travelCityShort = travelCityLabel?.split(',')[0].trim() ?? null;
+
   const sliderMax = sliderMaxKmProp ?? sliderMaxKmForTier(effectiveTier);
   const [draft, setDraft] = useState(filter);
   const [draftMood, setDraftMood] = useState(mood);
@@ -207,6 +217,61 @@ export function DiscoverFilterPanel({
         </p>
       )}
 
+      {travelModeAllowed ? (
+        <div className="border-b border-border pb-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <IoAirplane
+                size={18}
+                className={travelModeActive ? 'text-primary' : 'text-muted/50'}
+              />
+              <div className="min-w-0">
+                <p
+                  className={cn(
+                    'text-[14px] font-extrabold',
+                    travelModeActive ? 'text-foreground' : 'text-muted'
+                  )}
+                >
+                  Travel mode
+                </p>
+                {travelModeActive && travelCityShort ? (
+                  <p className="truncate text-[12px] font-semibold text-primary">{travelCityShort}</p>
+                ) : (
+                  <p className="text-[12px] font-semibold text-muted">Browse plans in another city</p>
+                )}
+              </div>
+            </div>
+
+            {travelModeActive ? (
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => router.push('/profile/travel')}
+                  className="rounded-full border border-border px-3 py-1.5 text-[12px] font-extrabold text-muted transition hover:border-primary/30 hover:text-primary"
+                >
+                  Change
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void clearTravelMode?.()}
+                  className="rounded-full border border-primary/20 bg-[#EDE8FF]/40 px-3 py-1.5 text-[12px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/70"
+                >
+                  Off
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => router.push('/profile/travel')}
+                className="shrink-0 rounded-full border border-primary/20 bg-[#EDE8FF]/40 px-3 py-1.5 text-[12px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/70"
+              >
+                Set up
+              </button>
+            )}
+          </div>
+        </div>
+      ) : null}
+
       <div>
         <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-muted">Vibe</p>
         <div className="flex flex-wrap gap-2">
@@ -289,6 +354,12 @@ export function DiscoverFilterPanel({
             Your {TIER_META.PLATINUM.label} plan searches up to {sliderMax}km.
           </p>
         )}
+        {travelModeActive && travelCityShort ? (
+          <p className="mt-1.5 flex items-center gap-1.5 text-[12px] font-semibold text-primary">
+            <IoAirplane size={12} className="shrink-0" />
+            Distance measured from {travelCityShort}
+          </p>
+        ) : null}
         <p className="mt-1 text-[11px] font-semibold text-muted">
           Distance uses your search location and each plan&apos;s meetup pin.
         </p>
