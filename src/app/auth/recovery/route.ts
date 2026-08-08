@@ -1,4 +1,4 @@
-import { formatAuthCallbackError, isPkceVerifierError } from '@/lib/auth/authCallbackErrors';
+import { formatRecoveryAuthError } from '@/lib/auth/recoveryErrors';
 import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
 import { isSupabaseConfigured } from '@/lib/env';
 import type { EmailOtpType } from '@supabase/supabase-js';
@@ -6,10 +6,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 function resetErrorRedirect(origin: string, message: string) {
   const url = new URL('/reset-password', origin);
-  url.searchParams.set('error', isPkceVerifierError(message) ? 'link_expired' : 'recovery_failed');
-  if (!isPkceVerifierError(message)) {
-    url.searchParams.set('error_description', formatAuthCallbackError(message).slice(0, 200));
-  }
+  url.searchParams.set('error', 'recovery_failed');
+  url.searchParams.set('error_description', formatRecoveryAuthError(message).slice(0, 200));
   return NextResponse.redirect(url.toString());
 }
 

@@ -19,7 +19,8 @@ export function resolveDiscoverViewerCoords(
     isPremium &&
     travel &&
     typeof travel.latitude === 'number' &&
-    typeof travel.longitude === 'number'
+    typeof travel.longitude === 'number' &&
+    (travel.label?.trim().length ?? 0) > 0
   ) {
     return { lat: travel.latitude, lng: travel.longitude };
   }

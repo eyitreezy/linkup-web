@@ -34,6 +34,7 @@ async function uploadFile(userId: string, file: File, prefix: string): Promise<{
 export async function submitVerificationBundle(args: {
   userId: string;
   idFile: File;
+  idBackFile?: File | null;
   videoFile: File;
   countryCode: string | null;
   documentType: KycDocumentType;
@@ -41,8 +42,15 @@ export async function submitVerificationBundle(args: {
 }): Promise<{ error: string | null }> {
   const client = createClient();
 
-  const upId = await uploadFile(args.userId, args.idFile, 'id');
+  const upId = await uploadFile(args.userId, args.idFile, 'id-front');
   if (upId.error) return { error: upId.error };
+
+  let idBackPath: string | null = null;
+  if (args.idBackFile) {
+    const upBack = await uploadFile(args.userId, args.idBackFile, 'id-back');
+    if (upBack.error) return { error: upBack.error };
+    idBackPath = upBack.path;
+  }
 
   const upVid = await uploadFile(args.userId, args.videoFile, 'liveness');
   if (upVid.error) return { error: upVid.error };
@@ -59,6 +67,7 @@ export async function submitVerificationBundle(args: {
       pipeline: 'vendor_pending',
       submitted_at: new Date().toISOString(),
       note: 'Awaiting automated and manual identity checks.',
+      ...(idBackPath ? { id_back_document_path: idBackPath } : {}),
     },
   });
   if (insErr) return { error: insErr.message };

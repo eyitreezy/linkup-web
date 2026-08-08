@@ -1,5 +1,7 @@
 'use client';
 
+import { KycDocumentCaptureSlot } from '@/components/kyc/KycDocumentCaptureSlot';
+import { KycLivenessCapture } from '@/components/kyc/KycLivenessCapture';
 import { FormCard } from '@/components/settings/FormCard';
 import { GradientChip } from '@/components/settings/GradientChip';
 import { SettingsPageHeader } from '@/components/settings/SettingsPageHeader';
@@ -51,22 +53,25 @@ export function KycWizardScreen() {
   const [step, setStep] = useState<KycStepNumber>(1);
   const [documentType, setDocumentType] = useState<KycDocumentType | null>(null);
   const [countryCode, setCountryCode] = useState<string | null>(null);
-  const [idFile, setIdFile] = useState<File | null>(null);
+  const [idFrontFile, setIdFrontFile] = useState<File | null>(null);
+  const [idBackFile, setIdBackFile] = useState<File | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rejectReason, setRejectReason] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
-  const idPreview = useMemo(() => (idFile ? URL.createObjectURL(idFile) : null), [idFile]);
+  const idFrontPreview = useMemo(() => (idFrontFile ? URL.createObjectURL(idFrontFile) : null), [idFrontFile]);
+  const idBackPreview = useMemo(() => (idBackFile ? URL.createObjectURL(idBackFile) : null), [idBackFile]);
   const videoPreview = useMemo(() => (videoFile ? URL.createObjectURL(videoFile) : null), [videoFile]);
 
   useEffect(() => {
     return () => {
-      if (idPreview) URL.revokeObjectURL(idPreview);
+      if (idFrontPreview) URL.revokeObjectURL(idFrontPreview);
+      if (idBackPreview) URL.revokeObjectURL(idBackPreview);
       if (videoPreview) URL.revokeObjectURL(videoPreview);
     };
-  }, [idPreview, videoPreview]);
+  }, [idFrontPreview, idBackPreview, videoPreview]);
 
   const { data: bundle } = useQuery({
     queryKey: ['profile-bundle', user?.id],
@@ -114,8 +119,12 @@ export function KycWizardScreen() {
   }, [user?.id, status]);
 
   async function onSubmitConsent() {
-    if (!user?.id || !idFile || !videoFile || !documentType) {
-      alert('Choose your ID type, add your document photo, and record your video first.');
+    if (!user?.id || !idFrontFile || !videoFile || !documentType) {
+      alert('Choose your ID type, add your document photos, and record your video first.');
+      return;
+    }
+    if (documentType !== 'passport' && !idBackFile) {
+      alert('Add both the front and back of your ID.');
       return;
     }
     if (!consent) {
@@ -125,7 +134,8 @@ export function KycWizardScreen() {
     setBusy(true);
     const { error } = await submitVerificationBundle({
       userId: user.id,
-      idFile,
+      idFile: idFrontFile,
+      idBackFile: documentType === 'passport' ? null : idBackFile,
       videoFile,
       countryCode,
       documentType,
@@ -162,7 +172,7 @@ export function KycWizardScreen() {
       <SettingsPageHeader
         kicker="Trust & safety"
         title="Identity verification"
-        subtitle="A quick check unlocks plans, offers, and escrow — same 7-step flow as the mobile app."
+        subtitle="A quick check unlocks plans, offers, and escrow with the same 7-step flow as the mobile app."
         backHref="/trust"
         backLabel="Back to verification status"
       />
@@ -185,7 +195,7 @@ export function KycWizardScreen() {
               </li>
             </ul>
             <p className="mt-4 text-[13px] font-semibold leading-relaxed text-muted">
-              Your ID and short clip stay private — used only to confirm you&apos;re you, like checks from a bank or
+              Your ID and short clip stay private. We use them only to confirm you&apos;re you, like checks from a bank or
               travel app.
             </p>
           </FormCard>
@@ -235,7 +245,7 @@ export function KycWizardScreen() {
 
       {step === 3 && documentType && (
         <div className="space-y-6">
-          <PremiumSectionHead title="Document photo" />
+          <PremiumSectionHead title="Government ID" />
           <FormCard>
             <label className="text-[13px] font-extrabold text-foreground">Country of issue</label>
             <select
@@ -250,27 +260,28 @@ export function KycWizardScreen() {
                 </option>
               ))}
             </select>
-            <label className="mt-4 block text-[13px] font-extrabold text-foreground">
-              Upload {DOCUMENT_TYPE_LABELS[documentType]}
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              className="mt-2 w-full text-[13px]"
-              onChange={(e) => setIdFile(e.target.files?.[0] ?? null)}
-            />
-            {idPreview ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={idPreview} alt="ID preview" className="mt-3 max-h-48 rounded-xl border object-contain" />
-            ) : null}
           </FormCard>
+          <KycDocumentCaptureSlot
+            title={documentType === 'passport' ? 'Passport photo page' : 'Front of ID'}
+            hint="Place the front of your document inside the frame. Keep all corners visible and text readable."
+            value={idFrontFile}
+            onChange={setIdFrontFile}
+          />
+          {documentType !== 'passport' ? (
+            <KycDocumentCaptureSlot
+              title="Back of ID"
+              hint="Flip your document and capture the back clearly. Avoid glare and cropped edges."
+              value={idBackFile}
+              onChange={setIdBackFile}
+            />
+          ) : null}
           <div className="flex gap-3">
             <button type="button" onClick={() => setStep(2)} className="flex-1 rounded-full border py-3 font-extrabold">
               Back
             </button>
             <button
               type="button"
-              disabled={!idFile}
+              disabled={!idFrontFile || (documentType !== 'passport' && !idBackFile)}
               onClick={() => setStep(4)}
               className="flex-[2] rounded-full linkup-gradient-primary py-3 font-extrabold text-white disabled:opacity-50"
             >
@@ -283,21 +294,7 @@ export function KycWizardScreen() {
       {step === 4 && (
         <div className="space-y-6">
           <PremiumSectionHead title="Liveness video" />
-          <FormCard>
-            <p className="text-[13px] font-semibold text-muted">
-              Record a short selfie video (5–10 seconds). Look at the camera and turn your head slightly.
-            </p>
-            <input
-              type="file"
-              accept="video/*"
-              capture="user"
-              className="mt-3 w-full text-[13px]"
-              onChange={(e) => setVideoFile(e.target.files?.[0] ?? null)}
-            />
-            {videoPreview ? (
-              <video src={videoPreview} controls className="mt-3 max-h-48 w-full rounded-xl border" />
-            ) : null}
-          </FormCard>
+          <KycLivenessCapture value={videoFile} onChange={setVideoFile} />
           <div className="flex gap-3">
             <button type="button" onClick={() => setStep(3)} className="flex-1 rounded-full border py-3 font-extrabold">
               Back
@@ -379,7 +376,8 @@ export function KycWizardScreen() {
                 type="button"
                 onClick={() => {
                   setRejectReason(null);
-                  setIdFile(null);
+                  setIdFrontFile(null);
+                  setIdBackFile(null);
                   setVideoFile(null);
                   setConsent(false);
                   setDocumentType(null);

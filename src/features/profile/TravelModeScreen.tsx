@@ -5,20 +5,18 @@ import { FormCard } from '@/components/settings/FormCard';
 import { SettingsPageHeader } from '@/components/settings/SettingsPageHeader';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
 import { usePermission } from '@/hooks/usePermission';
+import { TRAVEL_QUICK_PRESETS } from '@/lib/travel/travelPresets';
 import { createClient } from '@/lib/supabase/client';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { useAuthStore } from '@/stores/auth-store';
 import type { ProfilePreferences } from '@/types/database';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { IoAirplane, IoCheckmarkCircle, IoCloseCircle } from 'react-icons/io5';
 
-const PRESETS = [
-  { label: 'Lagos', latitude: 6.5244, longitude: 3.3792 },
-  { label: 'Abuja', latitude: 9.0765, longitude: 7.3986 },
-  { label: 'Port Harcourt', latitude: 4.8156, longitude: 7.0498 },
-] as const;
+const PRESETS = TRAVEL_QUICK_PRESETS;
 
 const PAYWALL_POINTS = [
   'Browse meetups as if you were visiting another city.',
@@ -34,6 +32,7 @@ type Feedback =
 
 export function TravelModeScreen() {
   const user = useAuthStore((s) => s.user);
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [feedback, setFeedback] = useState<Feedback>(null);
@@ -70,6 +69,7 @@ export function TravelModeScreen() {
       if (error) setFeedback({ kind: 'error', message: error.message });
       else {
         await queryClient.invalidateQueries({ queryKey: ['profile-bundle'] });
+        await queryClient.invalidateQueries({ queryKey: ['discover'] });
         setFeedback(next ? { kind: 'saved', label: next.label } : { kind: 'cleared' });
       }
     },
@@ -151,6 +151,25 @@ export function TravelModeScreen() {
         </div>
       ) : null}
 
+      <PremiumSectionHead title="Quick presets" />
+      <div className="grid gap-2 sm:grid-cols-2">
+        {PRESETS.map((p) => (
+          <button
+            key={p.label}
+            type="button"
+            disabled={saving}
+            onClick={() => {
+              setSearchQuery(p.label);
+              void save({ label: p.label, latitude: p.latitude, longitude: p.longitude });
+            }}
+            className="flex min-h-[48px] items-center justify-between rounded-2xl border border-border bg-white px-4 py-3 text-left text-[13px] font-extrabold text-foreground transition hover:border-primary/40 disabled:opacity-50"
+          >
+            <span>{p.label}</span>
+            <span className="text-[11px] font-bold text-primary">Use</span>
+          </button>
+        ))}
+      </div>
+
       <FormCard>
         <PremiumSectionHead title="Your travel pin" />
         <LocationSearchField
@@ -168,40 +187,31 @@ export function TravelModeScreen() {
             Active: <span className="font-extrabold text-foreground">{tm.label}</span>
           </p>
         ) : (
-          <p className="mt-3 text-[13px] font-semibold text-muted">No travel pin — using your profile location.</p>
+          <p className="mt-3 text-[13px] font-semibold text-muted">No travel pin. Using your profile home location.</p>
         )}
       </FormCard>
 
-      <PremiumSectionHead title="Quick presets" />
-      <div className="flex flex-wrap gap-2">
-        {PRESETS.map((p) => (
+      {tm ? (
+        <div className="space-y-3 pt-2">
           <button
-            key={p.label}
+            type="button"
+            onClick={() => router.push('/discover')}
+            className="w-full min-h-[52px] rounded-full linkup-gradient-primary text-[15px] font-extrabold text-white shadow-md"
+          >
+            Go to Discover
+          </button>
+          <button
             type="button"
             disabled={saving}
             onClick={() => {
-              setSearchQuery(p.label);
-              void save({ label: p.label, latitude: p.latitude, longitude: p.longitude });
+              setSearchQuery('');
+              void save(null);
             }}
-            className="rounded-full border border-border bg-white px-4 py-2 text-[13px] font-extrabold text-primary hover:border-primary/40 disabled:opacity-50"
+            className="w-full min-h-[48px] rounded-full border border-border bg-white text-[14px] font-extrabold text-muted transition hover:border-red-200 hover:text-red-700 disabled:opacity-50"
           >
-            {p.label}
+            Turn off travel mode
           </button>
-        ))}
-      </div>
-
-      {tm ? (
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => {
-            setSearchQuery('');
-            void save(null);
-          }}
-          className="w-full min-h-[48px] rounded-full border-2 border-primary/30 font-extrabold text-primary disabled:opacity-50"
-        >
-          Turn off travel mode
-        </button>
+        </div>
       ) : null}
     </div>
   );

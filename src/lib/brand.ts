@@ -19,3 +19,6 @@ export const APP_SPLASH_BACKGROUND = '#FBE9E9';
 
 /** Minimum branded splash duration on cold start (ms). */
 export const APP_SPLASH_DURATION_MS = 1200;
+
+/** Subtle product attribution on splash screens. */
+export const FLOWDECK_ATTRIBUTION = 'A product of Flowdecklabs';

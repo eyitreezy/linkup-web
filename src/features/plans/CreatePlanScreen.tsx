@@ -13,6 +13,7 @@ import { LocationSearchField } from '@/components/location/LocationSearchField';
 import { ToggleSwitch } from '@/components/settings/ToggleRow';
 import { Input } from '@/components/ui/Input';
 import { useGatedAction, useUpgradeGate } from '@/contexts/UpgradeGateContext';
+import { FlexibleHourSelector } from '@/components/plans/FlexibleHourSelector';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
 import { usePermission } from '@/hooks/usePermission';
 import { getMoodPlanCooldown } from '@/lib/plans/moodPlanCooldown';
@@ -22,8 +23,12 @@ import {
 } from '@/lib/plans/moodPlanComputations';
 import { validateMultiCitySelection } from '@/lib/plans/nigerianCities';
 import {
+  MEETUP_DURATION_QUICK_PRESETS,
+  MOOD_LISTING_QUICK_PRESETS,
+  shouldShowWeekendVisibilityText,
+} from '@/lib/plans/moodPlanUiHelpers';
+import {
   clampMoodListingHours,
-  MOOD_LISTING_OPTIONS,
   MOOD_REACH_LABELS,
   MOOD_WINDOW_CAP_HOURS,
   tierForListingHours,
@@ -51,7 +56,7 @@ const DURATIONS = [
   { m: 60, label: '1h' },
   { m: 90, label: '1.5h' },
   { m: 120, label: '2h' },
-  { m: 180, label: '3h+' },
+  { m: 180, label: '3h' },
 ] as const;
 
 const MOOD_TYPES = ['Chill', 'Active', 'Social', 'Premium vibe'] as const;
@@ -106,7 +111,7 @@ export function CreatePlanScreen() {
   const [patternCWarning, setPatternCWarning] = useState(false);
   const [isMoodPlan, setIsMoodPlan] = useState(false);
   const [moodType, setMoodType] = useState<string>(MOOD_TYPES[0]);
-  const [moodListingHours, setMoodListingHours] = useState<MoodListingHours>(3);
+  const [moodListingHours, setMoodListingHours] = useState<number>(3);
   const [isPaid, setIsPaid] = useState(true);
   const [startingPriceNgn, setStartingPriceNgn] = useState('');
   const [escrowPattern, setEscrowPattern] = useState<EscrowPattern>('A');
@@ -287,7 +292,7 @@ export function CreatePlanScreen() {
       hostContributionBps: 5000,
       isMoodPlan,
       moodType,
-      moodListingHours,
+      moodListingHours: moodListingHours as MoodListingHours,
       spotlightBoost: spotlightAllowed ? spotlightBoost : false,
       premiumSubscriber: spotlightAllowed,
       hideFromDiscovery,
@@ -422,29 +427,26 @@ export function CreatePlanScreen() {
                 </button>
               ))}
             </div>
-            <p className="text-[12px] font-extrabold uppercase tracking-wide text-muted">Listing hours</p>
-            <div className="flex flex-wrap gap-2">
-              {MOOD_LISTING_OPTIONS.map(({ h, label }) => {
-                const locked = h > windowCap;
-                return (
-                  <button
-                    key={h}
-                    type="button"
-                    onClick={() => selectListingHours(h)}
-                    className={cn(
-                      'inline-flex items-center gap-1 rounded-full px-3 py-2 text-[13px] font-extrabold',
-                      moodListingHours === h && !locked
-                        ? 'linkup-gradient-primary text-white'
-                        : 'bg-primary/10 text-primary',
-                      locked && 'opacity-50'
-                    )}
-                  >
-                    {label}
-                    {locked ? <IoLockClosed size={12} /> : null}
-                  </button>
-                );
-              })}
-            </div>
+            <p className="text-[12px] font-semibold leading-relaxed text-muted">
+              Listing duration controls how long your mood plan stays boosted in Discover. Meetup duration is how long the
+              hangout itself is expected to last.
+            </p>
+            <FlexibleHourSelector
+              label="Listing duration (Discover)"
+              value={moodListingHours}
+              min={1}
+              max={windowCap}
+              unit="hours"
+              presets={MOOD_LISTING_QUICK_PRESETS.filter((h) => h <= windowCap)}
+              onChange={(h) => {
+                if (h > windowCap) {
+                  const need = tierForListingHours(h);
+                  if (need) void runGated('mood_plan.activate', () => {});
+                  return;
+                }
+                setMoodListingHours(clampMoodListingHours(h, effectiveTier));
+              }}
+            />
             <div className="flex items-center gap-2 text-[13px] font-semibold text-muted">
               <IoLocationOutline size={16} className="shrink-0 text-primary" />
               <span>
@@ -452,7 +454,10 @@ export function CreatePlanScreen() {
                 <span className="font-extrabold text-foreground">{MOOD_REACH_LABELS[effectiveTier]}</span>
               </span>
             </div>
-            {isMoodPlan && ['GOLD', 'PLATINUM'].includes(effectiveTier) && isFridayActivation() ? (
+            {isMoodPlan &&
+            ['GOLD', 'PLATINUM'].includes(effectiveTier) &&
+            isFridayActivation() &&
+            shouldShowWeekendVisibilityText({ listingHours: moodListingHours, durationMinutes }) ? (
               <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-[12px] font-extrabold text-amber-800">
                 <IoSparkles size={14} />
                 Weekend Plan
@@ -474,22 +479,16 @@ export function CreatePlanScreen() {
           </label>
         )}
 
-        <p className="text-[12px] font-extrabold uppercase tracking-wide text-muted">Duration</p>
-        <div className="flex flex-wrap gap-2">
-          {DURATIONS.map((d) => (
-            <button
-              key={d.m}
-              type="button"
-              onClick={() => setDurationMinutes(d.m)}
-              className={cn(
-                'rounded-full px-4 py-2 text-[13px] font-extrabold',
-                durationMinutes === d.m ? 'linkup-gradient-primary text-white' : 'bg-primary/10 text-primary'
-              )}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
+        <FlexibleHourSelector
+          label={isMoodPlan ? 'Meetup duration' : 'Duration'}
+          value={durationMinutes ?? 60}
+          min={15}
+          max={360}
+          step={15}
+          unit="minutes"
+          presets={MEETUP_DURATION_QUICK_PRESETS}
+          onChange={(m) => setDurationMinutes(m)}
+        />
       </div>
 
       <PremiumSectionHead title="Story & place" />

@@ -2,7 +2,10 @@
 
 import { AuthShell } from '@/components/auth/AuthShell';
 import { AuthButton, AuthPasswordInput } from '@/components/auth/AuthFormPrimitives';
-import { formatAuthCallbackError } from '@/lib/auth/authCallbackErrors';
+import {
+  formatRecoveryAuthError,
+  PASSWORD_RESET_EXPIRED_MESSAGE,
+} from '@/lib/auth/recoveryErrors';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -17,15 +20,15 @@ function ResetPasswordFields() {
   const [error, setError] = useState<string | null>(() => {
     const recoveryError = searchParams.get('error');
     const desc = searchParams.get('error_description');
-    if (recoveryError === 'link_expired') {
-      return 'This reset link expired or was already used. Request a new one below.';
-    }
-    if (recoveryError === 'recovery_failed' && desc) {
-      try {
-        return formatAuthCallbackError(decodeURIComponent(desc.replace(/\+/g, ' ')));
-      } catch {
-        return formatAuthCallbackError(desc);
+    if (recoveryError === 'link_expired' || recoveryError === 'recovery_failed') {
+      if (desc) {
+        try {
+          return formatRecoveryAuthError(decodeURIComponent(desc.replace(/\+/g, ' ')));
+        } catch {
+          return formatRecoveryAuthError(desc);
+        }
       }
+      return PASSWORD_RESET_EXPIRED_MESSAGE;
     }
     return null;
   });
@@ -37,28 +40,6 @@ function ResetPasswordFields() {
     const supabase = createClient();
 
     async function establishRecoverySession() {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
-      const tokenHash = params.get('token_hash');
-      const type = params.get('type');
-
-      if (code) {
-        const { error: exchangeErr } = await supabase.auth.exchangeCodeForSession(code);
-        if (exchangeErr) {
-          setError(formatAuthCallbackError(exchangeErr.message));
-        }
-        window.history.replaceState({}, '', '/reset-password');
-      } else if (tokenHash && type === 'recovery') {
-        const { error: otpErr } = await supabase.auth.verifyOtp({
-          type: 'recovery',
-          token_hash: tokenHash,
-        });
-        if (otpErr) {
-          setError(formatAuthCallbackError(otpErr.message));
-        }
-        window.history.replaceState({}, '', '/reset-password');
-      }
-
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -72,6 +53,7 @@ function ResetPasswordFields() {
       if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         setHasSession(!!session?.user);
         setReady(true);
+        if (event === 'PASSWORD_RECOVERY') setError(null);
       }
     });
 
@@ -94,9 +76,9 @@ function ResetPasswordFields() {
     const supabase = createClient();
     const { error: err } = await supabase.auth.updateUser({ password });
     setBusy(false);
-    if (err) setError(err.message);
+    if (err) setError(formatRecoveryAuthError(err.message));
     else {
-      router.push('/discover');
+      router.push('/login?reset=success');
       router.refresh();
     }
   }
@@ -115,18 +97,16 @@ function ResetPasswordFields() {
         <div className="auth-verify-card">
           <IoAlertCircleOutline className="mx-auto text-[#F59E0B]" size={40} />
           <p className="mt-3 text-[14px] font-semibold leading-relaxed text-muted max-lg:text-white/85">
-            {error ??
-              'Open the reset link from your email again, or request a new one from the sign-in screen.'}
+            {error ?? PASSWORD_RESET_EXPIRED_MESSAGE}
           </p>
-          <AuthButton type="button" fullWidth className="mt-4" onClick={() => router.replace('/login')}>
+          <Link href="/forgot-password">
+            <AuthButton type="button" fullWidth className="mt-4">
+              Request a new reset email
+            </AuthButton>
+          </Link>
+          <AuthButton type="button" fullWidth variant="ghost" className="mt-2" onClick={() => router.replace('/login')}>
             Back to sign in
           </AuthButton>
-          <Link
-            href="/forgot-password"
-            className="auth-link mt-3 block text-center text-[13px] font-bold max-lg:text-white/90"
-          >
-            Request a new link
-          </Link>
         </div>
       </AuthShell>
     );

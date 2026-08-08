@@ -154,8 +154,8 @@ body {
   }
 }
 
-.splash-rise {
-  animation: splash-rise 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+.mirror-video {
+  transform: scaleX(-1);
 }
 
 .splash-fade-in {

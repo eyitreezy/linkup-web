@@ -38,12 +38,7 @@ export function tierForListingHours(h: number): SubscriptionTier | null {
   return 'PLATINUM';
 }
 
-export function clampMoodListingHours(
-  hours: MoodListingHours,
-  effectiveTier: SubscriptionTier
-): MoodListingHours {
+export function clampMoodListingHours(hours: number, effectiveTier: SubscriptionTier): number {
   const cap = MOOD_WINDOW_CAP_HOURS[effectiveTier] ?? 24;
-  if (hours <= cap) return hours;
-  const allowed = MOOD_LISTING_OPTIONS.filter((o) => o.h <= cap).map((o) => o.h);
-  return (allowed.length ? Math.max(...allowed) : 24) as MoodListingHours;
+  return Math.max(1, Math.min(Math.round(hours), cap));
 }
