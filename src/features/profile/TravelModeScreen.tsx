@@ -188,13 +188,12 @@ export function TravelModeScreen() {
                       longitude: city.longitude,
                     });
                   }}
-                  className="flex min-h-[48px] items-center justify-between rounded-2xl border border-border bg-white px-4 py-3 text-left text-[13px] font-extrabold text-foreground transition hover:border-primary/40 disabled:opacity-50"
+                  className="flex min-h-[48px] items-center rounded-2xl border border-border bg-white px-4 py-3 text-left text-[13px] font-extrabold text-foreground transition hover:border-primary/40 disabled:opacity-50"
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     <IoTimeOutline size={14} className="shrink-0 text-muted" />
                     <span className="truncate">{city.label.split(',')[0].trim()}</span>
                   </div>
-                  <span className="ml-2 shrink-0 text-[11px] font-bold text-primary">Use</span>
                 </button>
               ))}
           </div>
@@ -212,10 +211,9 @@ export function TravelModeScreen() {
               setSearchQuery(p.label);
               void save({ label: p.label, latitude: p.latitude, longitude: p.longitude });
             }}
-            className="flex min-h-[48px] items-center justify-between rounded-2xl border border-border bg-white px-4 py-3 text-left text-[13px] font-extrabold text-foreground transition hover:border-primary/40 disabled:opacity-50"
+            className="flex min-h-[48px] items-center rounded-2xl border border-border bg-white px-4 py-3 text-left text-[13px] font-extrabold text-foreground transition hover:border-primary/40 disabled:opacity-50"
           >
-            <span>{p.label}</span>
-            <span className="text-[11px] font-bold text-primary">Use</span>
+            <span className="truncate">{p.label}</span>
           </button>
         ))}
       </div>

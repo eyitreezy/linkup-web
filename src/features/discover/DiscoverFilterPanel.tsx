@@ -218,57 +218,57 @@ export function DiscoverFilterPanel({
       )}
 
       {travelModeAllowed ? (
-        <div className="border-b border-border pb-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <IoAirplane
-                size={18}
-                className={travelModeActive ? 'text-primary' : 'text-muted/50'}
-              />
-              <div className="min-w-0">
-                <p
-                  className={cn(
-                    'text-[14px] font-extrabold',
-                    travelModeActive ? 'text-foreground' : 'text-muted'
-                  )}
-                >
-                  Travel mode
-                </p>
-                {travelModeActive && travelCityShort ? (
-                  <p className="truncate text-[12px] font-semibold text-primary">{travelCityShort}</p>
-                ) : (
-                  <p className="text-[12px] font-semibold text-muted">Browse plans in another city</p>
+        <div className="space-y-3 border-b border-border pb-4">
+          <div className="flex min-w-0 items-start gap-2">
+            <IoAirplane
+              size={18}
+              className={cn('mt-0.5 shrink-0', travelModeActive ? 'text-primary' : 'text-muted/50')}
+            />
+            <div className="min-w-0">
+              <p
+                className={cn(
+                  'text-[14px] font-extrabold',
+                  travelModeActive ? 'text-foreground' : 'text-muted'
                 )}
-              </div>
+              >
+                Travel mode
+              </p>
+              {travelModeActive && travelCityShort ? (
+                <p className="truncate text-[12px] font-semibold text-primary">
+                  Active in {travelCityShort}
+                </p>
+              ) : (
+                <p className="text-[12px] font-semibold text-muted">Browse plans in another city</p>
+              )}
             </div>
+          </div>
 
-            {travelModeActive ? (
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => router.push('/profile/travel')}
-                  className="rounded-full border border-border px-3 py-1.5 text-[12px] font-extrabold text-muted transition hover:border-primary/30 hover:text-primary"
-                >
-                  Change
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void clearTravelMode?.()}
-                  className="rounded-full border border-primary/20 bg-[#EDE8FF]/40 px-3 py-1.5 text-[12px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/70"
-                >
-                  Off
-                </button>
-              </div>
-            ) : (
+          {travelModeActive ? (
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => router.push('/profile/travel')}
-                className="shrink-0 rounded-full border border-primary/20 bg-[#EDE8FF]/40 px-3 py-1.5 text-[12px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/70"
+                className="min-h-[40px] flex-1 rounded-full border border-border px-3 py-2 text-[12px] font-extrabold text-muted transition hover:border-primary/30 hover:text-primary"
               >
-                Set up
+                Change city
               </button>
-            )}
-          </div>
+              <button
+                type="button"
+                onClick={() => void clearTravelMode?.()}
+                className="min-h-[40px] flex-1 rounded-full border border-primary/20 bg-[#EDE8FF]/40 px-3 py-2 text-[12px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/70"
+              >
+                Turn off
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => router.push('/profile/travel')}
+              className="min-h-[40px] w-full rounded-full border border-primary/20 bg-[#EDE8FF]/40 px-3 py-2 text-[12px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/70"
+            >
+              Set up travel mode
+            </button>
+          )}
         </div>
       ) : null}
 
