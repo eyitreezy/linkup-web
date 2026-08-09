@@ -16,6 +16,7 @@ import {
   hasAdvancedDiscoverFilters,
   isDistanceFilterActive,
   type FeedFilterState,
+  type PlanTypeFilter,
 } from '@/lib/discovery/parseStoredFeedFilters';
 import { distanceKm } from '@/lib/location/distance';
 import type { PlanFeedRow } from '@/services/plans.service';
