@@ -1,4 +1,4 @@
-import { isCoordinateInAfrica } from '@/lib/location/africaCountries';
+import { isCoordinateInNigeria } from '@/lib/location/nigeriaBounds';
 import { getGoogleMapsServerApiKey, getGoogleMapsWebApiKey } from '@/lib/maps/config';
 import { NextResponse } from 'next/server';
 
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     const res = await fetch(url);
     const json = await res.json();
     const loc = json?.result?.geometry?.location;
-    if (loc && !isCoordinateInAfrica(loc.lat, loc.lng)) {
+    if (loc && !isCoordinateInNigeria(loc.lat, loc.lng)) {
       return NextResponse.json({ status: 'ZERO_RESULTS', result: null }, { status: 200 });
     }
     return NextResponse.json(json);

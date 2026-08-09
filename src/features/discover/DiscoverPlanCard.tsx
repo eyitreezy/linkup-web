@@ -17,6 +17,7 @@ import { publicProfileHref } from '@/lib/profile/profileRoutes';
 import type { PlanFeedRow } from '@/services/plans.service';
 import type { DbProfile } from '@/types/database';
 import Link from 'next/link';
+import { cn } from '@/utils/cn';
 import { IoGlobeOutline, IoShieldCheckmark } from 'react-icons/io5';
 
 type Props = {
@@ -55,6 +56,12 @@ export function DiscoverPlanCard({
         ))
     : null;
 
+  const planTypePill = plan.is_group_plan
+    ? { label: 'Group', colorClass: 'bg-[#5E52FF]/80 text-white' }
+    : plan.is_mood_plan
+      ? { label: 'Mood', colorClass: 'bg-[#FF4A72]/80 text-white' }
+      : null;
+
   return (
     <article className="group min-w-0 overflow-hidden rounded-[18px] border border-primary/10 bg-white shadow-[0_8px_28px_rgba(42,31,85,0.08)] transition hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-[0_14px_36px_rgba(108,99,255,0.14)] min-[360px]:rounded-[22px]">
       <Link href={`/plan/${plan.id}`} className="block">
@@ -65,6 +72,16 @@ export function DiscoverPlanCard({
             {distanceLabel ? (
               <span className="rounded-full bg-black/45 px-2 py-0.5 text-[10px] font-extrabold text-white backdrop-blur-sm">
                 {distanceLabel}
+              </span>
+            ) : null}
+            {planTypePill ? (
+              <span
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[10px] font-extrabold backdrop-blur-sm',
+                  planTypePill.colorClass
+                )}
+              >
+                {planTypePill.label}
               </span>
             ) : null}
             {boosted ? <BoostPill variant="mini" /> : null}

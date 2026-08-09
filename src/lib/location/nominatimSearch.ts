@@ -1,4 +1,4 @@
-import { NOMINATIM_AFRICA_COUNTRYCODES } from '@/lib/location/africaCountries';
+import { isCoordinateInNigeria } from '@/lib/location/nigeriaBounds';
 import type { LocationSuggestion } from '@/lib/location/types';
 
 type NominatimResult = {
@@ -12,7 +12,7 @@ type NominatimResult = {
 
 const NOMINATIM_USER_AGENT = 'LinkUp-Web/1.0 (https://linkup.app; location search)';
 
-/** OpenStreetMap Nominatim — Africa-only fallback with POI + address support. */
+/** OpenStreetMap Nominatim — Nigeria-only fallback with POI + address support. */
 export async function searchNominatimSuggestions(
   query: string,
   limit = 8
@@ -25,7 +25,7 @@ export async function searchNominatimSuggestions(
     format: 'json',
     limit: String(Math.min(Math.max(limit, 1), 10)),
     addressdetails: '0',
-    countrycodes: NOMINATIM_AFRICA_COUNTRYCODES,
+    countrycodes: 'ng',
   });
 
   try {
@@ -43,7 +43,14 @@ export async function searchNominatimSuggestions(
       const label = row.display_name?.trim();
       const latitude = row.lat != null ? Number(row.lat) : NaN;
       const longitude = row.lon != null ? Number(row.lon) : NaN;
-      if (!label || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
+      if (
+        !label ||
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude) ||
+        !isCoordinateInNigeria(latitude, longitude)
+      ) {
+        return [];
+      }
 
       const suggestion: LocationSuggestion = {
         label,

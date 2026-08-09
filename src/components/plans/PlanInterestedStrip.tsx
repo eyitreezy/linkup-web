@@ -127,7 +127,7 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-display text-[15px] font-extrabold text-foreground">Interested</h3>
         <Link
-          href={`/plan/${planId}/negotiate`}
+          href={`/plan/${planId}/interest`}
           className="text-[12px] font-extrabold text-primary underline"
         >
           Connect with all →

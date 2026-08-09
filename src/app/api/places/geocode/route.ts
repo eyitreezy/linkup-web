@@ -1,3 +1,4 @@
+import { isCoordinateInNigeria } from '@/lib/location/nigeriaBounds';
 import { getGoogleMapsWebApiKey } from '@/lib/maps/config';
 import { NextResponse } from 'next/server';
 
@@ -22,6 +23,7 @@ export async function GET(request: Request) {
   const url =
     `https://maps.googleapis.com/maps/api/geocode/json` +
     `?address=${encodeURIComponent(address)}` +
+    `&components=country:NG` +
     `&key=${encodeURIComponent(key)}`;
 
   try {
@@ -33,6 +35,9 @@ export async function GET(request: Request) {
     }
 
     const { lat, lng } = json.results[0].geometry.location;
+    if (!isCoordinateInNigeria(lat, lng)) {
+      return NextResponse.json({ status: 'ZERO_RESULTS', result: null }, { status: 200 });
+    }
     return NextResponse.json({
       status: 'OK',
       result: { latitude: lat, longitude: lng },

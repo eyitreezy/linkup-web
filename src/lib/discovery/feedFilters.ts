@@ -21,7 +21,7 @@ import { distanceKm } from '@/lib/location/distance';
 import type { PlanFeedRow } from '@/services/plans.service';
 import type { DbProfile, DbUserPresence } from '@/types/database';
 
-export type { FeedFilterState };
+export type { FeedFilterState, PlanTypeFilter };
 export {
   defaultDiscoverFeedFilter,
   parseStoredFeedFilters,
@@ -158,6 +158,16 @@ export function applyDiscoverFilters(
   } = opts;
   let out = rows.filter(filterDiscoverPlan);
   out = filterPlansByMood(out, mood);
+
+  if (filter.planTypeFilter && filter.planTypeFilter !== 'all') {
+    out = out.filter((plan) => {
+      if (filter.planTypeFilter === 'group') return !!plan.is_group_plan;
+      if (filter.planTypeFilter === 'mood') return !!plan.is_mood_plan;
+      if (filter.planTypeFilter === 'standard') return !plan.is_group_plan && !plan.is_mood_plan;
+      return true;
+    });
+  }
+
   out = filterTierRelativePremiumVisibilityPlans(
     out,
     viewerId ?? null,

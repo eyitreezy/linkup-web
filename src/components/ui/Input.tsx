@@ -26,7 +26,13 @@ export const Input = forwardRef<HTMLInputElement, Props>(
           )}
           {...props}
         />
-        {error ? <span className="mt-1.5 block text-[12px] font-semibold text-[#EF4444]">{error}</span> : null}
+        <span
+          className="mt-1.5 block min-h-[16px] text-[12px] font-semibold text-[#EF4444]"
+          aria-live="polite"
+          role="alert"
+        >
+          {error ?? ''}
+        </span>
       </label>
     );
   }

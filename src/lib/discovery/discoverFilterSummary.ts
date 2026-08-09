@@ -28,5 +28,8 @@ export function discoverFilterSummary(filter: FeedFilterState, mood: DiscoveryMo
   if (filter.hostPresence !== 'all') parts.push(PRESENCE_LABELS[filter.hostPresence]);
   if (filter.verifiedHostsOnly) parts.push('Verified');
   if (filter.minPriceCents != null || filter.maxPriceCents != null) parts.push('Price');
+  if (filter.planTypeFilter !== 'all') {
+    parts.push(filter.planTypeFilter.charAt(0).toUpperCase() + filter.planTypeFilter.slice(1));
+  }
   return parts.length > 0 ? parts.join(' · ') : 'Default feed';
 }

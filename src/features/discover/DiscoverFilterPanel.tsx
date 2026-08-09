@@ -42,6 +42,13 @@ const PRESENCE_OPTIONS = [
   { id: 'offline' as const, label: 'Offline' },
 ];
 
+const PLAN_TYPE_OPTIONS = [
+  { id: 'all' as const, label: 'All' },
+  { id: 'standard' as const, label: 'Standard' },
+  { id: 'group' as const, label: 'Group' },
+  { id: 'mood' as const, label: 'Mood' },
+];
+
 type Props = {
   filter: FeedFilterState;
   mood: DiscoveryMood;
@@ -148,7 +155,11 @@ export function DiscoverFilterPanel({
       maxPriceCents,
       verifiedHostsOnly,
       hostPresence: draft.hostPresence,
-      clientFiltersActive: distanceFilterActive || hasOtherConstraints,
+      planTypeFilter: draft.planTypeFilter,
+      clientFiltersActive:
+        distanceFilterActive ||
+        hasOtherConstraints ||
+        draft.planTypeFilter !== 'all',
     };
     onApply(next, draftMood);
     onApplied?.();
@@ -169,6 +180,7 @@ export function DiscoverFilterPanel({
       maxPriceCents: null,
       verifiedHostsOnly: false,
       hostPresence: 'all' as const,
+      planTypeFilter: 'all' as const,
       clientFiltersActive: false,
     };
     setDraft(next);
@@ -193,9 +205,19 @@ export function DiscoverFilterPanel({
       minPriceText.trim() !== '' ||
       maxPriceText.trim() !== '' ||
       draft.hostPresence !== 'all' ||
-      draft.verifiedHostsOnly
+      draft.verifiedHostsOnly ||
+      draft.planTypeFilter !== 'all'
     );
-  }, [draft.hostPresence, draft.maxDistanceKm, draft.verifiedHostsOnly, draftMood, distanceTouched, maxPriceText, minPriceText]);
+  }, [
+    draft.hostPresence,
+    draft.maxDistanceKm,
+    draft.verifiedHostsOnly,
+    draft.planTypeFilter,
+    draftMood,
+    distanceTouched,
+    maxPriceText,
+    minPriceText,
+  ]);
 
   return (
     <div
@@ -271,6 +293,27 @@ export function DiscoverFilterPanel({
           )}
         </div>
       ) : null}
+
+      <div>
+        <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-muted">Plan type</p>
+        <div className="flex flex-wrap gap-2">
+          {PLAN_TYPE_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setDraft((d) => ({ ...d, planTypeFilter: opt.id }))}
+              className={cn(
+                'rounded-full px-4 py-1.5 text-[13px] font-extrabold transition',
+                draft.planTypeFilter === opt.id
+                  ? 'linkup-gradient-primary text-white'
+                  : 'border border-border bg-white text-foreground hover:border-primary/40'
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div>
         <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-muted">Vibe</p>

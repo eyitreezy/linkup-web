@@ -350,6 +350,7 @@ export function DiscoverFeed() {
     activeFilter.maxPriceCents ?? 'max',
     activeFilter.verifiedHostsOnly ? 'verified' : 'all-hosts',
     activeFilter.hostPresence,
+    activeFilter.planTypeFilter ?? 'all',
     activeFilter.clientFiltersActive ? 'on' : 'off',
     meetTypeFilter?.id ?? 'all',
   ].join('-');

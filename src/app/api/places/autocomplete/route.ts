@@ -1,4 +1,4 @@
-import { isCoordinateInAfrica } from '@/lib/location/africaCountries';
+import { isCoordinateInNigeria } from '@/lib/location/nigeriaBounds';
 import { searchNominatimSuggestions } from '@/lib/location/nominatimSearch';
 import { getGoogleMapsServerApiKey, getGoogleMapsWebApiKey } from '@/lib/maps/config';
 import { NextResponse } from 'next/server';
@@ -15,7 +15,8 @@ async function googlePredictions(input: string, key: string) {
     input,
     key,
     location: '6.5244,3.3792',
-    radius: '8000000',
+    radius: '1000000',
+    components: 'country:ng',
   });
 
   const res = await fetch(
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
   }
 
   const nominatim = await searchNominatimSuggestions(input, 8);
-  const filtered = nominatim.filter((row) => isCoordinateInAfrica(row.latitude, row.longitude));
+  const filtered = nominatim.filter((row) => isCoordinateInNigeria(row.latitude, row.longitude));
   return toPayload(
     filtered.map((row) => ({
       description: row.label,

@@ -4,9 +4,9 @@
  */
 import { withTimeout } from '@/lib/async/withTimeout';
 import {
-  AFRICA_LOCATION_REJECTED_MESSAGE,
-  isCoordinateInAfrica,
-} from '@/lib/location/africaCountries';
+  NIGERIA_LOCATION_REJECTED_MESSAGE,
+  isCoordinateInNigeria,
+} from '@/lib/location/nigeriaBounds';
 import { safeFetch } from '@/lib/fetch/safeFetch';
 import {
   clientPlaceDetails,
@@ -127,8 +127,8 @@ export async function resolveGooglePlaceSuggestion(
     }
   }
 
-  if (!isCoordinateInAfrica(resolved.latitude, resolved.longitude)) {
-    throw new Error(AFRICA_LOCATION_REJECTED_MESSAGE);
+  if (!isCoordinateInNigeria(resolved.latitude, resolved.longitude)) {
+    throw new Error(NIGERIA_LOCATION_REJECTED_MESSAGE);
   }
 
   return resolved;

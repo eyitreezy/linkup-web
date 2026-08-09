@@ -154,7 +154,12 @@ export async function persistProfileMediaDraft(args: {
   }
 
   if (localFiles.length > 0) {
-    const uploaded = await uploadProfilePhotos(userId, localFiles);
+    const uploadItems = localIndexes.map((idx, i) => ({
+      file: localFiles[i],
+      clientId: resolvedPhotos[idx].clientId,
+      index: idx,
+    }));
+    const uploaded = await uploadProfilePhotos(userId, uploadItems);
     uploaded.forEach((url, i) => {
       const idx = localIndexes[i];
       resolvedPhotos[idx] = { ...resolvedPhotos[idx], url };

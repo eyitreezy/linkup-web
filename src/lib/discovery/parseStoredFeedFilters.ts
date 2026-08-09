@@ -1,5 +1,7 @@
 import { hasDiscoverPriceFilter, normalizeDiscoverPriceCents } from '@/lib/discovery/discoverPriceFilter';
 
+export type PlanTypeFilter = 'all' | 'standard' | 'group' | 'mood';
+
 export type FeedFilterState = {
   /** `null` = no distance cap (empty filter on load). */
   maxDistanceKm: number | null;
@@ -7,6 +9,7 @@ export type FeedFilterState = {
   maxPriceCents: number | null;
   verifiedHostsOnly: boolean;
   hostPresence: 'all' | 'online' | 'offline';
+  planTypeFilter: PlanTypeFilter;
   clientFiltersActive: boolean;
 };
 
@@ -27,6 +30,7 @@ export function defaultDiscoverFeedFilter(): FeedFilterState {
     maxPriceCents: null,
     verifiedHostsOnly: false,
     hostPresence: 'all',
+    planTypeFilter: 'all',
     clientFiltersActive: false,
   };
 }
@@ -34,13 +38,19 @@ export function defaultDiscoverFeedFilter(): FeedFilterState {
 export function isDiscoverFilterConstraintActive(
   f: Pick<
     FeedFilterState,
-    'maxDistanceKm' | 'minPriceCents' | 'maxPriceCents' | 'verifiedHostsOnly' | 'hostPresence'
+    | 'maxDistanceKm'
+    | 'minPriceCents'
+    | 'maxPriceCents'
+    | 'verifiedHostsOnly'
+    | 'hostPresence'
+    | 'planTypeFilter'
   >
 ): boolean {
   if (f.maxDistanceKm != null) return true;
   if (f.hostPresence !== 'all') return true;
   if (f.verifiedHostsOnly) return true;
   if (hasDiscoverPriceFilter(f)) return true;
+  if (f.planTypeFilter !== 'all' && f.planTypeFilter != null) return true;
   return false;
 }
 
@@ -81,6 +91,7 @@ export function parseStoredFeedFilters(
     verifiedHostsOnly: !!f.verifiedHostsOnly,
     hostPresence:
       f.hostPresence === 'online' || f.hostPresence === 'offline' ? f.hostPresence : ('all' as const),
+    planTypeFilter: 'all' as PlanTypeFilter,
   };
 
   const clientFiltersActive = isDiscoverFilterConstraintActive(draft);

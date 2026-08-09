@@ -78,6 +78,19 @@ export async function GET(request: NextRequest) {
     cookieResponse.cookies.set(PENDING_SIGNUP_PRIVACY_CONSENT_COOKIE, '', { path: '/', maxAge: 0 });
   }
 
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (session?.user && next === '/reset-password') {
+    const redirectResponse = NextResponse.redirect(new URL('/reset-password', origin));
+    cookieResponse.cookies.getAll().forEach(({ name, value, ...options }) => {
+      redirectResponse.cookies.set(name, value, options);
+    });
+    redirectResponse.cookies.set('linkup_auth_next', '', { path: '/', maxAge: 0 });
+    return redirectResponse;
+  }
+
   let destination = next;
   if (user) {
     destination = await resolvePostAuthDestinationForUserId(supabase, user.id, next);

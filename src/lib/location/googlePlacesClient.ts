@@ -3,7 +3,6 @@
  * Server-side Places web service calls fail with those keys (no Referer header).
  */
 import type { LocationSuggestion } from '@/lib/location/types';
-import { AFRICA_COUNTRY_CODES_LOWER } from '@/lib/location/africaCountries';
 import { getGoogleMapsWebApiKey } from '@/lib/maps/config';
 import { withTimeout } from '@/lib/async/withTimeout';
 
@@ -76,9 +75,9 @@ export async function clientPlacePredictions(
     service.getPlacePredictions(
       {
         input,
-        componentRestrictions: { country: AFRICA_COUNTRY_CODES_LOWER.slice(0, 5) },
+        componentRestrictions: { country: ['ng'] },
         location: new g.maps.LatLng(6.5244, 3.3792),
-        radius: 8_000_000,
+        radius: 1_000_000,
       },
       (predictions, status) => {
         clearTimeout(timer);

@@ -24,7 +24,7 @@ export function LocationSearchField({
   value,
   onChange,
   onSelect,
-  placeholder = 'Search city, neighborhood, or landmark',
+  placeholder = 'Search city or area in Nigeria',
   className,
 }: Props) {
   const listboxId = useId();

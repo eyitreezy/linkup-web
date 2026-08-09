@@ -26,7 +26,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import type { DbMeetType, EscrowPattern } from '@/types/database';
 import { cn } from '@/utils/cn';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { IoAddCircleOutline, IoClose, IoPencil, IoTrashOutline } from 'react-icons/io5';
 
 const DURATIONS = [
@@ -512,20 +512,66 @@ function MeetTypeRow({
   onEdit,
   onDelete,
 }: MeetTypeRowProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const scrollLeft = useRef(0);
+  const hasDragged = useRef(false);
+
+  const onMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    isDragging.current = true;
+    hasDragged.current = false;
+    startX.current = e.pageX - el.offsetLeft;
+    scrollLeft.current = el.scrollLeft;
+    el.style.cursor = 'grabbing';
+    el.style.userSelect = 'none';
+  }, []);
+
+  const onMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging.current || !scrollRef.current) return;
+    e.preventDefault();
+    hasDragged.current = true;
+    const el = scrollRef.current;
+    const x = e.pageX - el.offsetLeft;
+    const walk = (x - startX.current) * 1.2;
+    el.scrollLeft = scrollLeft.current - walk;
+  }, []);
+
+  const stopDrag = useCallback(() => {
+    if (!scrollRef.current) return;
+    isDragging.current = false;
+    scrollRef.current.style.cursor = 'grab';
+    scrollRef.current.style.userSelect = '';
+  }, []);
+
   return (
     <div className="space-y-1.5">
       <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted/70">{label}</p>
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+      <div
+        ref={scrollRef}
+        className="flex gap-2 overflow-x-auto pb-1 scrollbar-none select-none"
+        style={{ cursor: 'grab' }}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={stopDrag}
+        onMouseLeave={stopDrag}
+      >
         {types.map((mt) => {
           const selected = selectedId === mt.id;
           const pending = isPendingMeetType(mt, userId);
           const canManage = canUserManageMeetType(mt, userId) && !isAdmin;
 
+          const handleSelect = () => {
+            if (!hasDragged.current) onSelect(mt);
+          };
+
           return (
             <div key={mt.id} className={cn('group relative shrink-0', pending && 'opacity-60')}>
               <button
                 type="button"
-                onClick={() => onSelect(mt)}
+                onClick={handleSelect}
                 disabled={pending}
                 className={cn(
                   'flex min-h-[44px] items-center gap-2 rounded-full px-4 py-2 text-[13px] font-extrabold transition',
