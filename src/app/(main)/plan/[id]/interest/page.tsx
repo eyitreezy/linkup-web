@@ -2,6 +2,7 @@
 
 import { ProfileAvatar } from '@/components/profile/ProfileAvatar';
 import { useGatedAction } from '@/contexts/UpgradeGateContext';
+import { PlanFlowHeader } from '@/features/plans/PlanFlowHeader';
 import { usePermission } from '@/hooks/usePermission';
 import {
   fetchHiddenEngagementUserIds,
@@ -42,7 +43,6 @@ export default function PlanInterestPage() {
   const [plan, setPlan] = useState<PlanMeta | null>(null);
   const [rows, setRows] = useState<EngagementRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
 
   const load = useCallback(async () => {
     if (!planId) return;
@@ -112,7 +112,7 @@ export default function PlanInterestPage() {
 
   useEffect(() => {
     void load();
-  }, [load, refreshKey]);
+  }, [load]);
 
   const { viewCount, saveCount } = useMemo(() => {
     let views = 0;
@@ -140,7 +140,7 @@ export default function PlanInterestPage() {
 
   if (!permLoading && !canSeeInterest) {
     return (
-      <div className="mx-auto max-w-lg space-y-6 p-6">
+      <div className="mx-auto max-w-3xl space-y-6 p-6">
         <button
           type="button"
           onClick={() => router.back()}
@@ -171,31 +171,18 @@ export default function PlanInterestPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-4 pb-16 sm:p-6">
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground transition hover:border-primary/30 hover:text-primary"
-          aria-label="Back"
-        >
-          <IoArrowBack size={18} />
-        </button>
-        <div>
-          <p className="text-[11px] font-extrabold uppercase tracking-wide text-primary">
-            Premium insight
-          </p>
-          <h1 className="font-display text-[22px] font-extrabold leading-tight text-foreground">
-            Who is interested
-          </h1>
-        </div>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-6 pb-16">
+      <PlanFlowHeader
+        kicker="Premium insight"
+        title="Who is interested"
+        subtitle={plan?.title ?? undefined}
+        backHref={`/plan/${planId}`}
+        backLabel="Back to meetup details"
+      />
 
       {plan?.title ? (
         <p className="text-[14px] font-semibold text-muted">
-          Views and saves on{' '}
-          <span className="font-extrabold text-foreground">&ldquo;{plan.title}&rdquo;</span>. Tap a
-          profile to open it.
+          Views and saves on this meetup. Tap a profile to open it.
         </p>
       ) : null}
 
@@ -281,18 +268,6 @@ export default function PlanInterestPage() {
               </span>
             </Link>
           ))}
-        </div>
-      ) : null}
-
-      {!loading ? (
-        <div className="flex justify-center pt-2">
-          <button
-            type="button"
-            onClick={() => setRefreshKey((k) => k + 1)}
-            className="text-[13px] font-extrabold text-primary underline"
-          >
-            Refresh
-          </button>
         </div>
       ) : null}
     </div>
