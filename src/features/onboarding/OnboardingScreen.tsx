@@ -18,6 +18,11 @@ import {
   saveOnboardingSessionDraft,
 } from '@/lib/onboarding/sessionDraft';
 import { linkInvitationAfterSignup } from '@/lib/plans/planInvitations';
+import {
+  onboardingFieldClass,
+  onboardingTextareaClass,
+  onboardingValidationWrapClass,
+} from '@/lib/onboarding/formFieldClass';
 import { mediaDraftFromProfile, mergeProfileMediaDraftFromDb } from '@/lib/profile/media/draft';
 import { createClient } from '@/lib/supabase/client';
 import { fetchProfileVideo } from '@/services/profileMedia.service';
@@ -473,7 +478,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
               : reachable
                 ? 'border border-primary/30 bg-white text-foreground hover:border-primary/50'
                 : 'cursor-not-allowed border border-border bg-white/80 text-muted opacity-60',
-            needsAttention && 'ring-2 ring-amber-400 ring-offset-2'
+            needsAttention && 'outline outline-2 outline-amber-400 outline-offset-0'
           );
 
           if (!reachable) {
@@ -504,18 +509,18 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       ) : null}
 
       {step === 0 ? (
-        <FormCard className={validationHighlightStep === 0 ? 'ring-2 ring-amber-400 ring-offset-2' : undefined}>
+        <FormCard className={validationHighlightStep === 0 ? 'outline outline-2 outline-amber-400 outline-offset-0' : undefined}>
           <PremiumSectionHead title="Photos & video" />
           <label className="mt-3 block text-[13px] font-extrabold">Display name</label>
           <input
-            className="mt-1 w-full rounded-xl border border-border px-3 py-2.5 text-[14px] font-semibold"
+            className={onboardingFieldClass}
             value={draft.displayName}
             onChange={(e) => setDraft((d) => ({ ...d, displayName: e.target.value }))}
           />
           <label className="mt-4 block text-[13px] font-extrabold">Birthday</label>
           <input
             type="date"
-            className="mt-1 w-full rounded-xl border border-border px-3 py-2.5 text-[14px] font-semibold"
+            className={onboardingFieldClass}
             value={draft.birthDate.toISOString().slice(0, 10)}
             onChange={(e) => {
               const [y, m, day] = e.target.value.split('-').map(Number);
@@ -536,12 +541,12 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       ) : null}
 
       {step === 1 ? (
-        <div className={cn('space-y-6', validationHighlightStep === 1 && 'rounded-3xl ring-2 ring-amber-400 ring-offset-2 p-1')}>
+        <div className={cn('space-y-6', onboardingValidationWrapClass(validationHighlightStep === 1))}>
           <FormCard>
             <PremiumSectionHead title="Bio" />
             <textarea
               maxLength={150}
-              className="mt-2 min-h-[80px] w-full rounded-xl border border-border px-3 py-2.5 text-[14px] font-semibold"
+              className={onboardingTextareaClass}
               value={draft.bio}
               onChange={(e) => setDraft((d) => ({ ...d, bio: e.target.value }))}
             />
@@ -603,7 +608,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       ) : null}
 
       {step === 2 ? (
-        <FormCard className={validationHighlightStep === 2 ? 'ring-2 ring-amber-400 ring-offset-2' : undefined}>
+        <FormCard className={validationHighlightStep === 2 ? 'outline outline-2 outline-amber-400 outline-offset-0' : undefined}>
           <PremiumSectionHead title="Location" />
           <LocationSearchField
             value={draft.locationLabel}
@@ -628,7 +633,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       ) : null}
 
       {step === 3 ? (
-        <FormCard className={validationHighlightStep === 3 ? 'ring-2 ring-amber-400 ring-offset-2' : undefined}>
+        <FormCard className={validationHighlightStep === 3 ? 'outline outline-2 outline-amber-400 outline-offset-0' : undefined}>
           <PremiumSectionHead title="Discovery preferences" />
           <ToggleRow
             label="Public profile"

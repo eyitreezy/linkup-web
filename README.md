@@ -18,7 +18,15 @@ npm run dev
 Add to **Supabase → Authentication → URL Configuration**:
 
 - Site URL: `http://localhost:3000` (or production domain)
-- Redirect URLs: `http://localhost:3000/auth/callback`, `http://localhost:3000/auth/recovery`, `http://localhost:3000/auth/confirm`, `http://localhost:3000/reset-password`
+- Redirect URLs: `http://localhost:3000/auth/callback`, `http://localhost:3000/auth/recovery`, `http://localhost:3000/auth/recovery-callback`, `http://localhost:3000/auth/confirm`, `http://localhost:3000/reset-password`
+
+**Password reset (recommended email template)** — In Supabase → Authentication → Email Templates → **Reset password**, set the link to:
+
+```html
+<a href="{{ .SiteURL }}/auth/recovery-callback?token_hash={{ .TokenHash }}&type=recovery">Reset password</a>
+```
+
+This works in any browser/device. The app also accepts the default Supabase confirmation redirect to `/auth/recovery-callback` (hash or PKCE code).
 
 Enable **Google** under Authentication → Providers (same as mobile).
 

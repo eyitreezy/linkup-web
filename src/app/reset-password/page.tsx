@@ -7,14 +7,18 @@ import {
   PASSWORD_RESET_EXPIRED_MESSAGE,
 } from '@/lib/auth/recoveryErrors';
 import { getPasswordValidationErrors } from '@/lib/auth/passwordValidation';
+import {
+  establishRecoverySessionFromUrl,
+  stripRecoveryCredentialsFromUrl,
+} from '@/lib/auth/recoverySession';
+import { signOutAndRedirect } from '@/lib/auth/signOut';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { IoAlertCircleOutline } from 'react-icons/io5';
 
 function ResetPasswordFields() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -38,13 +42,42 @@ function ResetPasswordFields() {
   const [ready, setReady] = useState(false);
   const [hasSession, setHasSession] = useState(false);
 
+  const returnToSignIn = useCallback(() => {
+    void signOutAndRedirect({ redirectTo: '/login' });
+  }, []);
+
   useEffect(() => {
     const supabase = createClient();
+    let cancelled = false;
 
-    async function establishRecoverySession() {
+    async function bootstrap() {
+      const href = window.location.href;
+      const hasRecoveryCredentials =
+        href.includes('token_hash=') ||
+        href.includes('code=') ||
+        href.includes('access_token=');
+
+      if (hasRecoveryCredentials) {
+        const result = await establishRecoverySessionFromUrl(href);
+        if (cancelled) return;
+        if (result.ok) {
+          stripRecoveryCredentialsFromUrl();
+          setHasSession(true);
+          setReady(true);
+          setError(null);
+          return;
+        }
+        setHasSession(false);
+        setError(result.message);
+        setReady(true);
+        stripRecoveryCredentialsFromUrl();
+        return;
+      }
+
       const {
         data: { session },
       } = await supabase.auth.getSession();
+      if (cancelled) return;
       setHasSession(!!session?.user);
       setReady(true);
     }
@@ -57,10 +90,16 @@ function ResetPasswordFields() {
         setReady(true);
         if (event === 'PASSWORD_RECOVERY') setError(null);
       }
+      if (event === 'SIGNED_OUT') {
+        setHasSession(false);
+      }
     });
 
-    void establishRecoverySession();
-    return () => subscription.unsubscribe();
+    void bootstrap();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
@@ -80,11 +119,12 @@ function ResetPasswordFields() {
     const supabase = createClient();
     const { error: err } = await supabase.auth.updateUser({ password });
     setBusy(false);
-    if (err) setError(formatRecoveryAuthError(err.message));
-    else {
-      router.push('/login?reset=success');
-      router.refresh();
+    if (err) {
+      setError(formatRecoveryAuthError(err.message));
+      return;
     }
+
+    await signOutAndRedirect({ redirectTo: '/login?reset=success' });
   }
 
   if (!ready) {
@@ -108,8 +148,8 @@ function ResetPasswordFields() {
               Request a new reset link
             </AuthButton>
           </Link>
-          <AuthButton type="button" fullWidth variant="ghost" className="mt-2" onClick={() => router.replace('/login')}>
-            Back to sign in
+          <AuthButton type="button" fullWidth className="mt-2" onClick={returnToSignIn}>
+            Return to sign in
           </AuthButton>
         </div>
       </AuthShell>
@@ -158,9 +198,9 @@ function ResetPasswordFields() {
         <AuthButton type="submit" fullWidth disabled={busy}>
           {busy ? 'Saving…' : 'Update password'}
         </AuthButton>
-        <Link href="/login" className="auth-link block text-center text-[13px] font-bold max-lg:mt-2">
-          Back to sign in
-        </Link>
+        <AuthButton type="button" fullWidth className="mt-2" onClick={returnToSignIn}>
+          Return to sign in
+        </AuthButton>
       </form>
     </AuthShell>
   );

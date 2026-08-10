@@ -235,10 +235,10 @@ export function LocationSearchField({
           aria-autocomplete="list"
           aria-expanded={showPanel}
           aria-controls={showPanel ? listboxId : undefined}
-          className="w-full rounded-2xl border border-border bg-[#F8F9FC] px-4 py-3.5 text-[15px] font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+          className="box-border w-full rounded-2xl border-2 border-border bg-[#F8F9FC] px-4 py-3.5 text-[15px] font-semibold outline-none transition-[border-color] focus:border-primary"
         />
       </label>
-      <div className="mt-1.5 min-h-[1.125rem]">
+      <div className="mt-1.5 min-h-[2.75rem]">
         {resolveError ? (
           <p className="text-[12px] font-semibold text-red-600">{resolveError}</p>
         ) : showTypeMoreHint ? (
