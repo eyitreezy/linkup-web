@@ -148,9 +148,13 @@ function ResetPasswordFields() {
               Request a new reset link
             </AuthButton>
           </Link>
-          <AuthButton type="button" fullWidth className="mt-2" onClick={returnToSignIn}>
+          <button
+            type="button"
+            onClick={returnToSignIn}
+            className="auth-link mt-2 block w-full text-center text-[13px] font-bold text-foreground hover:underline max-lg:text-white/90"
+          >
             Return to sign in
-          </AuthButton>
+          </button>
         </div>
       </AuthShell>
     );
@@ -198,9 +202,13 @@ function ResetPasswordFields() {
         <AuthButton type="submit" fullWidth disabled={busy}>
           {busy ? 'Saving…' : 'Update password'}
         </AuthButton>
-        <AuthButton type="button" fullWidth className="mt-2" onClick={returnToSignIn}>
+        <button
+          type="button"
+          onClick={returnToSignIn}
+          className="auth-link mt-2 block w-full text-center text-[13px] font-bold text-foreground hover:underline max-lg:text-white/90"
+        >
           Return to sign in
-        </AuthButton>
+        </button>
       </form>
     </AuthShell>
   );

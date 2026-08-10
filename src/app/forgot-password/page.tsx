@@ -55,8 +55,10 @@ export default function ForgotPasswordPage() {
           <AuthButton type="button" fullWidth className="mt-4" variant="ghost" onClick={() => setSent(false)}>
             Edit email
           </AuthButton>
-          <Link href="/login" className="auth-link mt-3 block text-center text-[13px] font-bold max-lg:text-white/90">
-            Return to sign in
+          <Link href="/login" className="mt-3 block">
+            <AuthButton type="button" fullWidth>
+              Return to sign in
+            </AuthButton>
           </Link>
         </div>
       ) : (
