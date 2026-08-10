@@ -1,4 +1,9 @@
-import { PROFILE_VIDEO_MIME_TYPES } from '@/lib/profile/media/constants';
+import {
+  PROFILE_VIDEO_MAX_DURATION_SECONDS,
+  PROFILE_VIDEO_MAX_FILE_SIZE_BYTES,
+  PROFILE_VIDEO_MAX_SIZE_LABEL,
+  PROFILE_VIDEO_MIME_TYPES,
+} from '@/lib/profile/media/constants';
 
 export function isAllowedProfileVideoMime(mime: string): boolean {
   return (PROFILE_VIDEO_MIME_TYPES as readonly string[]).includes(mime);
@@ -102,4 +107,29 @@ export async function readVideoMetadata(
     video.remove();
     URL.revokeObjectURL(url);
   }
+}
+
+export function validateProfileVideoFile(
+  file: File
+): { valid: boolean; error: string | null } {
+  if (file.size > PROFILE_VIDEO_MAX_FILE_SIZE_BYTES) {
+    return {
+      valid: false,
+      error: `Video must be under ${PROFILE_VIDEO_MAX_SIZE_LABEL}. Please trim or compress it and try again.`,
+    };
+  }
+  return { valid: true, error: null };
+}
+
+export function validateProfileVideoDuration(
+  durationSeconds: number | null
+): { valid: boolean; error: string | null } {
+  if (durationSeconds == null) return { valid: true, error: null };
+  if (durationSeconds > PROFILE_VIDEO_MAX_DURATION_SECONDS) {
+    return {
+      valid: false,
+      error: `Video must be ${PROFILE_VIDEO_MAX_DURATION_SECONDS} seconds or less. Please trim it and try again.`,
+    };
+  }
+  return { valid: true, error: null };
 }

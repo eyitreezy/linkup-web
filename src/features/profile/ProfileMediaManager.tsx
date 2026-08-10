@@ -19,7 +19,7 @@ import {
   profileMediaMeetsMinimums,
   profileMediaValidationMessage,
 } from '@/lib/profile/media/validation';
-import { readVideoMetadata } from '@/lib/profile/media/videoMeta';
+import { readVideoMetadata, validateProfileVideoDuration, validateProfileVideoFile } from '@/lib/profile/media/videoMeta';
 import type { ProfileMediaDraft } from '@/lib/profile/media/types';
 import { cn } from '@/utils/cn';
 import { useEffect, useRef, useState } from 'react';
@@ -89,6 +89,14 @@ export function ProfileMediaManager({
   async function handleVideoPick(file: File | null) {
     if (!file) return;
     setVideoError(null);
+
+    const sizeCheck = validateProfileVideoFile(file);
+    if (!sizeCheck.valid) {
+      setVideoError(sizeCheck.error);
+      if (videoInputRef.current) videoInputRef.current.value = '';
+      return;
+    }
+
     setVideoBusy(true);
 
     onChange({
@@ -105,6 +113,14 @@ export function ProfileMediaManager({
 
     try {
       const { durationSeconds, thumbnailBlob } = await readVideoMetadata(file);
+
+      const durationCheck = validateProfileVideoDuration(durationSeconds);
+      if (!durationCheck.valid) {
+        setVideoError(durationCheck.error);
+        onChange({ ...mediaRef.current, video: null });
+        return;
+      }
+
       const thumbUrl = thumbnailBlob ? URL.createObjectURL(thumbnailBlob) : null;
       onChange({
         ...mediaRef.current,
@@ -119,17 +135,7 @@ export function ProfileMediaManager({
       });
     } catch {
       setVideoError('Could not read that video. Try a shorter MP4 or WebM clip.');
-      onChange({
-        ...mediaRef.current,
-        video: {
-          id: mediaRef.current.video?.id,
-          url: mediaRef.current.video?.url ?? null,
-          localFile: file,
-          storagePath: mediaRef.current.video?.storagePath,
-          thumbnailUrl: null,
-          durationSeconds: null,
-        },
-      });
+      onChange({ ...mediaRef.current, video: null });
     } finally {
       setVideoBusy(false);
       if (videoInputRef.current) videoInputRef.current.value = '';
@@ -283,7 +289,7 @@ export function ProfileMediaManager({
           </p>
         </div>
         <p className="mt-1 text-[12px] font-semibold leading-relaxed text-muted">
-          A short clip builds trust, just like on top dating apps. MP4, MOV, or WebM.
+          A short clip builds trust, just like on top dating apps. MP4, MOV, or WebM. Max 60 seconds and 100MB.
         </p>
 
         <div className="mt-3 flex flex-col gap-3 min-[480px]:flex-row min-[480px]:items-center">

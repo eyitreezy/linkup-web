@@ -160,6 +160,10 @@ export function applyDiscoverFilters(
   let out = rows.filter(filterDiscoverPlan);
   out = filterPlansByMood(out, mood);
 
+  if (viewerId) {
+    out = out.filter((row) => row.creator_id !== viewerId);
+  }
+
   if (filter.planTypeFilter && filter.planTypeFilter !== 'all') {
     out = out.filter((plan) => {
       if (filter.planTypeFilter === 'group') return !!plan.is_group_plan;
@@ -201,22 +205,19 @@ export function applyDiscoverFilters(
     });
   }
 
-  // Price applies to every plan (including the viewer's own) before other client bypasses.
+  // Price filter applies to all remaining discover rows.
   if (priceFilterActive) {
     out = applyDiscoverPriceFilterToRows(out, priceBounds);
   }
 
   out = out.filter((row) => {
     if (row.is_mood_plan && isPlanMoodWindowClosed(row)) return false;
-    const isOwnPlan = !!(viewerId && row.creator_id === viewerId);
-    if (!distanceFilterActive && isOwnPlan) return true;
 
     if (filter.verifiedHostsOnly && !passesVerifiedHostFilter(row, filter.verifiedHostsOnly)) {
       return false;
     }
 
     if (filter.hostPresence !== 'all') {
-      if (isOwnPlan) return true;
       if (presenceByUser) {
         const kind = resolveHostPresenceKind(
           viewerProfile ?? null,

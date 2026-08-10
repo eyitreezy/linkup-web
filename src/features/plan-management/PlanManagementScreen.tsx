@@ -17,6 +17,7 @@ import {
   sortCreatorPlans,
   type CreatorPlanRow,
 } from '@/lib/plans/planManagement';
+import { hasNewActivity, markPlanActivityRead } from '@/lib/plans/planActivityRead';
 import { createClient } from '@/lib/supabase/client';
 import {
   archiveCreatorPlan,
@@ -55,6 +56,7 @@ export function PlanManagementScreen() {
   const [editPlan, setEditPlan] = useState<CreatorPlanRow | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [shelfBusy, setShelfBusy] = useState(false);
+  const [dismissedActivityIds, setDismissedActivityIds] = useState<Set<string>>(() => new Set());
 
   useCreatorPlansRealtime(user?.id);
 
@@ -73,7 +75,12 @@ export function PlanManagementScreen() {
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['creator-plans', user?.id],
     queryFn: async () => {
-      if (!user?.id) return { plans: [] as CreatorPlanRow[], stats: { offersCountByPlan: {}, viewsByPlan: {} } };
+      if (!user?.id) {
+        return {
+          plans: [] as CreatorPlanRow[],
+          stats: { offersCountByPlan: {}, viewsByPlan: {}, savesByPlan: {}, latestEngagementAt: {} },
+        };
+      }
       const client = createClient();
       const { plans, error: loadErr } = await fetchCreatorPlans(client, user.id);
       if (loadErr) throw new Error(loadErr);
@@ -89,6 +96,16 @@ export function PlanManagementScreen() {
   const plans = data?.plans ?? EMPTY_PLANS;
   const offersCountByPlan = data?.stats.offersCountByPlan ?? {};
   const viewsByPlan = data?.stats.viewsByPlan ?? {};
+  const savesByPlan = data?.stats.savesByPlan ?? {};
+  const latestEngagementAt = data?.stats.latestEngagementAt ?? {};
+
+  const newActivityMap = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    for (const plan of plans) {
+      map[plan.id] = hasNewActivity(plan.id, latestEngagementAt[plan.id] ?? null);
+    }
+    return map;
+  }, [plans, latestEngagementAt]);
 
   const sectionCounts = useMemo(() => countBySection(plans), [plans]);
   const activeLivingCount = sectionCounts.active;
@@ -278,8 +295,14 @@ export function PlanManagementScreen() {
                 <PlanManagementCard
                   plan={p}
                   views={viewsByPlan[p.id] ?? 0}
+                  saves={savesByPlan[p.id] ?? 0}
                   offers={offersCountByPlan[p.id] ?? 0}
                   distanceKm={dist}
+                  hasNewActivity={(newActivityMap[p.id] ?? false) && !dismissedActivityIds.has(p.id)}
+                  onMarkRead={() => {
+                    markPlanActivityRead(p.id);
+                    setDismissedActivityIds((prev) => new Set(prev).add(p.id));
+                  }}
                   onEdit={() => setEditPlan(p)}
                   onDuplicate={() => void handleDuplicate(p)}
                   onArchive={() => setShelfDialog({ kind: 'archive', planId: p.id })}

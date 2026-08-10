@@ -10,7 +10,7 @@ import {
 import { pmActionBtn, pmActionScroller } from '@/features/plan-management/planManagementLayout';
 import { cn } from '@/utils/cn';
 import Link from 'next/link';
-import { IoChatbubblesOutline, IoEyeOutline } from 'react-icons/io5';
+import { IoBookmarkOutline, IoChatbubblesOutline, IoEyeOutline } from 'react-icons/io5';
 
 const STRIPE: Record<ReturnType<typeof planStripeKind>, string> = {
   default: 'bg-primary',
@@ -23,8 +23,11 @@ const STRIPE: Record<ReturnType<typeof planStripeKind>, string> = {
 type Props = {
   plan: CreatorPlanRow;
   views: number;
+  saves: number;
   offers: number;
   distanceKm: number | null;
+  hasNewActivity: boolean;
+  onMarkRead: () => void;
   onEdit: () => void;
   onDuplicate: () => void;
   onArchive: () => void;
@@ -38,8 +41,11 @@ const deleteBtnClass =
 export function PlanManagementCard({
   plan,
   views,
+  saves,
   offers,
   distanceKm,
+  hasNewActivity,
+  onMarkRead,
   onEdit,
   onDuplicate,
   onArchive,
@@ -49,6 +55,7 @@ export function PlanManagementCard({
   const caps = getCreatorEditCapabilities(plan, offers);
   const live = moodLive(plan);
   const ended = plan.is_mood_plan && isMoodExpired(plan);
+  const engagementTotal = views + saves;
 
   return (
     <article className="pm-card flex w-full min-w-0 overflow-hidden rounded-2xl border border-border/80 bg-white/90 shadow-sm transition hover:border-primary/20 hover:shadow-md min-[425px]:rounded-[18px]">
@@ -56,7 +63,14 @@ export function PlanManagementCard({
       <div className="min-w-0 flex-1 p-3 min-[425px]:p-4">
         <div className="pm-card-head">
           <div className="min-w-0 flex-1">
-            <h3 className="pm-card-title font-display text-foreground">{plan.title}</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="pm-card-title font-display text-foreground">{plan.title}</h3>
+              {hasNewActivity ? (
+                <span className="inline-flex items-center rounded-full bg-secondary/90 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-white">
+                  new
+                </span>
+              ) : null}
+            </div>
             <p className="pm-card-meta mt-1 font-semibold text-muted">
               {plan.status}
               {plan.is_mood_plan ? ' · Mood' : ''}
@@ -80,15 +94,33 @@ export function PlanManagementCard({
             {views} views
           </span>
           <span className="pm-card-metric bg-primary/5 text-muted">
+            <IoBookmarkOutline className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+            {saves} saves
+          </span>
+          <span className="pm-card-metric bg-primary/5 text-muted">
             <IoChatbubblesOutline className="h-4 w-4 shrink-0 text-secondary" aria-hidden />
             {offers} offers
           </span>
         </div>
 
         <div className={cn(pmActionScroller)}>
-          <Link href={`/plan/${plan.id}`} className={pmActionBtn}>
+          <Link
+            href={`/plan/${plan.id}`}
+            className={pmActionBtn}
+            onClick={() => onMarkRead()}
+          >
             Open
           </Link>
+          {plan.status !== 'draft' ? (
+            <Link href={`/plan/${plan.id}/interest`} className={pmActionBtn}>
+              Interest
+              {engagementTotal > 0 ? (
+                <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-extrabold text-primary">
+                  {engagementTotal}
+                </span>
+              ) : null}
+            </Link>
+          ) : null}
           {caps.canEdit ? (
             <button type="button" onClick={onEdit} className={pmActionBtn}>
               Edit

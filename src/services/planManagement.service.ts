@@ -5,6 +5,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export type CreatorPlanStats = {
   offersCountByPlan: Record<string, number>;
   viewsByPlan: Record<string, number>;
+  savesByPlan: Record<string, number>;
+  latestEngagementAt: Record<string, string>;
 };
 
 export async function fetchCreatorPlans(client: SupabaseClient, userId: string) {
@@ -24,19 +26,34 @@ export async function fetchCreatorPlanStats(
   planIds: string[]
 ): Promise<CreatorPlanStats> {
   if (planIds.length === 0) {
-    return { offersCountByPlan: {}, viewsByPlan: {} };
+    return { offersCountByPlan: {}, viewsByPlan: {}, savesByPlan: {}, latestEngagementAt: {} };
   }
 
   const [{ data: eng }, { data: offAgg }] = await Promise.all([
-    client.from('plan_engagements').select('plan_id, kind').in('plan_id', planIds),
+    client
+      .from('plan_engagements')
+      .select('plan_id, kind, created_at')
+      .in('plan_id', planIds)
+      .in('kind', ['view', 'save']),
     client.from('plan_offers').select('plan_id').in('plan_id', planIds),
   ]);
 
   const views: Record<string, number> = {};
+  const saves: Record<string, number> = {};
+  const latestEngagementAt: Record<string, string> = {};
+
   for (const r of eng ?? []) {
-    if ((r as { kind: string }).kind !== 'view') continue;
-    const pid = (r as { plan_id: string }).plan_id;
-    views[pid] = (views[pid] ?? 0) + 1;
+    const row = r as { plan_id: string; kind: string; created_at: string };
+    if (row.kind === 'view') {
+      views[row.plan_id] = (views[row.plan_id] ?? 0) + 1;
+    } else if (row.kind === 'save') {
+      saves[row.plan_id] = (saves[row.plan_id] ?? 0) + 1;
+    }
+
+    const existing = latestEngagementAt[row.plan_id];
+    if (!existing || new Date(row.created_at).getTime() > new Date(existing).getTime()) {
+      latestEngagementAt[row.plan_id] = row.created_at;
+    }
   }
 
   const offers: Record<string, number> = {};
@@ -45,7 +62,12 @@ export async function fetchCreatorPlanStats(
     offers[pid] = (offers[pid] ?? 0) + 1;
   }
 
-  return { offersCountByPlan: offers, viewsByPlan: views };
+  return {
+    offersCountByPlan: offers,
+    viewsByPlan: views,
+    savesByPlan: saves,
+    latestEngagementAt,
+  };
 }
 
 export async function archiveCreatorPlan(client: SupabaseClient, planId: string) {
