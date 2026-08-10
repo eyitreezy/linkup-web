@@ -33,7 +33,7 @@ function draftNeedsMediaUpload(draft: OnboardingDraft, existingVideoMediaId?: st
   if (draft.profileMedia.photos.some((p) => p.localFile)) return true;
   if (draft.profileMedia.video?.localFile) return true;
   if (existingVideoMediaId && !hasProfileVideo(draft.profileMedia)) return true;
-  return profileMediaMeetsMinimums(draft.profileMedia);
+  return false;
 }
 
 /** Debounced progress save — keeps onboarding data across refresh without requiring Continue. */

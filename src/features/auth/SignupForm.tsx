@@ -12,6 +12,7 @@ import {
   isDuplicateSignUpError,
   normalizeAuthEmail,
 } from '@/lib/auth/signupHelpers';
+import { getPasswordValidationErrors } from '@/lib/auth/passwordValidation';
 import { resolvePostAuthDestination } from '@/lib/auth/resolvePostAuthDestination';
 import { createClient } from '@/lib/supabase/client';
 import { env } from '@/lib/env';
@@ -31,6 +32,7 @@ function SignupFields() {
   const [privacyConsentChecked, setPrivacyConsentChecked] = useState(false);
   const [showConsentError, setShowConsentError] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
   const [resendBusy, setResendBusy] = useState(false);
@@ -65,6 +67,7 @@ function SignupFields() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setPasswordErrors([]);
     setShowConsentError(false);
     const trimmedName = displayName.trim();
     const normalizedEmail = normalizeAuthEmail(email);
@@ -80,8 +83,9 @@ function SignupFields() {
       setShowConsentError(true);
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    const nextPasswordErrors = getPasswordValidationErrors(password);
+    if (nextPasswordErrors.length > 0) {
+      setPasswordErrors(nextPasswordErrors);
       return;
     }
     setBusy(true);
@@ -195,12 +199,26 @@ function SignupFields() {
         />
         <AuthPasswordInput
           autoComplete="new-password"
-          placeholder="Password (min. 6 characters)"
+          placeholder="Password (min. 6 characters, 1 uppercase, 1 number)"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            if (passwordErrors.length > 0) {
+              setPasswordErrors(getPasswordValidationErrors(e.target.value));
+            }
+          }}
           minLength={6}
           required
         />
+        {passwordErrors.length > 0 ? (
+          <div className="space-y-1">
+            {passwordErrors.map((msg) => (
+              <p key={msg} className="auth-error">
+                {msg}
+              </p>
+            ))}
+          </div>
+        ) : null}
         <div className="flex items-start gap-2.5 pt-1">
           <button
             type="button"

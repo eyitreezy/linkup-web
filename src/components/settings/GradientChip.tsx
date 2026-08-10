@@ -14,8 +14,10 @@ export function GradientChip({ label, selected, onClick }: Props) {
       type="button"
       onClick={onClick}
       className={cn(
-        'rounded-full px-4 py-2 text-[13px] font-extrabold transition',
-        selected ? 'linkup-gradient-primary text-white shadow-sm' : 'border border-border bg-white text-primary hover:border-primary/30'
+        'box-border rounded-full border px-4 py-2 text-[13px] font-extrabold transition',
+        selected
+          ? 'border-primary/40 linkup-gradient-primary text-white shadow-sm'
+          : 'border-border bg-white text-primary hover:border-primary/30'
       )}
     >
       {label}

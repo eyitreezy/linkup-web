@@ -6,6 +6,7 @@ import {
   formatRecoveryAuthError,
   PASSWORD_RESET_EXPIRED_MESSAGE,
 } from '@/lib/auth/recoveryErrors';
+import { getPasswordValidationErrors } from '@/lib/auth/passwordValidation';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -17,6 +18,7 @@ function ResetPasswordFields() {
   const searchParams = useSearchParams();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(() => {
     const recoveryError = searchParams.get('error');
     const desc = searchParams.get('error_description');
@@ -64,10 +66,12 @@ function ResetPasswordFields() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    const nextPasswordErrors = getPasswordValidationErrors(password);
+    if (nextPasswordErrors.length > 0) {
+      setPasswordErrors(nextPasswordErrors);
       return;
     }
+    setPasswordErrors([]);
     if (password !== confirm) {
       setError('Passwords do not match.');
       return;
@@ -101,7 +105,7 @@ function ResetPasswordFields() {
           </p>
           <Link href="/forgot-password">
             <AuthButton type="button" fullWidth className="mt-4">
-              Request a new reset email
+              Request a new reset link
             </AuthButton>
           </Link>
           <AuthButton type="button" fullWidth variant="ghost" className="mt-2" onClick={() => router.replace('/login')}>
@@ -124,7 +128,12 @@ function ResetPasswordFields() {
           autoComplete="new-password"
           placeholder="New password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            if (passwordErrors.length > 0) {
+              setPasswordErrors(getPasswordValidationErrors(e.target.value));
+            }
+          }}
           minLength={6}
           required
         />
@@ -136,6 +145,15 @@ function ResetPasswordFields() {
           minLength={6}
           required
         />
+        {passwordErrors.length > 0 ? (
+          <div className="space-y-1">
+            {passwordErrors.map((msg) => (
+              <p key={msg} className="auth-error">
+                {msg}
+              </p>
+            ))}
+          </div>
+        ) : null}
         {error ? <p className="auth-error">{error}</p> : null}
         <AuthButton type="submit" fullWidth disabled={busy}>
           {busy ? 'Saving…' : 'Update password'}

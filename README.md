@@ -18,7 +18,7 @@ npm run dev
 Add to **Supabase → Authentication → URL Configuration**:
 
 - Site URL: `http://localhost:3000` (or production domain)
-- Redirect URLs: `http://localhost:3000/auth/callback`, `http://localhost:3000/reset-password`
+- Redirect URLs: `http://localhost:3000/auth/callback`, `http://localhost:3000/auth/recovery`, `http://localhost:3000/auth/confirm`, `http://localhost:3000/reset-password`
 
 Enable **Google** under Authentication → Providers (same as mobile).
 

@@ -61,6 +61,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
   const autosaveReadyRef = useRef(false);
   const skipAutosaveOnceRef = useRef(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mediaAutosaveInFlightRef = useRef(false);
   const onboardingFinishedRef = useRef(false);
   const draftRef = useRef(draft);
   const stepRef = useRef(step);
@@ -190,36 +191,63 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
 
     autosaveTimerRef.current = setTimeout(() => {
       void (async () => {
-        setAutosaving(true);
-        const result = await autosaveOnboardingProgress({
-          userId: user.id,
-          draft,
-          stepIndex: step,
-          existingPreferences: preferencesRef.current,
-          existingVideoMediaId: videoMetaRef.current.id,
-          existingVideoStoragePath: videoMetaRef.current.storagePath,
-        });
-        setAutosaving(false);
+        if (mediaAutosaveInFlightRef.current) return;
 
-        if (result.error) {
-          setError(result.error);
-          return;
+        const snapshot = draftRef.current;
+        const snapshotStep = stepRef.current;
+        const hasLocalMedia =
+          snapshot.profileMedia.photos.some((p) => p.localFile) ||
+          Boolean(snapshot.profileMedia.video?.localFile);
+
+        if (hasLocalMedia) {
+          mediaAutosaveInFlightRef.current = true;
         }
 
-        preferencesRef.current = result.preferences;
+        setAutosaving(true);
+        try {
+          const result = await autosaveOnboardingProgress({
+            userId: user.id,
+            draft: snapshot,
+            stepIndex: snapshotStep,
+            existingPreferences: preferencesRef.current,
+            existingVideoMediaId: videoMetaRef.current.id,
+            existingVideoStoragePath: videoMetaRef.current.storagePath,
+          });
 
-        if (result.mediaUploaded) {
-          skipAutosaveOnceRef.current = true;
-          const client = createClient();
-          const bundle = await fetchUserProfileBundle(client, user.id);
-          const video = await fetchProfileVideo(client, user.id);
-          videoMetaRef.current = { id: video?.id, storagePath: video?.storagePath };
-          if (bundle.profile) {
-            const fromDb = mediaDraftFromProfile(bundle.profile, video);
-            setDraft((d) => ({
-              ...d,
-              profileMedia: mergeProfileMediaDraftFromDb(d.profileMedia, fromDb),
-            }));
+          if (result.error) {
+            setError(result.error);
+            return;
+          }
+
+          preferencesRef.current = result.preferences;
+
+          if (result.mediaUploaded) {
+            skipAutosaveOnceRef.current = true;
+            const client = createClient();
+            const bundle = await fetchUserProfileBundle(client, user.id);
+            const video = await fetchProfileVideo(client, user.id);
+            videoMetaRef.current = { id: video?.id, storagePath: video?.storagePath };
+            if (bundle.profile) {
+              const fromDb = mediaDraftFromProfile(bundle.profile, video);
+              setDraft((d) => ({
+                ...d,
+                profileMedia: mergeProfileMediaDraftFromDb(d.profileMedia, fromDb),
+              }));
+            }
+          }
+        } finally {
+          mediaAutosaveInFlightRef.current = false;
+          setAutosaving(false);
+
+          const pendingLocal =
+            draftRef.current.profileMedia.photos.some((p) => p.localFile) ||
+            Boolean(draftRef.current.profileMedia.video?.localFile);
+          if (pendingLocal && autosaveReadyRef.current && !onboardingFinishedRef.current && !saving) {
+            skipAutosaveOnceRef.current = false;
+            if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+            autosaveTimerRef.current = setTimeout(() => {
+              setDraft((d) => ({ ...d }));
+            }, 120);
           }
         }
       })();
@@ -520,7 +548,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
           </FormCard>
           <FormCard>
             <PremiumSectionHead title="Interests & languages" />
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2 min-h-[7.5rem] flex flex-wrap content-start gap-2">
               {INTEREST_TAGS.map((tag) => (
                 <GradientChip
                   key={tag}
@@ -535,7 +563,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
                 />
               ))}
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 min-h-[5rem] flex flex-wrap content-start gap-2">
               {LANGUAGE_OPTIONS.map((tag) => (
                 <GradientChip
                   key={tag}
@@ -553,7 +581,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
           </FormCard>
           <FormCard>
             <PremiumSectionHead title="What you're here for" />
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2 min-h-[2.75rem] flex flex-wrap content-start gap-2">
               {INTENTS.map((i) => (
                 <GradientChip
                   key={i.id}
@@ -638,20 +666,22 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
         </>
       ) : null}
 
-      {!canContinue && continueHint ? (
-        <div className="rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2.5">
-          <p className="text-[13px] font-semibold text-amber-900">{continueHint}</p>
-          {finishBlockerStep != null && finishBlockerStep !== step ? (
-            <button
-              type="button"
-              onClick={() => goToStep(finishBlockerStep)}
-              className="mt-2 text-[13px] font-extrabold text-primary underline hover:no-underline"
-            >
-              Go to step {finishBlockerStep + 1}: {ONBOARDING_STEP_LABELS[finishBlockerStep]}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="min-h-[3.5rem]">
+        {!canContinue && continueHint ? (
+          <div className="rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2.5">
+            <p className="text-[13px] font-semibold text-amber-900">{continueHint}</p>
+            {finishBlockerStep != null && finishBlockerStep !== step ? (
+              <button
+                type="button"
+                onClick={() => goToStep(finishBlockerStep)}
+                className="mt-2 text-[13px] font-extrabold text-primary underline hover:no-underline"
+              >
+                Go to step {finishBlockerStep + 1}: {ONBOARDING_STEP_LABELS[finishBlockerStep]}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       <button
         type="button"

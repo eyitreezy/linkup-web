@@ -39,6 +39,16 @@ export function mediaDraftFromProfile(
   });
 }
 
+function urlMatchesPhotoClientId(url: string, clientId: string): boolean {
+  if (!url || !clientId) return false;
+  try {
+    const pathname = new URL(url).pathname;
+    return pathname.includes(`/${clientId}.`);
+  } catch {
+    return url.includes(`/${clientId}.`);
+  }
+}
+
 export function mergeProfileMediaDraftFromDb(
   local: ProfileMediaDraft,
   fromDb: ProfileMediaDraft
@@ -46,7 +56,12 @@ export function mergeProfileMediaDraftFromDb(
   const usedDbPhotoUrls = new Set<string>();
   const mergedPhotos = local.photos.map((p) => {
     if (p.url || !p.localFile) return p;
-    const match = fromDb.photos.find((db) => db.url && !usedDbPhotoUrls.has(db.url));
+    const match = fromDb.photos.find(
+      (db) =>
+        db.url &&
+        !usedDbPhotoUrls.has(db.url) &&
+        (urlMatchesPhotoClientId(db.url, p.clientId) || db.clientId === p.clientId)
+    );
     if (!match?.url) return p;
     usedDbPhotoUrls.add(match.url);
     return { ...p, url: match.url, localFile: undefined };
@@ -78,6 +93,7 @@ export function setPrimaryPhoto(media: ProfileMediaDraft, clientId: string): Pro
 }
 
 export function removePhoto(media: ProfileMediaDraft, clientId: string): ProfileMediaDraft {
+  revokePhotoPreviewUrl(clientId);
   const photos = media.photos.filter((p) => p.clientId !== clientId);
   return ensurePrimaryPhoto({ ...media, photos });
 }
@@ -92,8 +108,24 @@ export function addLocalPhotos(media: ProfileMediaDraft, files: File[]): Profile
   return ensurePrimaryPhoto({ ...media, photos: [...media.photos, ...next] });
 }
 
+const photoBlobUrlCache = new Map<string, string>();
+
+export function revokePhotoPreviewUrl(clientId: string): void {
+  const cached = photoBlobUrlCache.get(clientId);
+  if (cached) {
+    URL.revokeObjectURL(cached);
+    photoBlobUrlCache.delete(clientId);
+  }
+}
+
 export function photoPreviewUrl(photo: ProfilePhotoDraftItem): string | null {
   if (photo.url) return photo.url;
-  if (photo.localFile) return URL.createObjectURL(photo.localFile);
+  if (photo.localFile) {
+    const cached = photoBlobUrlCache.get(photo.clientId);
+    if (cached) return cached;
+    const url = URL.createObjectURL(photo.localFile);
+    photoBlobUrlCache.set(photo.clientId, url);
+    return url;
+  }
   return null;
 }

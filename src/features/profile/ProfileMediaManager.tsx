@@ -44,6 +44,11 @@ export function ProfileMediaManager({
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const localVideoUrlRef = useRef<string | null>(null);
+  const mediaRef = useRef(media);
+
+  useEffect(() => {
+    mediaRef.current = media;
+  }, [media]);
 
   const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -87,14 +92,14 @@ export function ProfileMediaManager({
     setVideoBusy(true);
 
     onChange({
-      ...media,
+      ...mediaRef.current,
       video: {
-        id: media.video?.id,
-        url: media.video?.url ?? null,
+        id: mediaRef.current.video?.id,
+        url: mediaRef.current.video?.url ?? null,
         localFile: file,
-        storagePath: media.video?.storagePath,
-        thumbnailUrl: media.video?.thumbnailUrl ?? null,
-        durationSeconds: media.video?.durationSeconds ?? null,
+        storagePath: mediaRef.current.video?.storagePath,
+        thumbnailUrl: mediaRef.current.video?.thumbnailUrl ?? null,
+        durationSeconds: mediaRef.current.video?.durationSeconds ?? null,
       },
     });
 
@@ -102,12 +107,12 @@ export function ProfileMediaManager({
       const { durationSeconds, thumbnailBlob } = await readVideoMetadata(file);
       const thumbUrl = thumbnailBlob ? URL.createObjectURL(thumbnailBlob) : null;
       onChange({
-        ...media,
+        ...mediaRef.current,
         video: {
-          id: media.video?.id,
-          url: media.video?.url ?? null,
+          id: mediaRef.current.video?.id,
+          url: mediaRef.current.video?.url ?? null,
           localFile: file,
-          storagePath: media.video?.storagePath,
+          storagePath: mediaRef.current.video?.storagePath,
           thumbnailUrl: thumbUrl,
           durationSeconds,
         },
@@ -115,12 +120,12 @@ export function ProfileMediaManager({
     } catch {
       setVideoError('Could not read that video. Try a shorter MP4 or WebM clip.');
       onChange({
-        ...media,
+        ...mediaRef.current,
         video: {
-          id: media.video?.id,
-          url: media.video?.url ?? null,
+          id: mediaRef.current.video?.id,
+          url: mediaRef.current.video?.url ?? null,
           localFile: file,
-          storagePath: media.video?.storagePath,
+          storagePath: mediaRef.current.video?.storagePath,
           thumbnailUrl: null,
           durationSeconds: null,
         },
@@ -154,7 +159,7 @@ export function ProfileMediaManager({
         aria-hidden
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
-          if (files.length) onChange(addLocalPhotos(media, files));
+          if (files.length) onChange(addLocalPhotos(mediaRef.current, files));
           e.target.value = '';
         }}
       />
@@ -223,7 +228,7 @@ export function ProfileMediaManager({
                         onClick={() => {
                           void (async () => {
                             setPrimaryBusy(true);
-                            const next = setPrimaryPhoto(media, photo.clientId);
+                            const next = setPrimaryPhoto(mediaRef.current, photo.clientId);
                             onChange(next);
                             try {
                               if (onPersistPrimary) await onPersistPrimary(photo.clientId);
@@ -241,7 +246,7 @@ export function ProfileMediaManager({
                       type="button"
                       className="inline-flex items-center justify-center gap-1 rounded-full bg-red-500/90 px-2 py-1.5 text-[11px] font-extrabold text-white"
                       onClick={() => {
-                        onChange(removePhoto(media, photo.clientId));
+                        onChange(removePhoto(mediaRef.current, photo.clientId));
                         setActivePhotoId(null);
                       }}
                     >
@@ -319,7 +324,7 @@ export function ProfileMediaManager({
                 className="inline-flex min-h-[40px] items-center rounded-full border border-red-200 bg-red-50 px-4 py-2 text-[12px] font-extrabold text-red-600 disabled:opacity-60"
                 onClick={() => {
                   setVideoError(null);
-                  onChange({ ...media, video: null });
+                  onChange({ ...mediaRef.current, video: null });
                   if (videoInputRef.current) videoInputRef.current.value = '';
                 }}
               >

@@ -37,6 +37,7 @@ export function LocationSearchField({
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSeqRef = useRef(0);
+  const suppressSearchRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const trimmedLen = value.trim().length;
@@ -57,6 +58,8 @@ export function LocationSearchField({
 
   const runSearch = useCallback(
     async (q: string) => {
+      if (suppressSearchRef.current) return;
+
       const trimmed = q.trim();
       if (trimmed.length < LOCATION_SUGGEST_MIN_CHARS) {
         setSuggestions([]);
@@ -73,14 +76,14 @@ export function LocationSearchField({
 
       try {
         const rows = await searchGooglePlaceSuggestions(trimmed, 8);
-        if (requestId !== requestSeqRef.current) return;
+        if (requestId !== requestSeqRef.current || suppressSearchRef.current) return;
 
         setSuggestions(rows);
         setSearched(true);
         setOpen(true);
         syncDropdownPosition();
       } catch {
-        if (requestId !== requestSeqRef.current) return;
+        if (requestId !== requestSeqRef.current || suppressSearchRef.current) return;
         setSuggestions([]);
         setSearched(true);
         setOpen(true);
@@ -98,6 +101,8 @@ export function LocationSearchField({
   }, []);
 
   useEffect(() => {
+    if (suppressSearchRef.current) return;
+
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       void runSearch(value);
@@ -132,15 +137,27 @@ export function LocationSearchField({
   }, [open]);
 
   async function pick(s: LocationSuggestion) {
+    suppressSearchRef.current = true;
+    requestSeqRef.current += 1;
     setOpen(false);
     setSearched(false);
+    setSuggestions([]);
+    setLoading(false);
     setResolveError(null);
+
     try {
       const resolved = await resolveGooglePlaceSuggestion(s);
-      onChange(resolved.label);
-      onSelect?.(resolved);
+      if (onSelect) {
+        onSelect(resolved);
+      } else {
+        onChange(resolved.label);
+      }
     } catch (e) {
       setResolveError(e instanceof Error ? e.message : 'Could not use that location.');
+    } finally {
+      window.setTimeout(() => {
+        suppressSearchRef.current = false;
+      }, 400);
     }
   }
 
@@ -194,6 +211,7 @@ export function LocationSearchField({
           ref={inputRef}
           value={value}
           onChange={(e) => {
+            suppressSearchRef.current = false;
             setResolveError(null);
             onChange(e.target.value);
             if (e.target.value.trim().length >= LOCATION_SUGGEST_MIN_CHARS) {
@@ -202,6 +220,7 @@ export function LocationSearchField({
             }
           }}
           onFocus={() => {
+            if (suppressSearchRef.current) return;
             if (canSearch) {
               setOpen(true);
               syncDropdownPosition();
@@ -219,19 +238,19 @@ export function LocationSearchField({
           className="w-full rounded-2xl border border-border bg-[#F8F9FC] px-4 py-3.5 text-[15px] font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
         />
       </label>
-      {resolveError ? (
-        <p className="mt-1.5 text-[12px] font-semibold text-red-600">{resolveError}</p>
-      ) : null}
-      {showTypeMoreHint ? (
-        <p className="mt-1.5 text-[12px] font-semibold text-muted">
-          Type at least {LOCATION_SUGGEST_MIN_CHARS} characters to see places.
-        </p>
-      ) : null}
-      {showNoResults && !showPanel ? (
-        <p className="mt-1.5 text-[12px] font-semibold text-muted">
-          No places found. Try a city, neighborhood, or landmark.
-        </p>
-      ) : null}
+      <div className="mt-1.5 min-h-[1.125rem]">
+        {resolveError ? (
+          <p className="text-[12px] font-semibold text-red-600">{resolveError}</p>
+        ) : showTypeMoreHint ? (
+          <p className="text-[12px] font-semibold text-muted">
+            Type at least {LOCATION_SUGGEST_MIN_CHARS} characters to see places.
+          </p>
+        ) : showNoResults && !showPanel ? (
+          <p className="text-[12px] font-semibold text-muted">
+            No places found. Try a city, neighborhood, or landmark.
+          </p>
+        ) : null}
+      </div>
       {mounted && dropdown ? createPortal(dropdown, document.body) : null}
     </div>
   );

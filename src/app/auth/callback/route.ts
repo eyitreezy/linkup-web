@@ -1,4 +1,5 @@
 import { formatAuthCallbackError, isPkceVerifierError } from '@/lib/auth/authCallbackErrors';
+import { formatRecoveryAuthError } from '@/lib/auth/recoveryErrors';
 import {
   resolvePostAuthDestinationForUserId,
   safeAuthNextPath,
@@ -16,7 +17,14 @@ function safeNextPath(raw: string | null): string {
   return safeAuthNextPath(raw);
 }
 
-function loginErrorRedirect(origin: string, message: string) {
+function loginErrorRedirect(origin: string, message: string, next?: string) {
+  if (next === '/reset-password') {
+    const url = new URL('/reset-password', origin);
+    url.searchParams.set('error', 'recovery_failed');
+    url.searchParams.set('error_description', formatRecoveryAuthError(message).slice(0, 200));
+    return NextResponse.redirect(url.toString());
+  }
+
   const url = new URL('/login', origin);
   if (isPkceVerifierError(message)) {
     url.searchParams.set('error', 'email_confirmed');
@@ -46,15 +54,15 @@ export async function GET(request: NextRequest) {
   const oauthErrorDesc = searchParams.get('error_description');
   if (oauthError) {
     const msg = oauthErrorDesc ?? oauthError;
-    return loginErrorRedirect(origin, decodeURIComponent(msg.replace(/\+/g, ' ')));
+    return loginErrorRedirect(origin, msg, next);
   }
 
   if (!isSupabaseConfigured) {
-    return loginErrorRedirect(origin, 'Supabase is not configured on the web app.');
+    return loginErrorRedirect(origin, 'Supabase is not configured on the web app.', next);
   }
 
   if (!code) {
-    return loginErrorRedirect(origin, 'No authorization code returned from Google.');
+    return loginErrorRedirect(origin, 'No authorization code returned from Google.', next);
   }
 
   const cookieResponse = NextResponse.next({ request });
@@ -65,7 +73,7 @@ export async function GET(request: NextRequest) {
     if (process.env.NODE_ENV === 'development') {
       console.error('[auth/callback] exchangeCodeForSession:', error.message);
     }
-    return loginErrorRedirect(origin, error.message);
+    return loginErrorRedirect(origin, error.message, next);
   }
 
   const {
