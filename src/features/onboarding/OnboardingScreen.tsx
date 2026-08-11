@@ -25,7 +25,7 @@ import {
 } from '@/lib/onboarding/formFieldClass';
 import { mediaDraftFromProfile, mergeProfileMediaDraftFromDb } from '@/lib/profile/media/draft';
 import { createClient } from '@/lib/supabase/client';
-import { fetchProfileVideo } from '@/services/profileMedia.service';
+import { fetchProfileVideos, profileVideoPersistMeta } from '@/services/profileMedia.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { useAuthStore } from '@/stores/auth-store';
 import type { MeetingIntent } from '@/types/onboarding';
@@ -61,7 +61,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
   const [error, setError] = useState<string | null>(null);
   const [validationHighlightStep, setValidationHighlightStep] = useState<number | null>(null);
   const preferencesRef = useRef<ProfilePreferences | null>(null);
-  const videoMetaRef = useRef<{ id?: string; storagePath?: string }>({});
+  const videoMetaRef = useRef<Array<{ id: string; storagePath: string }>>([]);
   const hydratedUserRef = useRef<string | null>(null);
   const autosaveReadyRef = useRef(false);
   const skipAutosaveOnceRef = useRef(false);
@@ -90,8 +90,8 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       if (!user?.id) return null;
       const client = createClient();
       const bundle = await fetchUserProfileBundle(client, user.id);
-      const video = await fetchProfileVideo(client, user.id);
-      return { ...bundle, video };
+      const videos = await fetchProfileVideos(client, user.id);
+      return { ...bundle, videos };
     },
     enabled: !!user?.id,
   });
@@ -100,10 +100,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     if (!data?.profile || !user?.id) return;
 
     preferencesRef.current = data.profile.preferences ?? null;
-    videoMetaRef.current = {
-      id: data.video?.id,
-      storagePath: data.video?.storagePath,
-    };
+    videoMetaRef.current = profileVideoPersistMeta(data.videos ?? []);
 
     const resumeStep =
       data.profile.onboarding_status === 'pending'
@@ -121,7 +118,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       skipAutosaveOnceRef.current = true;
       autosaveReadyRef.current = false;
 
-      const fromDb = draftFromProfile(data.profile, data.video);
+      const fromDb = draftFromProfile(data.profile, data.videos ?? []);
       const fromSession = loadOnboardingSessionDraft(user.id);
       const mergedDraft: OnboardingDraft = fromSession
         ? {
@@ -151,7 +148,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
         autosaveReadyRef.current = true;
       }, 200);
     }
-  }, [data?.profile, data?.video, user?.id]);
+  }, [data?.profile, data?.videos, user?.id]);
 
   useEffect(() => {
     if (!user?.id || hydratedUserRef.current !== user.id || onboardingFinishedRef.current) return;
@@ -171,8 +168,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
         draft: draftRef.current,
         stepIndex: stepRef.current,
         existingPreferences: preferencesRef.current,
-        existingVideoMediaId: videoMetaRef.current.id,
-        existingVideoStoragePath: videoMetaRef.current.storagePath,
+        existingVideos: videoMetaRef.current,
       });
     }
 
@@ -191,7 +187,8 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
 
     const hasLocalMedia =
-      draft.profileMedia.photos.some((p) => p.localFile) || Boolean(draft.profileMedia.video?.localFile);
+      draft.profileMedia.photos.some((p) => p.localFile) ||
+      draft.profileMedia.videos.some((v) => v.localFile);
     const delay = hasLocalMedia ? AUTOSAVE_MEDIA_MS : AUTOSAVE_MS;
 
     autosaveTimerRef.current = setTimeout(() => {
@@ -202,7 +199,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
         const snapshotStep = stepRef.current;
         const hasLocalMedia =
           snapshot.profileMedia.photos.some((p) => p.localFile) ||
-          Boolean(snapshot.profileMedia.video?.localFile);
+          snapshot.profileMedia.videos.some((v) => v.localFile);
 
         if (hasLocalMedia) {
           mediaAutosaveInFlightRef.current = true;
@@ -215,8 +212,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
             draft: snapshot,
             stepIndex: snapshotStep,
             existingPreferences: preferencesRef.current,
-            existingVideoMediaId: videoMetaRef.current.id,
-            existingVideoStoragePath: videoMetaRef.current.storagePath,
+            existingVideos: videoMetaRef.current,
           });
 
           if (result.error) {
@@ -230,10 +226,10 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
             skipAutosaveOnceRef.current = true;
             const client = createClient();
             const bundle = await fetchUserProfileBundle(client, user.id);
-            const video = await fetchProfileVideo(client, user.id);
-            videoMetaRef.current = { id: video?.id, storagePath: video?.storagePath };
+            const videos = await fetchProfileVideos(client, user.id);
+            videoMetaRef.current = profileVideoPersistMeta(videos);
             if (bundle.profile) {
-              const fromDb = mediaDraftFromProfile(bundle.profile, video);
+              const fromDb = mediaDraftFromProfile(bundle.profile, videos);
               setDraft((d) => ({
                 ...d,
                 profileMedia: mergeProfileMediaDraftFromDb(d.profileMedia, fromDb),
@@ -246,7 +242,7 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
 
           const pendingLocal =
             draftRef.current.profileMedia.photos.some((p) => p.localFile) ||
-            Boolean(draftRef.current.profileMedia.video?.localFile);
+            draftRef.current.profileMedia.videos.some((v) => v.localFile);
           if (pendingLocal && autosaveReadyRef.current && !onboardingFinishedRef.current && !saving) {
             skipAutosaveOnceRef.current = false;
             if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
@@ -343,8 +339,9 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
         draft,
         existingPreferences: savedPreferences,
         stepIndex: step,
-        existingVideoMediaId: videoMetaRef.current.id ?? data?.video?.id,
-        existingVideoStoragePath: videoMetaRef.current.storagePath ?? data?.video?.storagePath,
+        existingVideos: videoMetaRef.current.length
+          ? videoMetaRef.current
+          : profileVideoPersistMeta(data?.videos ?? []),
       });
       setSaving(false);
       if (err) {
@@ -376,8 +373,9 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       draft: draftRef.current,
       stepIndex: step,
       existingPreferences: savedPreferences,
-      existingVideoMediaId: videoMetaRef.current.id ?? data?.video?.id,
-      existingVideoStoragePath: videoMetaRef.current.storagePath ?? data?.video?.storagePath,
+      existingVideos: videoMetaRef.current.length
+        ? videoMetaRef.current
+        : profileVideoPersistMeta(data?.videos ?? []),
     });
     if (flushResult.error) {
       autosaveReadyRef.current = true;
@@ -392,10 +390,10 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
     if (flushResult.mediaUploaded) {
       const client = createClient();
       const bundle = await fetchUserProfileBundle(client, user.id);
-      const video = await fetchProfileVideo(client, user.id);
-      videoMetaRef.current = { id: video?.id, storagePath: video?.storagePath };
+      const videos = await fetchProfileVideos(client, user.id);
+      videoMetaRef.current = profileVideoPersistMeta(videos);
       if (bundle.profile) {
-        const fromDb = mediaDraftFromProfile(bundle.profile, video);
+        const fromDb = mediaDraftFromProfile(bundle.profile, videos);
         finalizeDraft = {
           ...finalizeDraft,
           profileMedia: mergeProfileMediaDraftFromDb(finalizeDraft.profileMedia, fromDb),
@@ -422,8 +420,9 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       userId: user.id,
       draft: finalizeDraft,
       existingPreferences: flushResult.preferences,
-      existingVideoMediaId: videoMetaRef.current.id ?? data?.video?.id,
-      existingVideoStoragePath: videoMetaRef.current.storagePath ?? data?.video?.storagePath,
+      existingVideos: videoMetaRef.current.length
+        ? videoMetaRef.current
+        : profileVideoPersistMeta(data?.videos ?? []),
     });
     setSaving(false);
     if (err) {
@@ -504,9 +503,13 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       </div>
 
       {error ? <p className="text-[14px] font-extrabold text-red-600">{error}</p> : null}
-      {autosaving ? (
-        <p className="text-[12px] font-semibold text-muted">Saving your progress…</p>
-      ) : null}
+      <p
+        className="text-[12px] font-semibold text-muted transition-opacity duration-200"
+        style={{ opacity: autosaving ? 1 : 0 }}
+        aria-live="polite"
+      >
+        Saving your progress…
+      </p>
 
       {step === 0 ? (
         <FormCard className={validationHighlightStep === 0 ? 'outline outline-2 outline-amber-400 outline-offset-0' : undefined}>

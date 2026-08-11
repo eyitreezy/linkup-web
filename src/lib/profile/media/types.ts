@@ -19,7 +19,7 @@ export type ProfileVideoDraft = {
 
 export type ProfileMediaDraft = {
   photos: ProfilePhotoDraftItem[];
-  video: ProfileVideoDraft | null;
+  videos: ProfileVideoDraft[];
 };
 
 export type DbProfileVideo = {

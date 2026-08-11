@@ -13,12 +13,12 @@ import { IoCheckmarkCircle, IoPlay, IoVolumeHigh, IoVolumeMute } from 'react-ico
 
 type Props = {
   profile: Pick<DbProfile, 'primary_photo_url' | 'photo_urls' | 'avatar_url' | 'display_name'> | null;
-  video?: DbProfileVideo | null;
+  videos?: DbProfileVideo[];
   className?: string;
 };
 
-export function HostMediaGallery({ profile, video = null, className }: Props) {
-  const items = useMemo(() => buildHostMediaSequence(profile, video ?? null), [profile, video]);
+export function HostMediaGallery({ profile, videos = [], className }: Props) {
+  const items = useMemo(() => buildHostMediaSequence(profile, videos), [profile, videos]);
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState<Record<string, boolean>>({});
   const touchStartX = useRef<number | null>(null);

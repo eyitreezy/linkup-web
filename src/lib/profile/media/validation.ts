@@ -11,11 +11,16 @@ export function activePhotoCount(media: ProfileMediaDraft): number {
 }
 
 export function hasProfileVideo(media: ProfileMediaDraft): boolean {
-  return !!(media.video && (media.video.url || media.video.localFile));
+  return (
+    media.videos.length > 0 &&
+    (!!media.videos[0]?.url || !!media.videos[0]?.localFile)
+  );
 }
 
 export function profileMediaMeetsMinimums(media: ProfileMediaDraft): boolean {
-  return activePhotoCount(media) >= PROFILE_MEDIA_MIN_PHOTOS && hasProfileVideo(media);
+  const photoOk = activePhotoCount(media) >= PROFILE_MEDIA_MIN_PHOTOS;
+  const videoOk = media.videos.some((v) => v.url || v.localFile);
+  return photoOk && videoOk;
 }
 
 export function profileMediaValidationMessage(media: ProfileMediaDraft): string | null {
@@ -33,12 +38,11 @@ export function profileMediaValidationMessage(media: ProfileMediaDraft): string 
   if (photos > PROFILE_MEDIA_MAX_PHOTOS) {
     return `You can keep up to ${PROFILE_MEDIA_MAX_PHOTOS} photos.`;
   }
-  if (media.video?.localFile && media.video.id) {
+  if (media.videos.some((v) => v.localFile && v.id)) {
     return null;
   }
-  const videoCount = video ? 1 : 0;
-  if (videoCount > PROFILE_MEDIA_MAX_VIDEOS) {
-    return `You can keep up to ${PROFILE_MEDIA_MAX_VIDEOS} profile video.`;
+  if (media.videos.length > PROFILE_MEDIA_MAX_VIDEOS) {
+    return `You can keep up to ${PROFILE_MEDIA_MAX_VIDEOS} profile videos.`;
   }
   return null;
 }

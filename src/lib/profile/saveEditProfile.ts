@@ -20,8 +20,7 @@ export async function saveEditProfile(args: {
   userId: string;
   draft: OnboardingDraft;
   existingPreferences: ProfilePreferences | null;
-  existingVideoMediaId?: string;
-  existingVideoStoragePath?: string;
+  existingVideos?: Array<{ id: string; storagePath: string }>;
   /** When false, allow saving with fewer than 3 photos / no video (legacy edit). Onboarding requires true. */
   requireFullMedia?: boolean;
 }): Promise<{ error: string | null }> {
@@ -60,8 +59,7 @@ export async function saveEditProfile(args: {
     const persisted = await persistProfileMediaDraft({
       userId,
       media: draft.profileMedia,
-      existingVideoMediaId: args.existingVideoMediaId,
-      existingVideoStoragePath: args.existingVideoStoragePath,
+      existingVideos: args.existingVideos,
     });
     mediaPatch = persisted;
   } catch (e) {

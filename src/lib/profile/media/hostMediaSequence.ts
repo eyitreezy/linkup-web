@@ -14,10 +14,10 @@ export type HostMediaItem =
 
 type ProfilePhotos = Pick<DbProfile, 'primary_photo_url' | 'photo_urls' | 'avatar_url'>;
 
-/** Photos first; profile video slots in after the third photo when possible (dating-app style). */
+/** Photos first; profile videos slot in after the third photo when possible (dating-app style). */
 export function buildHostMediaSequence(
   profile: ProfilePhotos | null | undefined,
-  video: DbProfileVideo | null
+  videos: DbProfileVideo[]
 ): HostMediaItem[] {
   const photos = resolveGalleryPhotoUrls(profile);
   const primary = photos[0] ?? null;
@@ -29,15 +29,17 @@ export function buildHostMediaSequence(
     isPrimary: url === primary && index === 0,
   }));
 
-  if (video?.url) {
+  const playableVideos = videos.filter((v) => v.url);
+  if (playableVideos.length > 0) {
     const insertAt = Math.min(3, items.length);
-    items.splice(insertAt, 0, {
+    const videoItems: HostMediaItem[] = playableVideos.map((video) => ({
       kind: 'video',
       id: `video-${video.id}`,
       url: video.url,
       thumbnailUrl: video.thumbnailUrl,
       durationSeconds: video.durationSeconds,
-    });
+    }));
+    items.splice(insertAt, 0, ...videoItems);
   }
 
   return items;

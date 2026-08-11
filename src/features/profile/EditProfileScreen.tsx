@@ -18,7 +18,7 @@ import { profileMediaMeetsMinimums } from '@/lib/profile/media/validation';
 import { draftMediaValidationHint, saveEditProfile } from '@/lib/profile/saveEditProfile';
 import { createClient } from '@/lib/supabase/client';
 import { setPrimaryPhoto } from '@/lib/profile/media/draft';
-import { fetchProfileVideo } from '@/services/profileMedia.service';
+import { fetchProfileVideos, profileVideoPersistMeta } from '@/services/profileMedia.service';
 import { persistPrimaryPhoto } from '@/services/profilePrimary.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { useAuthStore } from '@/stores/auth-store';
@@ -52,19 +52,19 @@ export function EditProfileScreen() {
       if (!user?.id) return null;
       const client = createClient();
       const bundle = await fetchUserProfileBundle(client, user.id);
-      const video = await fetchProfileVideo(client, user.id);
-      return { ...bundle, video };
+      const videos = await fetchProfileVideos(client, user.id);
+      return { ...bundle, videos };
     },
     enabled: !!user?.id,
   });
 
   useEffect(() => {
-    if (data?.profile) setDraft(draftFromProfile(data.profile, data.video));
-  }, [data?.profile, data?.video]);
+    if (data?.profile) setDraft(draftFromProfile(data.profile, data.videos ?? []));
+  }, [data?.profile, data?.videos]);
 
   const savedDraft = useMemo(
-    () => (data?.profile ? draftFromProfile(data.profile, data.video) : null),
-    [data?.profile, data?.video]
+    () => (data?.profile ? draftFromProfile(data.profile, data.videos ?? []) : null),
+    [data?.profile, data?.videos]
   );
 
   const isDirty = useMemo(() => {
@@ -96,8 +96,7 @@ export function EditProfileScreen() {
       userId: user.id,
       draft,
       existingPreferences: data?.profile?.preferences ?? null,
-      existingVideoMediaId: data?.video?.id,
-      existingVideoStoragePath: data?.video?.storagePath,
+      existingVideos: profileVideoPersistMeta(data?.videos ?? []),
       requireFullMedia: true,
     });
     if (error) {
@@ -115,7 +114,7 @@ export function EditProfileScreen() {
     setStatusDialog({
       variant: 'success',
       title: 'Profile saved',
-      message: 'Your photos, video, bio, and preferences are updated across LinkUp.',
+      message: 'Your photos, videos, bio, and preferences are updated across LinkUp.',
     });
   }
 

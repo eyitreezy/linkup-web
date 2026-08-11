@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { PROFILE_MEDIA_MAX_VIDEOS } from '@/lib/profile/media/constants';
 import type { DbProfileVideo } from '@/lib/profile/media/types';
 
 const PROFILE_VIDEO_ROLE = 'profile_video';
@@ -33,33 +34,43 @@ function rowToVideo(row: MediaRow, client: SupabaseClient): DbProfileVideo {
   };
 }
 
-export async function fetchProfileVideo(
+function isProfileVideoRow(row: MediaRow): boolean {
+  return (row.metadata?.role === PROFILE_VIDEO_ROLE || (row.mime_type ?? '').startsWith('video/')) && !!row.storage_path;
+}
+
+export async function fetchProfileVideos(
   client: SupabaseClient,
   userId: string
-): Promise<DbProfileVideo | null> {
+): Promise<DbProfileVideo[]> {
   const { data, error } = await client
     .from('media')
     .select('id, storage_bucket, storage_path, mime_type, metadata')
     .eq('parent_table', 'profiles')
     .eq('parent_id', userId)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: true })
+    .limit(PROFILE_MEDIA_MAX_VIDEOS);
 
-  if (error || !data?.length) return null;
+  if (error || !data?.length) return [];
 
-  const row = (data as MediaRow[]).find(
-    (r) =>
-      (r.metadata?.role === PROFILE_VIDEO_ROLE || (r.mime_type ?? '').startsWith('video/')) &&
-      r.storage_path
-  );
-  return row ? rowToVideo(row, client) : null;
+  return (data as MediaRow[])
+    .filter(isProfileVideoRow)
+    .map((row) => rowToVideo(row, client));
+}
+
+export async function fetchProfileVideo(
+  client: SupabaseClient,
+  userId: string
+): Promise<DbProfileVideo | null> {
+  const videos = await fetchProfileVideos(client, userId);
+  return videos[0] ?? null;
 }
 
 export async function fetchProfileVideosByUserIds(
   client: SupabaseClient,
   userIds: string[]
-): Promise<Map<string, DbProfileVideo>> {
+): Promise<Map<string, DbProfileVideo[]>> {
   const unique = [...new Set(userIds)].filter(Boolean);
-  const map = new Map<string, DbProfileVideo>();
+  const map = new Map<string, DbProfileVideo[]>();
   if (unique.length === 0) return map;
 
   const { data, error } = await client
@@ -67,14 +78,16 @@ export async function fetchProfileVideosByUserIds(
     .select('id, parent_id, storage_bucket, storage_path, mime_type, metadata, created_at')
     .eq('parent_table', 'profiles')
     .in('parent_id', unique)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: true });
 
   if (error || !data) return map;
 
   for (const row of data as (MediaRow & { parent_id: string })[]) {
-    if (map.has(row.parent_id)) continue;
-    if (!(row.metadata?.role === PROFILE_VIDEO_ROLE || (row.mime_type ?? '').startsWith('video/'))) continue;
-    map.set(row.parent_id, rowToVideo(row, client));
+    if (!isProfileVideoRow(row)) continue;
+    const list = map.get(row.parent_id) ?? [];
+    if (list.length >= PROFILE_MEDIA_MAX_VIDEOS) continue;
+    list.push(rowToVideo(row, client));
+    map.set(row.parent_id, list);
   }
   return map;
 }
@@ -82,4 +95,12 @@ export async function fetchProfileVideosByUserIds(
 export async function deleteProfileVideoMedia(client: SupabaseClient, mediaId: string, storageBucket: string, storagePath: string) {
   await client.storage.from(storageBucket).remove([storagePath]);
   await client.from('media').delete().eq('id', mediaId);
+}
+
+export function profileVideoPersistMeta(
+  videos: DbProfileVideo[]
+): Array<{ id: string; storagePath: string }> {
+  return videos
+    .filter((v) => v.id && v.storagePath)
+    .map((v) => ({ id: v.id, storagePath: v.storagePath }));
 }

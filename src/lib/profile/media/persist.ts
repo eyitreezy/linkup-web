@@ -12,7 +12,6 @@ import { createClient } from '@/lib/supabase/client';
 
 const PROFILE_VIDEO_ROLE = 'profile_video';
 const VIDEO_BUCKET = 'profile-videos';
-const PHOTO_BUCKET = 'avatars';
 
 function reorderPhotoUrls(photos: ProfilePhotoDraftItem[]): { urls: string[]; primary: string | null } {
   const active = photos.filter((p) => p.url);
@@ -127,16 +126,15 @@ async function upsertProfileVideoRow(args: {
 export async function persistProfileMediaDraft(args: {
   userId: string;
   media: ProfileMediaDraft;
-  existingVideoMediaId?: string;
-  existingVideoStoragePath?: string;
+  existingVideos?: Array<{ id: string; storagePath: string }>;
 }): Promise<{
   photo_urls: string[];
   primary_photo_url: string | null;
   avatar_url: string | null;
-  videoMediaId: string | null;
+  videoMediaIds: string[];
 }> {
   const { userId } = args;
-  let media = ensurePrimaryPhoto(args.media);
+  const media = ensurePrimaryPhoto(args.media);
   const client = createClient();
 
   const resolvedPhotos: ProfilePhotoDraftItem[] = [];
@@ -175,30 +173,38 @@ export async function persistProfileMediaDraft(args: {
     active.map((p) => ({ ...p, url: p.url! }))
   );
 
-  let videoMediaId: string | null = args.existingVideoMediaId ?? null;
+  const newVideoIds: string[] = [];
+  const newStoragePaths: string[] = [];
 
-  if (media.video?.localFile) {
-    const uploaded = await uploadProfileVideo(userId, media.video.localFile);
-    videoMediaId = await upsertProfileVideoRow({
-      userId,
-      existingMediaId: args.existingVideoMediaId,
-      existingStoragePath: args.existingVideoStoragePath,
-      ...uploaded,
-    });
-  } else if (media.video?.url && media.video.id) {
-    videoMediaId = media.video.id;
-  } else if (!media.video?.url && !media.video?.localFile && args.existingVideoMediaId) {
-    if (args.existingVideoStoragePath) {
-      await client.storage.from(VIDEO_BUCKET).remove([args.existingVideoStoragePath]);
+  for (const videoDraft of media.videos) {
+    if (videoDraft.localFile) {
+      const uploaded = await uploadProfileVideo(userId, videoDraft.localFile);
+      newStoragePaths.push(uploaded.storagePath);
+      const mediaId = await upsertProfileVideoRow({
+        userId,
+        existingMediaId: videoDraft.id,
+        existingStoragePath: videoDraft.storagePath,
+        ...uploaded,
+      });
+      newVideoIds.push(mediaId);
+    } else if (videoDraft.url && videoDraft.id) {
+      newStoragePaths.push(videoDraft.storagePath ?? '');
+      newVideoIds.push(videoDraft.id);
     }
-    await client.from('media').delete().eq('id', args.existingVideoMediaId);
-    videoMediaId = null;
+  }
+
+  const keptPaths = new Set(newStoragePaths.filter(Boolean));
+  for (const existing of args.existingVideos ?? []) {
+    if (!keptPaths.has(existing.storagePath)) {
+      await client.storage.from(VIDEO_BUCKET).remove([existing.storagePath]);
+      await client.from('media').delete().eq('id', existing.id);
+    }
   }
 
   return {
     photo_urls,
     primary_photo_url,
     avatar_url: primary_photo_url,
-    videoMediaId,
+    videoMediaIds: newVideoIds,
   };
 }

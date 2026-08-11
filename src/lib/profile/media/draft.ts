@@ -1,10 +1,10 @@
 import { resolvePrimaryPhotoUrl } from '@/lib/profile/media/resolve';
 import { ensurePrimaryPhoto } from '@/lib/profile/media/validation';
-import type { DbProfileVideo, ProfileMediaDraft, ProfilePhotoDraftItem } from '@/lib/profile/media/types';
+import type { DbProfileVideo, ProfileMediaDraft, ProfilePhotoDraftItem, ProfileVideoDraft } from '@/lib/profile/media/types';
 import type { DbProfile } from '@/types/database';
 
 export function defaultProfileMediaDraft(): ProfileMediaDraft {
-  return { photos: [], video: null };
+  return { photos: [], videos: [] };
 }
 
 export function newPhotoClientId(): string {
@@ -13,7 +13,7 @@ export function newPhotoClientId(): string {
 
 export function mediaDraftFromProfile(
   profile: Pick<DbProfile, 'photo_urls' | 'primary_photo_url' | 'avatar_url'> | null,
-  video: DbProfileVideo | null
+  videos: DbProfileVideo[]
 ): ProfileMediaDraft {
   const primary = resolvePrimaryPhotoUrl(profile);
   const urls = (profile?.photo_urls ?? []).filter((u): u is string => typeof u === 'string' && u.trim().length > 0);
@@ -27,15 +27,13 @@ export function mediaDraftFromProfile(
 
   return ensurePrimaryPhoto({
     photos,
-    video: video
-      ? {
-          id: video.id,
-          url: video.url,
-          storagePath: video.storagePath,
-          thumbnailUrl: video.thumbnailUrl,
-          durationSeconds: video.durationSeconds,
-        }
-      : null,
+    videos: videos.map((v) => ({
+      id: v.id,
+      url: v.url,
+      storagePath: v.storagePath,
+      thumbnailUrl: v.thumbnailUrl,
+      durationSeconds: v.durationSeconds,
+    })),
   });
 }
 
@@ -67,22 +65,22 @@ export function mergeProfileMediaDraftFromDb(
     return { ...p, url: match.url, localFile: undefined };
   });
 
-  let video = local.video;
-  if (local.video === null) {
-    video = null;
-  } else if (local.video?.localFile && !local.video.url && fromDb.video?.url) {
-    video = {
-      ...local.video,
-      id: fromDb.video.id,
-      url: fromDb.video.url,
-      storagePath: fromDb.video.storagePath,
-      thumbnailUrl: fromDb.video.thumbnailUrl,
-      durationSeconds: fromDb.video.durationSeconds,
-      localFile: undefined,
-    };
-  }
+  const mergedVideos: ProfileVideoDraft[] = local.videos.map((localVid, i) => {
+    if (localVid.localFile && !localVid.url && fromDb.videos[i]?.url) {
+      return {
+        ...localVid,
+        id: fromDb.videos[i].id,
+        url: fromDb.videos[i].url,
+        storagePath: fromDb.videos[i].storagePath,
+        thumbnailUrl: fromDb.videos[i].thumbnailUrl,
+        durationSeconds: fromDb.videos[i].durationSeconds,
+        localFile: undefined,
+      };
+    }
+    return localVid;
+  });
 
-  return ensurePrimaryPhoto({ photos: mergedPhotos, video });
+  return ensurePrimaryPhoto({ photos: mergedPhotos, videos: mergedVideos });
 }
 
 export function setPrimaryPhoto(media: ProfileMediaDraft, clientId: string): ProfileMediaDraft {

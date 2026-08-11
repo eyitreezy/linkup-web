@@ -12,7 +12,7 @@ export function ageFromBirthDate(b: Date): number {
   return Math.max(0, a);
 }
 
-export function draftFromProfile(p: DbProfile | null, video?: DbProfileVideo | null): OnboardingDraft {
+export function draftFromProfile(p: DbProfile | null, videos: DbProfileVideo[] = []): OnboardingDraft {
   const d = defaultOnboardingDraft();
   if (!p) return d;
 
@@ -22,7 +22,7 @@ export function draftFromProfile(p: DbProfile | null, video?: DbProfileVideo | n
     const [y, m, day] = p.birth_date.split('-').map(Number);
     if (y && m && day) d.birthDate = new Date(y, m - 1, day);
   }
-  d.profileMedia = mediaDraftFromProfile(p, video ?? null);
+  d.profileMedia = mediaDraftFromProfile(p, videos);
   d.remotePhotoUrls = [...(p.photo_urls ?? [])];
   d.localPhotoFiles = [];
   if (p.age_min != null) d.ageMin = p.age_min;

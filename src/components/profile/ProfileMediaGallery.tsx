@@ -10,14 +10,14 @@ import { IoCheckmarkCircle } from 'react-icons/io5';
 
 type Props = {
   profile: Pick<DbProfile, 'primary_photo_url' | 'photo_urls' | 'avatar_url' | 'display_name'>;
-  video?: DbProfileVideo | null;
+  videos?: DbProfileVideo[];
   /** compact = avatar row; full = discover-style hero grid */
   variant?: 'compact' | 'full';
   className?: string;
 };
 
-export function ProfileMediaGallery({ profile, video = null, variant = 'full', className }: Props) {
-  const bundle = bundleProfileMedia(profile, video ?? null);
+export function ProfileMediaGallery({ profile, videos = [], variant = 'full', className }: Props) {
+  const bundle = bundleProfileMedia(profile, videos[0] ?? null);
   const [activePhoto, setActivePhoto] = useState(0);
   const photos = bundle.galleryPhotoUrls;
   const hero = photos[activePhoto] ?? bundle.primaryPhotoUrl;
@@ -79,14 +79,26 @@ export function ProfileMediaGallery({ profile, video = null, variant = 'full', c
         </div>
       ) : null}
 
-      {video ? (
-        <ProfileVideoCard video={video} />
+      {videos.length > 0 ? (
+        <div className="space-y-2">
+          {videos.map((video, i) => (
+            <ProfileVideoCard key={video.id} video={video} label={videos.length > 1 ? `Profile video ${i + 1}` : undefined} />
+          ))}
+        </div>
       ) : null}
     </div>
   );
 }
 
-export function ProfileVideoCard({ video, className }: { video: DbProfileVideo; className?: string }) {
+export function ProfileVideoCard({
+  video,
+  label,
+  className,
+}: {
+  video: DbProfileVideo;
+  label?: string;
+  className?: string;
+}) {
   return (
     <div className={cn('overflow-hidden rounded-2xl border border-primary/15 bg-white/90', className)}>
       <div className="relative aspect-video w-full bg-black/5">
@@ -96,7 +108,7 @@ export function ProfileVideoCard({ video, className }: { video: DbProfileVideo; 
           durationSeconds={video.durationSeconds}
         />
       </div>
-      <p className="px-3 py-2 text-[12px] font-semibold text-muted">Profile video</p>
+      <p className="px-3 py-2 text-[12px] font-semibold text-muted">{label ?? 'Profile video'}</p>
     </div>
   );
 }

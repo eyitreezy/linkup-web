@@ -14,7 +14,6 @@ import { ProfileMediaGallery } from '@/components/profile/ProfileMediaGallery';
 import { resolvePrimaryPhotoUrl } from '@/lib/profile/media/resolve';
 import { signOutAndRedirect } from '@/lib/auth/signOut';
 import { createClient } from '@/lib/supabase/client';
-import { fetchProfileVideo } from '@/services/profileMedia.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { useAuthStore } from '@/stores/auth-store';
 import type { UserVerification } from '@/types/database';
@@ -56,8 +55,7 @@ export function ProfileScreen() {
       if (!user?.id) return null;
       const client = createClient();
       const bundle = await fetchUserProfileBundle(client, user.id);
-      const video = await fetchProfileVideo(client, user.id);
-      return { ...bundle, video };
+      return bundle;
     },
     enabled: !!user?.id,
   });

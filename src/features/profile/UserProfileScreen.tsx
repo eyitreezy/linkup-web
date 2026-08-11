@@ -15,7 +15,7 @@ import {
 import { openDirectChatPath } from '@/lib/messaging/openDirectChat';
 import { resolvePrimaryPhotoUrl } from '@/lib/profile/media/resolve';
 import { createClient } from '@/lib/supabase/client';
-import { fetchProfileVideo } from '@/services/profileMedia.service';
+import { fetchProfileVideos } from '@/services/profileMedia.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { useAuthStore } from '@/stores/auth-store';
 import type { DbProfile, DbUserPresence } from '@/types/database';
@@ -65,10 +65,10 @@ export function UserProfileScreen({ userId }: Props) {
       ]);
       if (pe) throw new Error(pe.message);
       if (!profile) return null;
-      const video = await fetchProfileVideo(client, userId);
+      const videos = await fetchProfileVideos(client, userId);
       return {
         profile: profile as DbProfile,
-        video,
+        videos,
         subscriptionTier: (userRow as { subscription_tier?: SubscriptionTier } | null)?.subscription_tier ?? 'FREE',
       };
     },
@@ -190,7 +190,7 @@ export function UserProfileScreen({ userId }: Props) {
     );
   }
 
-  const { profile, video, subscriptionTier } = data;
+  const { profile, videos, subscriptionTier } = data;
   const primary = resolvePrimaryPhotoUrl(profile);
   const prefs = profile.preferences ?? {};
   const name = profile.display_name?.trim() || 'LinkUp member';
@@ -244,7 +244,7 @@ export function UserProfileScreen({ userId }: Props) {
         </div>
 
         <div className="mt-5 overflow-hidden rounded-2xl border border-primary/10">
-          <HostMediaGallery profile={profile} video={video} className="rounded-2xl" />
+          <HostMediaGallery profile={profile} videos={videos} className="rounded-2xl" />
         </div>
 
         <div className="mt-5">

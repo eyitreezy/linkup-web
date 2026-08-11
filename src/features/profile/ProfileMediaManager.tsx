@@ -2,8 +2,10 @@
 
 import {
   PROFILE_MEDIA_MAX_PHOTOS,
+  PROFILE_MEDIA_MAX_VIDEOS,
   PROFILE_MEDIA_MIN_PHOTOS,
   PROFILE_MEDIA_MIN_VIDEOS,
+  PROFILE_VIDEO_MAX_DURATION_SECONDS,
 } from '@/lib/profile/media/constants';
 import {
   addLocalPhotos,
@@ -11,11 +13,9 @@ import {
   removePhoto,
   setPrimaryPhoto,
 } from '@/lib/profile/media/draft';
-import { ProfileVideoPreview } from '@/components/profile/ProfileVideoPreview';
 import { ProfilePhotoPreviewOverlay } from '@/components/profile/ProfilePhotoPreviewOverlay';
 import {
   activePhotoCount,
-  hasProfileVideo,
   profileMediaMeetsMinimums,
   profileMediaValidationMessage,
 } from '@/lib/profile/media/validation';
@@ -42,8 +42,7 @@ export function ProfileMediaManager({
   className,
 }: Props) {
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
-  const localVideoUrlRef = useRef<string | null>(null);
+  const localVideoUrlsRef = useRef<Map<number, string>>(new Map());
   const mediaRef = useRef(media);
 
   useEffect(() => {
@@ -53,97 +52,97 @@ export function ProfileMediaManager({
   const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
-  const [videoBusy, setVideoBusy] = useState(false);
+  const [videoBusySlots, setVideoBusySlots] = useState<Record<number, boolean>>({});
   const [primaryBusy, setPrimaryBusy] = useState(false);
-  const [videoError, setVideoError] = useState<string | null>(null);
-  const [localVideoPreviewUrl, setLocalVideoPreviewUrl] = useState<string | null>(null);
+  const [videoErrors, setVideoErrors] = useState<Record<number, string | null>>({});
 
   const photoCount = activePhotoCount(media);
-  const hasVideo = hasProfileVideo(media);
   const validationMsg = showValidation ? profileMediaValidationMessage(media) : null;
 
   useEffect(() => {
-    if (media.video?.localFile) {
-      if (localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
-      const url = URL.createObjectURL(media.video.localFile);
-      localVideoUrlRef.current = url;
-      setLocalVideoPreviewUrl(url);
-      return;
-    }
-    if (localVideoUrlRef.current) {
-      URL.revokeObjectURL(localVideoUrlRef.current);
-      localVideoUrlRef.current = null;
-    }
-    setLocalVideoPreviewUrl(null);
-  }, [media.video?.localFile]);
-
-  useEffect(() => {
     return () => {
-      if (localVideoUrlRef.current) {
-        URL.revokeObjectURL(localVideoUrlRef.current);
-        localVideoUrlRef.current = null;
-      }
+      localVideoUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      localVideoUrlsRef.current.clear();
     };
   }, []);
 
-  async function handleVideoPick(file: File | null) {
+  async function handleVideoPickForSlot(slotIndex: number, file: File | null) {
     if (!file) return;
-    setVideoError(null);
+    setVideoErrors((e) => ({ ...e, [slotIndex]: null }));
 
     const sizeCheck = validateProfileVideoFile(file);
     if (!sizeCheck.valid) {
-      setVideoError(sizeCheck.error);
-      if (videoInputRef.current) videoInputRef.current.value = '';
+      setVideoErrors((e) => ({ ...e, [slotIndex]: sizeCheck.error }));
       return;
     }
 
-    setVideoBusy(true);
+    setVideoBusySlots((b) => ({ ...b, [slotIndex]: true }));
 
-    onChange({
-      ...mediaRef.current,
-      video: {
-        id: mediaRef.current.video?.id,
-        url: mediaRef.current.video?.url ?? null,
-        localFile: file,
-        storagePath: mediaRef.current.video?.storagePath,
-        thumbnailUrl: mediaRef.current.video?.thumbnailUrl ?? null,
-        durationSeconds: mediaRef.current.video?.durationSeconds ?? null,
-      },
-    });
+    const placeholder = [...mediaRef.current.videos];
+    placeholder[slotIndex] = {
+      ...(placeholder[slotIndex] ?? {}),
+      localFile: file,
+      url: placeholder[slotIndex]?.url ?? null,
+      thumbnailUrl: null,
+      durationSeconds: null,
+    };
+    onChange({ ...mediaRef.current, videos: placeholder });
 
     try {
       const { durationSeconds, thumbnailBlob } = await readVideoMetadata(file);
-
       const durationCheck = validateProfileVideoDuration(durationSeconds);
       if (!durationCheck.valid) {
-        setVideoError(durationCheck.error);
-        onChange({ ...mediaRef.current, video: null });
+        setVideoErrors((e) => ({ ...e, [slotIndex]: durationCheck.error }));
+        const reverted = [...mediaRef.current.videos];
+        if (!reverted[slotIndex]?.url) reverted.splice(slotIndex, 1);
+        else reverted[slotIndex] = { ...reverted[slotIndex], localFile: undefined };
+        onChange({ ...mediaRef.current, videos: reverted });
         return;
       }
-
+      const old = localVideoUrlsRef.current.get(slotIndex);
+      if (old) URL.revokeObjectURL(old);
       const thumbUrl = thumbnailBlob ? URL.createObjectURL(thumbnailBlob) : null;
-      onChange({
-        ...mediaRef.current,
-        video: {
-          id: mediaRef.current.video?.id,
-          url: mediaRef.current.video?.url ?? null,
-          localFile: file,
-          storagePath: mediaRef.current.video?.storagePath,
-          thumbnailUrl: thumbUrl,
-          durationSeconds,
-        },
-      });
+      if (thumbUrl) localVideoUrlsRef.current.set(slotIndex, thumbUrl);
+
+      const updated = [...mediaRef.current.videos];
+      updated[slotIndex] = {
+        ...(updated[slotIndex] ?? {}),
+        localFile: file,
+        thumbnailUrl: thumbUrl,
+        durationSeconds,
+        url: updated[slotIndex]?.url ?? null,
+      };
+      onChange({ ...mediaRef.current, videos: updated });
     } catch {
-      setVideoError('Could not read that video. Try a shorter MP4 or WebM clip.');
-      onChange({ ...mediaRef.current, video: null });
+      setVideoErrors((e) => ({
+        ...e,
+        [slotIndex]: 'Could not read that video. Try a shorter MP4 or WebM clip.',
+      }));
+      const reverted = [...mediaRef.current.videos];
+      if (!reverted[slotIndex]?.url) reverted.splice(slotIndex, 1);
+      onChange({ ...mediaRef.current, videos: reverted });
     } finally {
-      setVideoBusy(false);
-      if (videoInputRef.current) videoInputRef.current.value = '';
+      setVideoBusySlots((b) => ({ ...b, [slotIndex]: false }));
     }
   }
 
-  const thumbnailPreview = media.video?.thumbnailUrl ?? null;
-  const playbackUrl = localVideoPreviewUrl ?? media.video?.url ?? null;
+  function handleRemoveVideo(slotIndex: number) {
+    const old = localVideoUrlsRef.current.get(slotIndex);
+    if (old) {
+      URL.revokeObjectURL(old);
+      localVideoUrlsRef.current.delete(slotIndex);
+    }
+    setVideoErrors((e) => {
+      const n = { ...e };
+      delete n[slotIndex];
+      return n;
+    });
+    onChange({
+      ...mediaRef.current,
+      videos: mediaRef.current.videos.filter((_, i) => i !== slotIndex),
+    });
+  }
+
   const photoPreviewUris = media.photos.map((photo) => photoPreviewUrl(photo) ?? '');
 
   function openPhotoPreview(photoClientId: string) {
@@ -168,15 +167,6 @@ export function ProfileMediaManager({
           if (files.length) onChange(addLocalPhotos(mediaRef.current, files));
           e.target.value = '';
         }}
-      />
-      <input
-        ref={videoInputRef}
-        type="file"
-        accept="video/mp4,video/quicktime,video/webm"
-        className="hidden"
-        tabIndex={-1}
-        aria-hidden
-        onChange={(e) => void handleVideoPick(e.target.files?.[0] ?? null)}
       />
 
       <div>
@@ -278,70 +268,109 @@ export function ProfileMediaManager({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-white/80 p-4">
+      <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="inline-flex items-center gap-1.5 text-[13px] font-extrabold text-foreground">
             <IoVideocamOutline className="text-secondary" size={18} />
-            Profile video
+            Profile videos
           </p>
           <p className="text-[12px] font-semibold text-muted">
-            {hasVideo ? '1' : '0'}/{PROFILE_MEDIA_MIN_VIDEOS} required
+            {media.videos.length}/{PROFILE_MEDIA_MAX_VIDEOS} · max {PROFILE_VIDEO_MAX_DURATION_SECONDS}s · 30MB each
           </p>
         </div>
-        <p className="mt-1 text-[12px] font-semibold leading-relaxed text-muted">
-          A short clip builds trust, just like on top dating apps. MP4, MOV, or WebM. Max 60 seconds and 100MB.
+        <p className="text-[12px] font-semibold leading-relaxed text-muted">
+          Short clips build trust. Upload up to 3 videos. MP4, MOV, or WebM.
         </p>
 
-        <div className="mt-3 flex flex-col gap-3 min-[480px]:flex-row min-[480px]:items-center">
-          <div className="relative aspect-video w-full max-w-xs shrink-0 overflow-hidden rounded-2xl border border-primary/15 bg-[#EDE8FF]/50">
-            {videoBusy ? (
-              <div className="flex h-full min-h-[9rem] flex-col items-center justify-center gap-2 text-muted">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
-                <span className="text-[12px] font-semibold">Processing video…</span>
-              </div>
-            ) : hasVideo && playbackUrl ? (
-              <ProfileVideoPreview
-                compact
-                playbackUrl={playbackUrl}
-                thumbnailUrl={thumbnailPreview}
-                durationSeconds={media.video?.durationSeconds}
-              />
-            ) : (
-              <div className="flex h-full min-h-[9rem] flex-col items-center justify-center gap-2 text-muted">
-                <IoVideocamOutline size={32} />
-                <span className="text-[12px] font-semibold">No video yet</span>
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={videoBusy}
-              onClick={() => videoInputRef.current?.click()}
-              className="inline-flex min-h-[40px] cursor-pointer items-center rounded-full linkup-gradient-primary px-4 py-2 text-[12px] font-extrabold text-white shadow-sm disabled:opacity-60"
-            >
-              {hasVideo ? 'Replace video' : 'Upload video'}
-            </button>
-            {hasVideo ? (
-              <button
-                type="button"
-                disabled={videoBusy}
-                className="inline-flex min-h-[40px] items-center rounded-full border border-red-200 bg-red-50 px-4 py-2 text-[12px] font-extrabold text-red-600 disabled:opacity-60"
-                onClick={() => {
-                  setVideoError(null);
-                  onChange({ ...mediaRef.current, video: null });
-                  if (videoInputRef.current) videoInputRef.current.value = '';
-                }}
+        <div className="grid grid-cols-3 gap-2">
+          {media.videos.map((v, i) => {
+            const previewUrl = localVideoUrlsRef.current.get(i) ?? v.thumbnailUrl ?? v.url ?? null;
+            return (
+              <div
+                key={`${v.id ?? 'local'}-${i}`}
+                className="relative aspect-[9/16] overflow-hidden rounded-2xl border border-primary/15 bg-[#EDE8FF]/50"
               >
-                Delete video
-              </button>
-            ) : null}
-          </div>
+                {videoBusySlots[i] ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-2">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
+                    <span className="text-[10px] font-semibold text-muted">Processing...</span>
+                  </div>
+                ) : previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={previewUrl} alt={`Video ${i + 1}`} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center">
+                    <IoVideocamOutline size={24} className="text-muted/40" />
+                  </div>
+                )}
+                <span className="absolute left-2 top-2 rounded-full bg-black/50 px-1.5 py-0.5 text-[9px] font-extrabold text-white">
+                  {i + 1}
+                </span>
+                {v.durationSeconds != null ? (
+                  <span className="absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[9px] font-extrabold text-white">
+                    {Math.round(v.durationSeconds)}s
+                  </span>
+                ) : null}
+                {!videoBusySlots[i] ? (
+                  <div className="absolute right-1.5 top-1.5 flex flex-col gap-1">
+                    <label className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white hover:bg-black/80">
+                      <input
+                        type="file"
+                        accept="video/mp4,video/quicktime,video/webm"
+                        className="sr-only"
+                        onChange={(e) => {
+                          void handleVideoPickForSlot(i, e.target.files?.[0] ?? null);
+                          e.target.value = '';
+                        }}
+                      />
+                      <IoVideocamOutline size={12} />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveVideo(i)}
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white hover:bg-red-600/80"
+                      aria-label={`Remove video ${i + 1}`}
+                    >
+                      <IoTrashOutline size={11} />
+                    </button>
+                  </div>
+                ) : null}
+                {videoErrors[i] ? (
+                  <div className="absolute inset-x-0 bottom-0 bg-red-900/80 p-1.5">
+                    <p className="text-[9px] font-semibold leading-tight text-white">{videoErrors[i]}</p>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+
+          {media.videos.length < PROFILE_MEDIA_MAX_VIDEOS ? (
+            <label className="relative flex aspect-[9/16] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/25 bg-white/80 transition hover:border-primary/45 hover:bg-[#EDE8FF]/30">
+              <input
+                type="file"
+                accept="video/mp4,video/quicktime,video/webm"
+                className="sr-only"
+                onChange={(e) => {
+                  void handleVideoPickForSlot(media.videos.length, e.target.files?.[0] ?? null);
+                  e.target.value = '';
+                }}
+              />
+              {videoBusySlots[media.videos.length] ? (
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
+              ) : (
+                <>
+                  <IoVideocamOutline size={22} className="text-primary/50" />
+                  <span className="text-[10px] font-extrabold text-primary/60">
+                    {media.videos.length === 0 ? 'Add video' : 'Add another'}
+                  </span>
+                </>
+              )}
+            </label>
+          ) : null}
         </div>
 
-        {videoError ? (
-          <p className="mt-3 text-[12px] font-semibold text-red-600">{videoError}</p>
+        {showValidation && media.videos.length < PROFILE_MEDIA_MIN_VIDEOS ? (
+          <p className="text-[12px] font-semibold text-[#EF4444]">Add at least 1 profile video to continue.</p>
         ) : null}
       </div>
 
@@ -351,7 +380,7 @@ export function ProfileMediaManager({
         </p>
       ) : showValidation && profileMediaMeetsMinimums(media) ? (
         <p className="rounded-xl border border-emerald-200/80 bg-emerald-50 px-3 py-2.5 text-[13px] font-semibold text-emerald-800">
-          Media looks great. Primary photo and video are set.
+          Media looks great. Primary photo and videos are set.
         </p>
       ) : null}
 

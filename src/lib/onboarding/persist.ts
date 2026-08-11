@@ -3,7 +3,7 @@ import { persistProfileMediaDraft } from '@/lib/profile/media/persist';
 import { hasProfileVideo, profileMediaMeetsMinimums } from '@/lib/profile/media/validation';
 import { draftFromProfile } from '@/lib/onboarding/hydrate';
 import { createClient } from '@/lib/supabase/client';
-import { fetchProfileVideo } from '@/services/profileMedia.service';
+import { fetchProfileVideos } from '@/services/profileMedia.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import type { DbProfile } from '@/types/database';
 import type { ProfilePreferences } from '@/types/database';
@@ -29,10 +29,14 @@ function mergedPreferences(
   };
 }
 
-function draftNeedsMediaUpload(draft: OnboardingDraft, existingVideoMediaId?: string): boolean {
+function draftNeedsMediaUpload(
+  draft: OnboardingDraft,
+  existingVideos?: Array<{ id: string; storagePath: string }>
+): boolean {
   if (draft.profileMedia.photos.some((p) => p.localFile)) return true;
-  if (draft.profileMedia.video?.localFile) return true;
-  if (existingVideoMediaId && !hasProfileVideo(draft.profileMedia)) return true;
+  if (draft.profileMedia.videos.some((v) => v.localFile)) return true;
+  if (existingVideos?.length && draft.profileMedia.videos.length < existingVideos.length) return true;
+  if (existingVideos?.length && !hasProfileVideo(draft.profileMedia)) return true;
   return false;
 }
 
@@ -42,8 +46,7 @@ export async function autosaveOnboardingProgress(args: {
   draft: OnboardingDraft;
   stepIndex: number;
   existingPreferences: ProfilePreferences | null;
-  existingVideoMediaId?: string;
-  existingVideoStoragePath?: string;
+  existingVideos?: Array<{ id: string; storagePath: string }>;
 }): Promise<{ error: string | null; preferences: ProfilePreferences; mediaUploaded: boolean }> {
   const { userId, draft, stepIndex, existingPreferences } = args;
   const client = createClient();
@@ -84,13 +87,12 @@ export async function autosaveOnboardingProgress(args: {
   }
 
   let mediaUploaded = false;
-  if (draftNeedsMediaUpload(draft, args.existingVideoMediaId)) {
+  if (draftNeedsMediaUpload(draft, args.existingVideos)) {
     try {
       const media = await persistProfileMediaDraft({
         userId,
         media: draft.profileMedia,
-        existingVideoMediaId: args.existingVideoMediaId,
-        existingVideoStoragePath: args.existingVideoStoragePath,
+        existingVideos: args.existingVideos,
       });
       patch.photo_urls = media.photo_urls;
       patch.primary_photo_url = media.primary_photo_url;
@@ -135,8 +137,7 @@ export async function saveOnboardingStep(args: {
   draft: OnboardingDraft;
   existingPreferences: ProfilePreferences | null;
   stepIndex: number;
-  existingVideoMediaId?: string;
-  existingVideoStoragePath?: string;
+  existingVideos?: Array<{ id: string; storagePath: string }>;
 }): Promise<{ error: string | null }> {
   const { userId, draft, existingPreferences, stepIndex } = args;
   const client = createClient();
@@ -160,8 +161,7 @@ export async function saveOnboardingStep(args: {
       const media = await persistProfileMediaDraft({
         userId,
         media: draft.profileMedia,
-        existingVideoMediaId: args.existingVideoMediaId,
-        existingVideoStoragePath: args.existingVideoStoragePath,
+        existingVideos: args.existingVideos,
       });
       patch.photo_urls = media.photo_urls;
       patch.primary_photo_url = media.primary_photo_url;
@@ -210,8 +210,7 @@ export async function finalizeOnboarding(args: {
   userId: string;
   draft: OnboardingDraft;
   existingPreferences: ProfilePreferences | null;
-  existingVideoMediaId?: string;
-  existingVideoStoragePath?: string;
+  existingVideos?: Array<{ id: string; storagePath: string }>;
 }): Promise<{ error: string | null }> {
   const resolved = await resolveDraftForFinalize(args.userId, args.draft);
   if (resolved.error) return { error: resolved.error };
@@ -224,8 +223,7 @@ export async function finalizeOnboarding(args: {
     mediaPatch = await persistProfileMediaDraft({
       userId: args.userId,
       media: draft.profileMedia,
-      existingVideoMediaId: args.existingVideoMediaId,
-      existingVideoStoragePath: args.existingVideoStoragePath,
+      existingVideos: args.existingVideos,
     });
   } catch (e) {
     if (!profileMediaMeetsMinimums(draft.profileMedia)) {
@@ -233,8 +231,8 @@ export async function finalizeOnboarding(args: {
     }
     const bundle = await fetchUserProfileBundle(client, args.userId);
     const profile = bundle.profile as DbProfile | null;
-    const fallbackVideo = await fetchProfileVideo(client, args.userId);
-    const dbMedia = draftFromProfile(profile, fallbackVideo).profileMedia;
+    const fallbackVideos = await fetchProfileVideos(client, args.userId);
+    const dbMedia = draftFromProfile(profile, fallbackVideos).profileMedia;
     if (profile?.photo_urls?.length && profileMediaMeetsMinimums(dbMedia)) {
       mediaPatch = {
         photo_urls: profile.photo_urls ?? [],

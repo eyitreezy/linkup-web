@@ -17,13 +17,11 @@ function profileMediaSnapshot(media: ProfileMediaDraft) {
       isPrimary: p.isPrimary,
       localSig: localFileSig(p.localFile),
     })),
-    video: media.video
-      ? {
-          id: media.video.id ?? null,
-          url: media.video.url,
-          localSig: localFileSig(media.video.localFile),
-        }
-      : null,
+    videos: media.videos.map((v) => ({
+      id: v.id ?? null,
+      url: v.url,
+      localSig: localFileSig(v.localFile),
+    })),
   };
 }
 
