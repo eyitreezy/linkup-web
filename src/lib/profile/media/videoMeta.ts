@@ -3,6 +3,7 @@ import {
   PROFILE_VIDEO_MAX_FILE_SIZE_BYTES,
   PROFILE_VIDEO_MAX_SIZE_LABEL,
   PROFILE_VIDEO_MIME_TYPES,
+  profileVideoDurationWithinLimit,
 } from '@/lib/profile/media/constants';
 
 export const PROFILE_VIDEO_ALLOWED_FORMATS_LABEL = 'MP4, MOV, or WebM';
@@ -153,7 +154,7 @@ export function validateProfileVideoDuration(
   durationSeconds: number | null
 ): { valid: boolean; error: string | null } {
   if (durationSeconds == null) return { valid: true, error: null };
-  if (durationSeconds > PROFILE_VIDEO_MAX_DURATION_SECONDS) {
+  if (!profileVideoDurationWithinLimit(durationSeconds)) {
     return {
       valid: false,
       error: `Video length is greater than ${PROFILE_VIDEO_MAX_DURATION_SECONDS} seconds. Please trim it and try again.`,
