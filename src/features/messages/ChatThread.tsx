@@ -914,7 +914,7 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
           />
         ) : (
           <>
-            <div className="flex min-w-0 flex-1 items-center gap-2.5 min-[360px]:gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 min-[360px]:gap-3">
               {isGroupChat ? (
                 <GroupAvatarCell
                   avatarUrl={peer.groupAvatarUrl}
@@ -923,15 +923,15 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
                   size={44}
                 />
               ) : (
-                <AvatarWithPresence
-                  uri={peer.avatarUrl}
-                  name={peer.name}
-                  size={44}
-                  presence={headerPresence}
-                  showDot
-                />
+          <AvatarWithPresence
+            uri={peer.avatarUrl}
+            name={peer.name}
+            size={44}
+            presence={headerPresence}
+            showDot
+          />
               )}
-              <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1">
                 {isGroupChat ? (
                   <>
                     <h2 className="truncate font-display text-base font-extrabold text-foreground min-[360px]:text-lg">
@@ -953,47 +953,47 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
                     )}
                   </>
                 ) : peer.otherId ? (
-                  <Link
-                    href={`/user/${peer.otherId}`}
-                    className="block min-w-0"
-                    aria-label={`View ${peer.name}'s profile`}
-                  >
-                    <div className="flex items-center gap-1">
-                      <span className="truncate font-display text-base font-extrabold text-foreground min-[360px]:text-lg">
-                        {peer.name}
-                      </span>
-                      {peer.verified ? (
-                        <IoCheckmarkCircle className="shrink-0 text-primary" size={17} aria-label="Verified" />
-                      ) : null}
-                    </div>
-                  </Link>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <h2 className="truncate font-display text-base font-extrabold text-foreground min-[360px]:text-lg">
-                      {peer.name}
-                    </h2>
-                  </div>
-                )}
+              <Link
+                href={`/user/${peer.otherId}`}
+                className="block min-w-0"
+                aria-label={`View ${peer.name}'s profile`}
+              >
+                <div className="flex items-center gap-1">
+                  <span className="truncate font-display text-base font-extrabold text-foreground min-[360px]:text-lg">
+                    {peer.name}
+                  </span>
+                  {peer.verified ? (
+                    <IoCheckmarkCircle className="shrink-0 text-primary" size={17} aria-label="Verified" />
+                  ) : null}
+                </div>
+              </Link>
+            ) : (
+              <div className="flex items-center gap-1">
+                <h2 className="truncate font-display text-base font-extrabold text-foreground min-[360px]:text-lg">
+                  {peer.name}
+                </h2>
+              </div>
+            )}
                 {!isGroupChat ? (
                   linkedMeetup ? (
-                    <Link
-                      href={`/plan/${linkedMeetup.id}`}
-                      className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full bg-gradient-to-r from-primary/15 to-secondary/10 px-2 py-0.5 text-[11px] font-extrabold text-primary min-[360px]:px-2.5 min-[360px]:py-1 min-[360px]:text-[12px]"
-                    >
-                      <IoSparkles size={14} />
-                      <span className="truncate">{linkedMeetup.title}</span>
-                      <IoChevronForward size={14} className="shrink-0 text-secondary" />
-                    </Link>
-                  ) : headerPresence.caption ? (
-                    <p className="text-[11px] font-semibold text-muted min-[360px]:text-[12px]">{headerPresence.caption}</p>
-                  ) : (
-                    <p className="text-[11px] font-semibold text-muted min-[360px]:text-[12px]">Direct message</p>
+              <Link
+                href={`/plan/${linkedMeetup.id}`}
+                className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full bg-gradient-to-r from-primary/15 to-secondary/10 px-2 py-0.5 text-[11px] font-extrabold text-primary min-[360px]:px-2.5 min-[360px]:py-1 min-[360px]:text-[12px]"
+              >
+                <IoSparkles size={14} />
+                <span className="truncate">{linkedMeetup.title}</span>
+                <IoChevronForward size={14} className="shrink-0 text-secondary" />
+              </Link>
+            ) : headerPresence.caption ? (
+              <p className="text-[11px] font-semibold text-muted min-[360px]:text-[12px]">{headerPresence.caption}</p>
+            ) : (
+              <p className="text-[11px] font-semibold text-muted min-[360px]:text-[12px]">Direct message</p>
                   )
                 ) : null}
-              </div>
-            </div>
+          </div>
+        </div>
             {user?.id ? (
-              <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setSearchOpen(true)}
@@ -1011,26 +1011,26 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
                     <IoInformationCircleOutline size={22} />
                   </Link>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => setAppearanceOpen(true)}
-                  className="rounded-full p-2 text-muted transition hover:bg-[#F5F6FA]"
-                  aria-label="Chat appearance"
-                >
-                  <IoColorPaletteOutline size={22} />
-                </button>
+            <button
+              type="button"
+              onClick={() => setAppearanceOpen(true)}
+              className="rounded-full p-2 text-muted transition hover:bg-[#F5F6FA]"
+              aria-label="Chat appearance"
+            >
+              <IoColorPaletteOutline size={22} />
+            </button>
                 {user?.id && (peer.otherId || isGroupChat) ? (
-                  <button
-                    type="button"
-                    onClick={() => setSafetyOpen(true)}
-                    className="rounded-full p-2 text-muted transition hover:bg-[#F5F6FA]"
-                    aria-label="Safety and report"
-                  >
-                    <IoEllipsisHorizontal size={22} />
-                  </button>
+            <button
+              type="button"
+              onClick={() => setSafetyOpen(true)}
+              className="rounded-full p-2 text-muted transition hover:bg-[#F5F6FA]"
+              aria-label="Safety and report"
+            >
+              <IoEllipsisHorizontal size={22} />
+            </button>
                 ) : null}
-              </div>
-            ) : null}
+          </div>
+        ) : null}
           </>
         )}
       </header>
@@ -1364,15 +1364,15 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
             </div>
           ) : null}
           {reportMemberId ? (
-            <ChatReportDialog
-              open={reportOpen}
+          <ChatReportDialog
+            open={reportOpen}
               onClose={() => {
                 setReportOpen(false);
                 setReportMemberId(null);
               }}
-              reporterId={user.id}
+            reporterId={user.id}
               reportedUserId={reportMemberId}
-            />
+          />
           ) : null}
         </>
       ) : null}

@@ -5,6 +5,8 @@ import {
   PROFILE_VIDEO_MIME_TYPES,
 } from '@/lib/profile/media/constants';
 
+export const PROFILE_VIDEO_ALLOWED_FORMATS_LABEL = 'MP4, MOV, or WebM';
+
 export function isAllowedProfileVideoMime(mime: string): boolean {
   return (PROFILE_VIDEO_MIME_TYPES as readonly string[]).includes(mime);
 }
@@ -109,13 +111,39 @@ export async function readVideoMetadata(
   }
 }
 
+export function validateProfileVideoMime(
+  file: File
+): { valid: boolean; error: string | null } {
+  const mime = (file.type || '').toLowerCase();
+  if (mime && !isAllowedProfileVideoMime(mime)) {
+    return {
+      valid: false,
+      error: `Video type is not ${PROFILE_VIDEO_ALLOWED_FORMATS_LABEL}. Please choose a supported format and try again.`,
+    };
+  }
+
+  const name = file.name.toLowerCase();
+  const extOk = /\.(mp4|mov|webm)$/.test(name);
+  if (!mime && !extOk) {
+    return {
+      valid: false,
+      error: `Video type is not ${PROFILE_VIDEO_ALLOWED_FORMATS_LABEL}. Please choose a supported format and try again.`,
+    };
+  }
+
+  return { valid: true, error: null };
+}
+
 export function validateProfileVideoFile(
   file: File
 ): { valid: boolean; error: string | null } {
+  const mimeCheck = validateProfileVideoMime(file);
+  if (!mimeCheck.valid) return mimeCheck;
+
   if (file.size > PROFILE_VIDEO_MAX_FILE_SIZE_BYTES) {
     return {
       valid: false,
-      error: `Video must be under ${PROFILE_VIDEO_MAX_SIZE_LABEL}. Please trim or compress it and try again.`,
+      error: `Video size is greater than ${PROFILE_VIDEO_MAX_SIZE_LABEL}. Please trim or compress it and try again.`,
     };
   }
   return { valid: true, error: null };
@@ -128,7 +156,7 @@ export function validateProfileVideoDuration(
   if (durationSeconds > PROFILE_VIDEO_MAX_DURATION_SECONDS) {
     return {
       valid: false,
-      error: `Video must be ${PROFILE_VIDEO_MAX_DURATION_SECONDS} seconds or less. Please trim it and try again.`,
+      error: `Video length is greater than ${PROFILE_VIDEO_MAX_DURATION_SECONDS} seconds. Please trim it and try again.`,
     };
   }
   return { valid: true, error: null };

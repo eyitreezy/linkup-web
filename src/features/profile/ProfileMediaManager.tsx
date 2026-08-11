@@ -15,15 +15,19 @@ import {
 } from '@/lib/profile/media/draft';
 import { ProfilePhotoPreviewOverlay } from '@/components/profile/ProfilePhotoPreviewOverlay';
 import {
+  ProfileVideoPreviewOverlay,
+  type ProfileVideoPreviewItem,
+} from '@/components/profile/ProfileVideoPreviewOverlay';
+import {
   activePhotoCount,
   profileMediaMeetsMinimums,
   profileMediaValidationMessage,
 } from '@/lib/profile/media/validation';
 import { readVideoMetadata, validateProfileVideoDuration, validateProfileVideoFile } from '@/lib/profile/media/videoMeta';
-import type { ProfileMediaDraft } from '@/lib/profile/media/types';
+import type { ProfileMediaDraft, ProfileVideoDraft } from '@/lib/profile/media/types';
 import { cn } from '@/utils/cn';
 import { useEffect, useRef, useState } from 'react';
-import { IoCheckmarkCircle, IoTrashOutline, IoVideocamOutline } from 'react-icons/io5';
+import { IoCheckmarkCircle, IoPlay, IoTrashOutline, IoVideocamOutline } from 'react-icons/io5';
 
 type Props = {
   media: ProfileMediaDraft;
@@ -42,7 +46,8 @@ export function ProfileMediaManager({
   className,
 }: Props) {
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const localVideoUrlsRef = useRef<Map<number, string>>(new Map());
+  const localVideoThumbUrlsRef = useRef<Map<number, string>>(new Map());
+  const localVideoPlaybackUrlsRef = useRef<Map<number, string>>(new Map());
   const mediaRef = useRef(media);
 
   useEffect(() => {
@@ -50,8 +55,11 @@ export function ProfileMediaManager({
   }, [media]);
 
   const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewIndex, setPreviewIndex] = useState(0);
+  const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
+  const [photoPreviewIndex, setPhotoPreviewIndex] = useState(0);
+  const [videoPreviewOpen, setVideoPreviewOpen] = useState(false);
+  const [videoPreviewIndex, setVideoPreviewIndex] = useState(0);
+  const [videoPreviewRev, setVideoPreviewRev] = useState(0);
   const [videoBusySlots, setVideoBusySlots] = useState<Record<number, boolean>>({});
   const [primaryBusy, setPrimaryBusy] = useState(false);
   const [videoErrors, setVideoErrors] = useState<Record<number, string | null>>({});
@@ -61,18 +69,56 @@ export function ProfileMediaManager({
 
   useEffect(() => {
     return () => {
-      localVideoUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-      localVideoUrlsRef.current.clear();
+      localVideoThumbUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      localVideoThumbUrlsRef.current.clear();
+      localVideoPlaybackUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      localVideoPlaybackUrlsRef.current.clear();
     };
   }, []);
+
+  function ensureLocalPlaybackUrl(slotIndex: number, file: File): string {
+    const existing = localVideoPlaybackUrlsRef.current.get(slotIndex);
+    if (existing) return existing;
+    const url = URL.createObjectURL(file);
+    localVideoPlaybackUrlsRef.current.set(slotIndex, url);
+    return url;
+  }
+
+  function videoPlaybackUrl(video: ProfileVideoDraft, slotIndex: number): string | null {
+    if (video.localFile) return localVideoPlaybackUrlsRef.current.get(slotIndex) ?? null;
+    return video.url;
+  }
+
+  function canPreviewVideo(video: ProfileVideoDraft, slotIndex: number): boolean {
+    return !!videoPlaybackUrl(video, slotIndex) && !videoBusySlots[slotIndex];
+  }
+
+  const videoPreviewItems: ProfileVideoPreviewItem[] = media.videos.map((v, i) => ({
+    playbackUrl: videoPlaybackUrl(v, i) ?? '',
+    thumbnailUrl: localVideoThumbUrlsRef.current.get(i) ?? v.thumbnailUrl,
+    durationSeconds: v.durationSeconds,
+    label: `Profile video ${i + 1}`,
+  }));
+  void videoPreviewRev;
+
+  function openVideoPreview(slotIndex: number) {
+    const video = media.videos[slotIndex];
+    if (!video || !canPreviewVideo(video, slotIndex)) return;
+    if (video.localFile && !localVideoPlaybackUrlsRef.current.has(slotIndex)) {
+      ensureLocalPlaybackUrl(slotIndex, video.localFile);
+      setVideoPreviewRev((n) => n + 1);
+    }
+    setVideoPreviewIndex(slotIndex);
+    setVideoPreviewOpen(true);
+  }
 
   async function handleVideoPickForSlot(slotIndex: number, file: File | null) {
     if (!file) return;
     setVideoErrors((e) => ({ ...e, [slotIndex]: null }));
 
-    const sizeCheck = validateProfileVideoFile(file);
-    if (!sizeCheck.valid) {
-      setVideoErrors((e) => ({ ...e, [slotIndex]: sizeCheck.error }));
+    const fileCheck = validateProfileVideoFile(file);
+    if (!fileCheck.valid) {
+      setVideoErrors((e) => ({ ...e, [slotIndex]: fileCheck.error }));
       return;
     }
 
@@ -99,10 +145,16 @@ export function ProfileMediaManager({
         onChange({ ...mediaRef.current, videos: reverted });
         return;
       }
-      const old = localVideoUrlsRef.current.get(slotIndex);
-      if (old) URL.revokeObjectURL(old);
+
+      const oldThumb = localVideoThumbUrlsRef.current.get(slotIndex);
+      if (oldThumb) URL.revokeObjectURL(oldThumb);
+      const oldPlayback = localVideoPlaybackUrlsRef.current.get(slotIndex);
+      if (oldPlayback) URL.revokeObjectURL(oldPlayback);
+      localVideoPlaybackUrlsRef.current.delete(slotIndex);
+
       const thumbUrl = thumbnailBlob ? URL.createObjectURL(thumbnailBlob) : null;
-      if (thumbUrl) localVideoUrlsRef.current.set(slotIndex, thumbUrl);
+      if (thumbUrl) localVideoThumbUrlsRef.current.set(slotIndex, thumbUrl);
+      ensureLocalPlaybackUrl(slotIndex, file);
 
       const updated = [...mediaRef.current.videos];
       updated[slotIndex] = {
@@ -116,7 +168,7 @@ export function ProfileMediaManager({
     } catch {
       setVideoErrors((e) => ({
         ...e,
-        [slotIndex]: 'Could not read that video. Try a shorter MP4 or WebM clip.',
+        [slotIndex]: 'Could not read that video. Try a shorter MP4, MOV, or WebM clip.',
       }));
       const reverted = [...mediaRef.current.videos];
       if (!reverted[slotIndex]?.url) reverted.splice(slotIndex, 1);
@@ -127,16 +179,24 @@ export function ProfileMediaManager({
   }
 
   function handleRemoveVideo(slotIndex: number) {
-    const old = localVideoUrlsRef.current.get(slotIndex);
-    if (old) {
-      URL.revokeObjectURL(old);
-      localVideoUrlsRef.current.delete(slotIndex);
+    const oldThumb = localVideoThumbUrlsRef.current.get(slotIndex);
+    if (oldThumb) {
+      URL.revokeObjectURL(oldThumb);
+      localVideoThumbUrlsRef.current.delete(slotIndex);
+    }
+    const oldPlayback = localVideoPlaybackUrlsRef.current.get(slotIndex);
+    if (oldPlayback) {
+      URL.revokeObjectURL(oldPlayback);
+      localVideoPlaybackUrlsRef.current.delete(slotIndex);
     }
     setVideoErrors((e) => {
       const n = { ...e };
       delete n[slotIndex];
       return n;
     });
+    if (videoPreviewOpen && videoPreviewIndex === slotIndex) {
+      setVideoPreviewOpen(false);
+    }
     onChange({
       ...mediaRef.current,
       videos: mediaRef.current.videos.filter((_, i) => i !== slotIndex),
@@ -148,9 +208,11 @@ export function ProfileMediaManager({
   function openPhotoPreview(photoClientId: string) {
     const idx = media.photos.findIndex((p) => p.clientId === photoClientId);
     if (idx < 0 || !photoPreviewUris[idx]) return;
-    setPreviewIndex(idx);
-    setPreviewOpen(true);
+    setPhotoPreviewIndex(idx);
+    setPhotoPreviewOpen(true);
   }
+
+  const visibleVideoErrors = Object.entries(videoErrors).filter(([, msg]) => msg);
 
   return (
     <div className={cn('space-y-5', className)}>
@@ -279,12 +341,13 @@ export function ProfileMediaManager({
           </p>
         </div>
         <p className="text-[12px] font-semibold leading-relaxed text-muted">
-          Short clips build trust. Upload up to 3 videos. MP4, MOV, or WebM.
+          Short clips build trust. Upload up to 3 videos (MP4, MOV, or WebM). Tap a clip to preview it full screen.
         </p>
 
         <div className="grid grid-cols-3 gap-2">
           {media.videos.map((v, i) => {
-            const previewUrl = localVideoUrlsRef.current.get(i) ?? v.thumbnailUrl ?? v.url ?? null;
+            const thumbUrl = localVideoThumbUrlsRef.current.get(i) ?? v.thumbnailUrl ?? null;
+            const previewable = canPreviewVideo(v, i);
             return (
               <div
                 key={`${v.id ?? 'local'}-${i}`}
@@ -295,24 +358,45 @@ export function ProfileMediaManager({
                     <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
                     <span className="text-[10px] font-semibold text-muted">Processing...</span>
                   </div>
-                ) : previewUrl ? (
+                ) : previewable ? (
+                  <button
+                    type="button"
+                    onClick={() => openVideoPreview(i)}
+                    className="group relative h-full w-full"
+                    aria-label={`Preview video ${i + 1}`}
+                  >
+                    {thumbUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={thumbUrl} alt={`Video ${i + 1}`} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center bg-[#EDE8FF]/80">
+                        <IoVideocamOutline size={24} className="text-muted/40" />
+                      </div>
+                    )}
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/15 transition group-hover:bg-black/30">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-primary shadow-md transition group-hover:scale-105">
+                        <IoPlay size={18} className="ml-0.5" />
+                      </span>
+                    </span>
+                  </button>
+                ) : thumbUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={previewUrl} alt={`Video ${i + 1}`} className="h-full w-full object-cover" />
+                  <img src={thumbUrl} alt={`Video ${i + 1}`} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full items-center justify-center">
                     <IoVideocamOutline size={24} className="text-muted/40" />
                   </div>
                 )}
-                <span className="absolute left-2 top-2 rounded-full bg-black/50 px-1.5 py-0.5 text-[9px] font-extrabold text-white">
+                <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/50 px-1.5 py-0.5 text-[9px] font-extrabold text-white">
                   {i + 1}
                 </span>
                 {v.durationSeconds != null ? (
-                  <span className="absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[9px] font-extrabold text-white">
+                  <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[9px] font-extrabold text-white">
                     {Math.round(v.durationSeconds)}s
                   </span>
                 ) : null}
                 {!videoBusySlots[i] ? (
-                  <div className="absolute right-1.5 top-1.5 flex flex-col gap-1">
+                  <div className="absolute right-1.5 top-1.5 z-10 flex flex-col gap-1">
                     <label className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white hover:bg-black/80">
                       <input
                         type="file"
@@ -333,11 +417,6 @@ export function ProfileMediaManager({
                     >
                       <IoTrashOutline size={11} />
                     </button>
-                  </div>
-                ) : null}
-                {videoErrors[i] ? (
-                  <div className="absolute inset-x-0 bottom-0 bg-red-900/80 p-1.5">
-                    <p className="text-[9px] font-semibold leading-tight text-white">{videoErrors[i]}</p>
                   </div>
                 ) : null}
               </div>
@@ -369,6 +448,20 @@ export function ProfileMediaManager({
           ) : null}
         </div>
 
+        {visibleVideoErrors.length > 0 ? (
+          <div className="space-y-2">
+            {visibleVideoErrors.map(([slot, msg]) => (
+              <p
+                key={slot}
+                className="rounded-xl border border-red-200/90 bg-red-50 px-3 py-2.5 text-[12px] font-semibold leading-relaxed text-red-700"
+                role="alert"
+              >
+                Video {Number(slot) + 1}: {msg}
+              </p>
+            ))}
+          </div>
+        ) : null}
+
         {showValidation && media.videos.length < PROFILE_MEDIA_MIN_VIDEOS ? (
           <p className="text-[12px] font-semibold text-[#EF4444]">Add at least 1 profile video to continue.</p>
         ) : null}
@@ -385,11 +478,19 @@ export function ProfileMediaManager({
       ) : null}
 
       <ProfilePhotoPreviewOverlay
-        open={previewOpen}
+        open={photoPreviewOpen}
         uris={photoPreviewUris}
-        index={previewIndex}
-        onIndexChange={setPreviewIndex}
-        onClose={() => setPreviewOpen(false)}
+        index={photoPreviewIndex}
+        onIndexChange={setPhotoPreviewIndex}
+        onClose={() => setPhotoPreviewOpen(false)}
+      />
+
+      <ProfileVideoPreviewOverlay
+        open={videoPreviewOpen}
+        videos={videoPreviewItems}
+        index={videoPreviewIndex}
+        onIndexChange={setVideoPreviewIndex}
+        onClose={() => setVideoPreviewOpen(false)}
       />
     </div>
   );

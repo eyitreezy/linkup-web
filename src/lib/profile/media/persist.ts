@@ -1,7 +1,7 @@
 import {
   PROFILE_MEDIA_MAX_PHOTOS,
   PROFILE_VIDEO_MAX_BYTES,
-  PROFILE_VIDEO_MIME_TYPES,
+  PROFILE_VIDEO_MAX_SIZE_LABEL,
 } from '@/lib/profile/media/constants';
 import { mediaTypeFromMime } from '@/lib/media/mediaType';
 import { extForVideoMime, isAllowedProfileVideoMime, readVideoMetadata } from '@/lib/profile/media/videoMeta';
@@ -33,11 +33,11 @@ async function uploadProfileVideo(
   mimeType: string;
 }> {
   if (file.size > PROFILE_VIDEO_MAX_BYTES) {
-    throw new Error('Video is too large. Please upload a shorter clip.');
+    throw new Error(`Video size is greater than ${PROFILE_VIDEO_MAX_SIZE_LABEL}. Please upload a shorter clip.`);
   }
   const mime = file.type || 'video/mp4';
   if (!isAllowedProfileVideoMime(mime)) {
-    throw new Error('Unsupported video format. Use MP4, MOV, or WebM.');
+    throw new Error(`Video type is not MP4, MOV, or WebM. Please choose a supported format.`);
   }
 
   const client = createClient();
