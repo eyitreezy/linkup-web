@@ -539,6 +539,37 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
             className="mt-4"
             media={draft.profileMedia}
             onChange={(profileMedia) => setDraft((d) => ({ ...d, profileMedia }))}
+            onPersistedVideoRemoved={(nextMedia) => {
+              if (!user?.id) return;
+              const nextDraft = { ...draftRef.current, profileMedia: nextMedia };
+              draftRef.current = nextDraft;
+              void autosaveOnboardingProgress({
+                userId: user.id,
+                draft: nextDraft,
+                stepIndex: stepRef.current,
+                existingPreferences: preferencesRef.current,
+                existingVideos: videoMetaRef.current,
+              }).then(async (result) => {
+                if (result.error) {
+                  setError(result.error);
+                  return;
+                }
+                preferencesRef.current = result.preferences;
+                if (result.mediaUploaded) {
+                  const client = createClient();
+                  const bundle = await fetchUserProfileBundle(client, user.id);
+                  const videos = await fetchProfileVideos(client, user.id);
+                  videoMetaRef.current = profileVideoPersistMeta(videos);
+                  if (bundle.profile) {
+                    const fromDb = mediaDraftFromProfile(bundle.profile, videos);
+                    setDraft((d) => ({
+                      ...d,
+                      profileMedia: mergeProfileMediaDraftFromDb(d.profileMedia, fromDb),
+                    }));
+                  }
+                }
+              });
+            }}
           />
         </FormCard>
       ) : null}

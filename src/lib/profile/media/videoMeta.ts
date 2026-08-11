@@ -153,7 +153,12 @@ export function validateProfileVideoFile(
 export function validateProfileVideoDuration(
   durationSeconds: number | null
 ): { valid: boolean; error: string | null } {
-  if (durationSeconds == null) return { valid: true, error: null };
+  if (durationSeconds == null || !Number.isFinite(durationSeconds)) {
+    return {
+      valid: false,
+      error: `Could not read video length. Try a shorter MP4, MOV, or WebM clip (max ${PROFILE_VIDEO_MAX_DURATION_SECONDS} seconds).`,
+    };
+  }
   if (!profileVideoDurationWithinLimit(durationSeconds)) {
     return {
       valid: false,

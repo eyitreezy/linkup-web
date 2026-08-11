@@ -245,8 +245,10 @@ export function MeetTypeSelectorSection({ meetTypeId, onSelect }: Props) {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-[12px] font-extrabold uppercase tracking-wide text-muted">Meet type</p>
-        <p className="mt-0.5 text-[13px] font-semibold text-muted">Pick a vibe for your meetup.</p>
+        <p className="text-[12px] font-extrabold uppercase tracking-wide text-[#0F172A]">Meet type</p>
+        <p className="mt-0.5 text-[13px] font-semibold text-[#0F172A]">
+          Pick a meet type for your plan from the options below.
+        </p>
       </div>
 
       {isLoading ? (
@@ -548,7 +550,7 @@ function MeetTypeRow({
 
   return (
     <div className="space-y-1.5">
-      <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted/70">{label}</p>
+      <p className="text-[11px] font-extrabold uppercase tracking-wide text-[#0F172A]/80">{label}</p>
       <div
         ref={scrollRef}
         className="flex gap-2 overflow-x-auto pb-1 scrollbar-none select-none"

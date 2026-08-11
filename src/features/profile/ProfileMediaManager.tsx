@@ -34,14 +34,36 @@ type Props = {
   onChange: (next: ProfileMediaDraft) => void;
   /** When set, persisted photos call this on Make Primary (immediate DB + gallery reorder). */
   onPersistPrimary?: (clientId: string) => Promise<void>;
+  /** Persist media when a previously saved video is removed (prevents reappearing on reload). */
+  onPersistedVideoRemoved?: (nextMedia: ProfileMediaDraft) => void | Promise<void>;
   showValidation?: boolean;
   className?: string;
 };
+
+function shiftIndexMap(map: Map<number, string>, removedIndex: number): Map<number, string> {
+  const next = new Map<number, string>();
+  map.forEach((value, idx) => {
+    if (idx < removedIndex) next.set(idx, value);
+    else if (idx > removedIndex) next.set(idx - 1, value);
+  });
+  return next;
+}
+
+function shiftBusyOrErrors<T>(record: Record<number, T>, removedIndex: number): Record<number, T> {
+  const next: Record<number, T> = {};
+  Object.entries(record).forEach(([key, value]) => {
+    const idx = Number(key);
+    if (idx < removedIndex) next[idx] = value;
+    else if (idx > removedIndex) next[idx - 1] = value;
+  });
+  return next;
+}
 
 export function ProfileMediaManager({
   media,
   onChange,
   onPersistPrimary,
+  onPersistedVideoRemoved,
   showValidation = true,
   className,
 }: Props) {
@@ -63,6 +85,7 @@ export function ProfileMediaManager({
   const [videoBusySlots, setVideoBusySlots] = useState<Record<number, boolean>>({});
   const [primaryBusy, setPrimaryBusy] = useState(false);
   const [videoErrors, setVideoErrors] = useState<Record<number, string | null>>({});
+  const [localVideoThumbs, setLocalVideoThumbs] = useState<Record<number, string>>({});
 
   const photoCount = activePhotoCount(media);
   const validationMsg = showValidation ? profileMediaValidationMessage(media) : null;
@@ -95,21 +118,14 @@ export function ProfileMediaManager({
 
   const videoPreviewItems: ProfileVideoPreviewItem[] = media.videos.map((v, i) => ({
     playbackUrl: videoPlaybackUrl(v, i) ?? '',
-    thumbnailUrl: localVideoThumbUrlsRef.current.get(i) ?? v.thumbnailUrl,
+    thumbnailUrl: localVideoThumbs[i] ?? v.thumbnailUrl,
     durationSeconds: v.durationSeconds,
     label: `Profile video ${i + 1}`,
   }));
   void videoPreviewRev;
 
-  function openVideoPreview(slotIndex: number) {
-    const video = media.videos[slotIndex];
-    if (!video || !canPreviewVideo(video, slotIndex)) return;
-    if (video.localFile && !localVideoPlaybackUrlsRef.current.has(slotIndex)) {
-      ensureLocalPlaybackUrl(slotIndex, video.localFile);
-      setVideoPreviewRev((n) => n + 1);
-    }
-    setVideoPreviewIndex(slotIndex);
-    setVideoPreviewOpen(true);
+  function videoThumbUrl(video: ProfileVideoDraft, slotIndex: number): string | null {
+    return localVideoThumbs[slotIndex] ?? video.thumbnailUrl ?? null;
   }
 
   async function handleVideoPickForSlot(slotIndex: number, file: File | null) {
@@ -124,25 +140,11 @@ export function ProfileMediaManager({
 
     setVideoBusySlots((b) => ({ ...b, [slotIndex]: true }));
 
-    const placeholder = [...mediaRef.current.videos];
-    placeholder[slotIndex] = {
-      ...(placeholder[slotIndex] ?? {}),
-      localFile: file,
-      url: placeholder[slotIndex]?.url ?? null,
-      thumbnailUrl: null,
-      durationSeconds: null,
-    };
-    onChange({ ...mediaRef.current, videos: placeholder });
-
     try {
       const { durationSeconds, thumbnailBlob } = await readVideoMetadata(file);
       const durationCheck = validateProfileVideoDuration(durationSeconds);
       if (!durationCheck.valid) {
         setVideoErrors((e) => ({ ...e, [slotIndex]: durationCheck.error }));
-        const reverted = [...mediaRef.current.videos];
-        if (!reverted[slotIndex]?.url) reverted.splice(slotIndex, 1);
-        else reverted[slotIndex] = { ...reverted[slotIndex], localFile: undefined };
-        onChange({ ...mediaRef.current, videos: reverted });
         return;
       }
 
@@ -156,51 +158,89 @@ export function ProfileMediaManager({
       if (thumbUrl) localVideoThumbUrlsRef.current.set(slotIndex, thumbUrl);
       ensureLocalPlaybackUrl(slotIndex, file);
 
-      const updated = [...mediaRef.current.videos];
-      updated[slotIndex] = {
-        ...(updated[slotIndex] ?? {}),
+      const current = mediaRef.current.videos;
+      const existing = current[slotIndex];
+      const nextVideo: ProfileVideoDraft = {
+        id: existing?.id,
+        url: existing?.url ?? null,
+        storagePath: existing?.storagePath,
         localFile: file,
         thumbnailUrl: thumbUrl,
         durationSeconds,
-        url: updated[slotIndex]?.url ?? null,
       };
+
+      const updated =
+        slotIndex < current.length
+          ? current.map((v, i) => (i === slotIndex ? nextVideo : v))
+          : [...current, nextVideo];
+
       onChange({ ...mediaRef.current, videos: updated });
+      setLocalVideoThumbs((prev) => {
+        const next = { ...prev };
+        if (thumbUrl) next[slotIndex] = thumbUrl;
+        else delete next[slotIndex];
+        return next;
+      });
+      setVideoPreviewRev((n) => n + 1);
     } catch {
       setVideoErrors((e) => ({
         ...e,
         [slotIndex]: 'Could not read that video. Try a shorter MP4, MOV, or WebM clip.',
       }));
-      const reverted = [...mediaRef.current.videos];
-      if (!reverted[slotIndex]?.url) reverted.splice(slotIndex, 1);
-      onChange({ ...mediaRef.current, videos: reverted });
     } finally {
       setVideoBusySlots((b) => ({ ...b, [slotIndex]: false }));
     }
   }
 
   function handleRemoveVideo(slotIndex: number) {
+    const removed = mediaRef.current.videos[slotIndex];
+    const wasPersisted = !!(removed?.id && removed?.storagePath);
+
     const oldThumb = localVideoThumbUrlsRef.current.get(slotIndex);
-    if (oldThumb) {
-      URL.revokeObjectURL(oldThumb);
-      localVideoThumbUrlsRef.current.delete(slotIndex);
-    }
+    if (oldThumb) URL.revokeObjectURL(oldThumb);
     const oldPlayback = localVideoPlaybackUrlsRef.current.get(slotIndex);
-    if (oldPlayback) {
-      URL.revokeObjectURL(oldPlayback);
-      localVideoPlaybackUrlsRef.current.delete(slotIndex);
-    }
-    setVideoErrors((e) => {
-      const n = { ...e };
-      delete n[slotIndex];
-      return n;
+    if (oldPlayback) URL.revokeObjectURL(oldPlayback);
+
+    localVideoThumbUrlsRef.current = shiftIndexMap(localVideoThumbUrlsRef.current, slotIndex);
+    localVideoPlaybackUrlsRef.current = shiftIndexMap(localVideoPlaybackUrlsRef.current, slotIndex);
+    setLocalVideoThumbs((prev) => {
+      const shifted: Record<number, string> = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        const idx = Number(key);
+        if (idx < slotIndex) shifted[idx] = value;
+        else if (idx > slotIndex) shifted[idx - 1] = value;
+      });
+      return shifted;
     });
+    setVideoErrors((e) => shiftBusyOrErrors(e, slotIndex));
+    setVideoBusySlots((b) => shiftBusyOrErrors(b, slotIndex));
+
     if (videoPreviewOpen && videoPreviewIndex === slotIndex) {
       setVideoPreviewOpen(false);
+    } else if (videoPreviewOpen && videoPreviewIndex > slotIndex) {
+      setVideoPreviewIndex((i) => i - 1);
     }
-    onChange({
+
+    const nextMedia = {
       ...mediaRef.current,
       videos: mediaRef.current.videos.filter((_, i) => i !== slotIndex),
-    });
+    };
+    onChange(nextMedia);
+
+    if (wasPersisted && onPersistedVideoRemoved) {
+      void onPersistedVideoRemoved(nextMedia);
+    }
+  }
+
+  function openVideoPreview(slotIndex: number) {
+    const video = media.videos[slotIndex];
+    if (!video || !canPreviewVideo(video, slotIndex)) return;
+    if (video.localFile && !localVideoPlaybackUrlsRef.current.has(slotIndex)) {
+      ensureLocalPlaybackUrl(slotIndex, video.localFile);
+      setVideoPreviewRev((n) => n + 1);
+    }
+    setVideoPreviewIndex(slotIndex);
+    setVideoPreviewOpen(true);
   }
 
   const photoPreviewUris = media.photos.map((photo) => photoPreviewUrl(photo) ?? '');
@@ -345,8 +385,8 @@ export function ProfileMediaManager({
         </p>
 
         <div className="grid grid-cols-3 gap-2">
-          {media.videos.map((v, i) => {
-            const thumbUrl = localVideoThumbUrlsRef.current.get(i) ?? v.thumbnailUrl ?? null;
+            {media.videos.map((v, i) => {
+            const thumbUrl = videoThumbUrl(v, i);
             const previewable = canPreviewVideo(v, i);
             return (
               <div

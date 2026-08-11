@@ -26,7 +26,8 @@ import type { MeetingIntent } from '@/types/onboarding';
 import { defaultOnboardingDraft, type OnboardingDraft } from '@/types/onboarding';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import type { ProfileMediaDraft } from '@/lib/profile/media/types';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const INTENTS: { id: MeetingIntent; label: string }[] = [
   { id: 'friendship', label: 'Friendship' },
@@ -45,6 +46,7 @@ export function EditProfileScreen() {
     title: string;
     message: string;
   } | null>(null);
+  const existingVideosRef = useRef<Array<{ id: string; storagePath: string }>>([]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['profile-bundle', user?.id],
@@ -57,6 +59,10 @@ export function EditProfileScreen() {
     },
     enabled: !!user?.id,
   });
+
+  useEffect(() => {
+    existingVideosRef.current = profileVideoPersistMeta(data?.videos ?? []);
+  }, [data?.videos]);
 
   useEffect(() => {
     if (data?.profile) setDraft(draftFromProfile(data.profile, data.videos ?? []));
@@ -88,6 +94,29 @@ export function EditProfileScreen() {
       profileMediaMeetsMinimums(draft.profileMedia)
     );
   }, [draft]);
+
+  async function persistRemovedVideo(nextMedia: ProfileMediaDraft) {
+    if (!user?.id) return;
+    const nextDraft = { ...draft, profileMedia: nextMedia };
+    setDraft(nextDraft);
+    const { error } = await saveEditProfile({
+      userId: user.id,
+      draft: nextDraft,
+      existingPreferences: data?.profile?.preferences ?? null,
+      existingVideos: existingVideosRef.current,
+      requireFullMedia: true,
+    });
+    if (error) {
+      setStatusDialog({
+        variant: 'error',
+        title: 'Could not remove video',
+        message: error,
+      });
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ['profile-bundle'] });
+    await queryClient.refetchQueries({ queryKey: ['profile-bundle', user.id] });
+  }
 
   async function save() {
     if (!user?.id || !canSave || !isDirty) return;
@@ -192,6 +221,7 @@ export function EditProfileScreen() {
           className="mt-3"
           media={draft.profileMedia}
           onChange={(profileMedia) => setDraft((d) => ({ ...d, profileMedia }))}
+          onPersistedVideoRemoved={(nextMedia) => void persistRemovedVideo(nextMedia)}
           onPersistPrimary={async (clientId) => {
             if (!user?.id) return;
             const photo = draft.profileMedia.photos.find((p) => p.clientId === clientId);

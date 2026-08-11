@@ -147,10 +147,9 @@ export function LocationSearchField({
 
     try {
       const resolved = await resolveGooglePlaceSuggestion(s);
+      onChange(resolved.label);
       if (onSelect) {
         onSelect(resolved);
-      } else {
-        onChange(resolved.label);
       }
     } catch (e) {
       setResolveError(e instanceof Error ? e.message : 'Could not use that location.');

@@ -517,7 +517,10 @@ export function CreatePlanScreen() {
           label="Location"
           value={locationLabel}
           onChange={setLocationLabel}
-          onSelect={(s) => setCoords(s)}
+          onSelect={(s) => {
+            setLocationLabel(s.label);
+            setCoords(s);
+          }}
           placeholder="Search with Google Places…"
         />
       </div>

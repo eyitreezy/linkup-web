@@ -6,17 +6,14 @@ export const PROFILE_MEDIA_MAX_VIDEOS = 3;
 /** Maximum profile video file size in bytes (30MB). */
 export const PROFILE_VIDEO_MAX_BYTES = 30 * 1024 * 1024;
 
-/** Maximum profile video duration in seconds. */
-export const PROFILE_VIDEO_MAX_DURATION_SECONDS = 20;
+/** Hard upload limit for profile videos (seconds). */
+export const PROFILE_VIDEO_MAX_DURATION_SECONDS = 21;
 
-/**
- * Encoders and browsers often report a few frames over the nominal cut (e.g. 20.04s for a 20s export).
- * Validation allows this slack so "max 20s" clips at exactly 20s are not rejected.
- */
-export const PROFILE_VIDEO_DURATION_TOLERANCE_SECONDS = 0.5;
+/** Tiny float slack for encoder metadata (e.g. 21.02s for a 21s export). */
+export const PROFILE_VIDEO_DURATION_TOLERANCE_SECONDS = 0.05;
 
 export function profileVideoDurationWithinLimit(durationSeconds: number | null | undefined): boolean {
-  if (durationSeconds == null || !Number.isFinite(durationSeconds)) return true;
+  if (durationSeconds == null || !Number.isFinite(durationSeconds)) return false;
   return durationSeconds <= PROFILE_VIDEO_MAX_DURATION_SECONDS + PROFILE_VIDEO_DURATION_TOLERANCE_SECONDS;
 }
 
