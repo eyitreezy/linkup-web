@@ -4,16 +4,14 @@ import { useWebPush } from '@/hooks/useWebPush';
 import { useState } from 'react';
 
 export function MoodPlanPushPrompt() {
-  const { status, subscribe } = useWebPush();
+  const { status, isSubscribed, subscribing, subscribe } = useWebPush();
   const [dismissed, setDismissed] = useState(false);
-  const [subscribing, setSubscribing] = useState(false);
 
-  if (status !== 'default' || dismissed) return null;
+  if (isSubscribed || status === 'granted' || status === 'denied' || dismissed) return null;
+  if (status !== 'default' && status !== 'loading') return null;
 
   async function handleEnable() {
-    setSubscribing(true);
     await subscribe();
-    setSubscribing(false);
   }
 
   return (

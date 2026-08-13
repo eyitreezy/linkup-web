@@ -30,8 +30,16 @@ export function NotificationsSettingsScreen() {
   const [error, setError] = useState<string | null>(null);
   const runGated = useGatedAction();
   const { allowed: hasReadReceipts } = usePermission('messaging.read_receipts');
-  const { status: webPushStatus, subscribe, unsubscribe } = useWebPush();
-  const moodPushEnabled = webPushStatus === 'granted';
+  const {
+    status: webPushStatus,
+    isSubscribed: moodPushEnabled,
+    subscribing: moodPushSubscribing,
+    lastError: moodPushError,
+    vapidConfigured,
+    subscribe,
+    unsubscribe,
+    clearError: clearMoodPushError,
+  } = useWebPush();
   const moodPushUnsupported = webPushStatus === 'unsupported';
 
   const { data, isLoading } = useQuery({
@@ -160,16 +168,32 @@ export function NotificationsSettingsScreen() {
           hint={
             moodPushUnsupported
               ? 'Browser push is not supported on this device.'
-              : 'Get a browser notification when a mood plan appears near you.'
+              : !vapidConfigured
+                ? 'Push is not configured on this deployment yet.'
+                : moodPushSubscribing
+                  ? 'Enabling browser notifications…'
+                  : 'Get a browser notification when a mood plan appears near you.'
           }
           checked={moodPushEnabled}
-          disabled={moodPushUnsupported || webPushStatus === 'denied'}
+          disabled={
+            moodPushUnsupported || webPushStatus === 'denied' || moodPushSubscribing || !vapidConfigured
+          }
           onChange={(v) => {
-            if (v) void subscribe();
-            else void unsubscribe();
+            clearMoodPushError();
+            if (v) {
+              void subscribe().then((result) => {
+                if (!result.ok) setError(result.message);
+              });
+            } else {
+              void unsubscribe();
+            }
           }}
         />
       </FormCard>
+
+      {moodPushError ? (
+        <p className="text-[13px] font-semibold text-red-600">{moodPushError}</p>
+      ) : null}
 
       <PremiumSectionHead title="Visibility" />
       <FormCard>

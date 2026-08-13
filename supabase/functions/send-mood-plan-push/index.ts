@@ -10,12 +10,28 @@ import webpush from 'npm:web-push@3.6.7';
 import { handleCors, jsonError, jsonResponse } from '../_shared/http.ts';
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
 
-const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';
-const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY') ?? '';
-const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:hello@linkup.ng';
+/** Strip whitespace/quotes accidentally included when pasting into Supabase secrets. */
+function sanitizeVapidKey(raw: string): string {
+  return raw.trim().replace(/^["']|["']$/g, '').replace(/\s+/g, '');
+}
 
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+const VAPID_PUBLIC_KEY = sanitizeVapidKey(Deno.env.get('VAPID_PUBLIC_KEY') ?? '');
+const VAPID_PRIVATE_KEY = sanitizeVapidKey(Deno.env.get('VAPID_PRIVATE_KEY') ?? '');
+const VAPID_SUBJECT = (Deno.env.get('VAPID_SUBJECT') ?? 'mailto:hello@linkup.ng').trim();
+
+let vapidReady = false;
+
+function ensureVapidConfigured(): boolean {
+  if (vapidReady) return true;
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return false;
+  try {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    vapidReady = true;
+    return true;
+  } catch (e) {
+    console.error('Invalid VAPID keys:', e);
+    return false;
+  }
 }
 
 const MOOD_REACH_KM: Record<string, number | null> = {
@@ -47,7 +63,7 @@ Deno.serve(async (req) => {
     return jsonError('Method not allowed', 405);
   }
 
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+  if (!ensureVapidConfigured()) {
     return jsonError('Push not configured', 503, 'vapid_not_configured');
   }
 

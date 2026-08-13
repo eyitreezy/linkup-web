@@ -654,7 +654,7 @@ export function PlanAgreementScreen({ planId, offerId }: Props) {
         primaryLabel = 'Complete secure payment';
         onPrimary = () => void goToEscrowPayment();
       } else {
-        primaryLabel = 'Continue to secure payment';
+      primaryLabel = 'Continue to secure payment';
         onPrimary = () => void goToEscrowPayment();
       }
     } else if (existingEscrowId) {
@@ -805,21 +805,21 @@ export function PlanAgreementScreen({ planId, offerId }: Props) {
       />
       {cancelOptionsOpen ? (
         <AgreementBottomSheet title="Why are you cancelling?" onClose={() => setCancelOptionsOpen(false)}>
-          <button
-            type="button"
-            disabled={busy}
+              <button
+                type="button"
+                disabled={busy}
             onClick={() => void handleCancel({ noShow: false })}
             className="w-full rounded-2xl border border-border p-4 text-left transition hover:bg-[#F5F6FA] disabled:opacity-50"
-          >
+              >
             <p className="text-[15px] font-extrabold text-foreground">I want to cancel</p>
             <p className="mt-1 text-[13px] font-semibold text-muted">
               Standard cancellation. See refund policy below
             </p>
-          </button>
-          <button
-            type="button"
+              </button>
+              <button
+                type="button"
             disabled={busy}
-            onClick={() => {
+                onClick={() => {
               setCancelOptionsOpen(false);
               setNoShowConfirmOpen(true);
             }}
@@ -880,7 +880,7 @@ export function PlanAgreementScreen({ planId, offerId }: Props) {
               className="mt-4 w-full rounded-full linkup-gradient-primary py-3 text-[14px] font-extrabold text-white"
             >
               Done
-            </button>
+              </button>
           </div>
         </div>
       ) : null}
@@ -916,12 +916,12 @@ export function PlanAgreementScreen({ planId, offerId }: Props) {
           </>
         ) : (
         <>
-          <PlanFlowHeader
-            kicker="Agreement"
+      <PlanFlowHeader
+        kicker="Agreement"
             title="Confirm plan"
             subtitle={leadSub}
-            backHref={`/plan/${planId}`}
-          />
+        backHref={`/plan/${planId}`}
+      />
 
           {hostParty && guestParty ? (
             <div className="linkup-card p-6">
@@ -1024,22 +1024,22 @@ export function PlanAgreementScreen({ planId, offerId }: Props) {
 
           {showCancelPlan ? (
             <div className="flex flex-row gap-3 pt-2">
-              <button
-                type="button"
+        <button
+          type="button"
                 disabled={busy}
                 onClick={() => setMutualCancelOpen(true)}
                 className="flex min-h-[48px] flex-1 items-center justify-center rounded-full linkup-gradient-primary px-3 text-center text-[13px] font-extrabold leading-tight text-white transition hover:opacity-95 disabled:opacity-50 sm:px-4 sm:text-[14px]"
               >
                 Suggest mutual cancellation
-              </button>
-              <button
-                type="button"
+        </button>
+        <button
+          type="button"
                 disabled={busy}
                 onClick={() => (isGuest ? setCancelOptionsOpen(true) : setCancelOpen(true))}
                 className="flex min-h-[48px] flex-1 items-center justify-center rounded-full border border-primary/25 bg-white px-3 text-center text-[13px] font-extrabold leading-tight text-primary transition hover:bg-[#EDE8FF]/50 disabled:opacity-50 sm:px-4 sm:text-[14px]"
-              >
+        >
                 Cancel this plan
-              </button>
+        </button>
             </div>
           ) : null}
         </>
