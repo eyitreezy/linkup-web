@@ -1,6 +1,7 @@
 'use client';
 
 import { ChunkLoadRecovery } from '@/components/ChunkLoadRecovery';
+import { ServiceWorkerRegistrar } from '@/components/notifications/ServiceWorkerRegistrar';
 import { SplashGate } from '@/components/splash/SplashGate';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
@@ -21,6 +22,7 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ChunkLoadRecovery />
+      <ServiceWorkerRegistrar />
       <SplashGate>{children}</SplashGate>
     </QueryClientProvider>
   );

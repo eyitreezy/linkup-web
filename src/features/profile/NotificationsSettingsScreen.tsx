@@ -7,6 +7,7 @@ import { TierBadge } from '@/components/subscription/TierBadge';
 import { useGatedAction } from '@/contexts/UpgradeGateContext';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
 import { usePermission } from '@/hooks/usePermission';
+import { useWebPush } from '@/hooks/useWebPush';
 import { defaultVisibilityPrefs, readVisibilityFromProfile } from '@/lib/presence/visibilityPrefs';
 import { createClient } from '@/lib/supabase/client';
 import { fetchUserProfileBundle } from '@/services/profile.service';
@@ -29,6 +30,9 @@ export function NotificationsSettingsScreen() {
   const [error, setError] = useState<string | null>(null);
   const runGated = useGatedAction();
   const { allowed: hasReadReceipts } = usePermission('messaging.read_receipts');
+  const { status: webPushStatus, subscribe, unsubscribe } = useWebPush();
+  const moodPushEnabled = webPushStatus === 'granted';
+  const moodPushUnsupported = webPushStatus === 'unsupported';
 
   const { data, isLoading } = useQuery({
     queryKey: ['profile-bundle', user?.id],
@@ -151,6 +155,20 @@ export function NotificationsSettingsScreen() {
             patch({ email: v });
           }}
         />
+        <ToggleRow
+          label="Mood plan alerts"
+          hint={
+            moodPushUnsupported
+              ? 'Browser push is not supported on this device.'
+              : 'Get a browser notification when a mood plan appears near you.'
+          }
+          checked={moodPushEnabled}
+          disabled={moodPushUnsupported || webPushStatus === 'denied'}
+          onChange={(v) => {
+            if (v) void subscribe();
+            else void unsubscribe();
+          }}
+        />
       </FormCard>
 
       <PremiumSectionHead title="Visibility" />
@@ -202,9 +220,12 @@ export function NotificationsSettingsScreen() {
         />
       </FormCard>
 
-      <p className="text-[13px] font-semibold text-muted">
-        Web push registration uses the same preference fields as mobile; enable push when browser support is added.
-      </p>
+      {webPushStatus === 'denied' ? (
+        <p className="text-[13px] font-semibold text-muted">
+          Mood plan alerts are blocked in your browser settings. Allow notifications for this site to
+          enable them.
+        </p>
+      ) : null}
     </div>
   );
 }

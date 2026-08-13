@@ -34,6 +34,7 @@ import {
   MOOD_WINDOW_CAP_HOURS,
   tierForListingHours,
 } from '@/lib/plans/moodPlanTierConfig';
+import { MOOD_REACH_KM, moodReachKeyForTier } from '@/lib/plans/moodReachFilter';
 import { getFourthVisibilityOptionCopy, canCreatorSelectPremiumVisibility } from '@/lib/plans/tierRelativePremiumVisibility';
 import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import { createClient } from '@/lib/supabase/client';
@@ -130,6 +131,7 @@ export function CreatePlanScreen() {
   const { effectiveTier: moodTier } = usePermission('mood_plan.activate');
   const effectiveTier = moodTier ?? subscriptionState.effectiveTier;
   const canSelectPremiumVisibility = canCreatorSelectPremiumVisibility(effectiveTier);
+  const moodReachKm = MOOD_REACH_KM[moodReachKeyForTier(effectiveTier)];
 
   const fourthOptionCopy = getFourthVisibilityOptionCopy(effectiveTier);
   const visibilityOptions = useMemo(
@@ -316,6 +318,11 @@ export function CreatePlanScreen() {
 
     await queryClient.invalidateQueries({ queryKey: ['creator-plans'] });
     await queryClient.invalidateQueries({ queryKey: ['discover'] });
+    if (planId && isMoodPlan) {
+      void createClient()
+        .functions.invoke('send-mood-plan-push', { body: { planId } })
+        .catch(() => {});
+    }
     if (planId) router.push(`/plan/${planId}`);
     else router.push('/plan-management');
   }
@@ -523,6 +530,29 @@ export function CreatePlanScreen() {
           }}
           placeholder="Search with Google Places…"
         />
+        {isMoodPlan && (locationLabel.trim() || coords?.latitude != null) ? (
+          <div className="flex items-start gap-2 rounded-xl border border-primary/15 bg-[#EDE8FF]/30 px-3 py-2.5">
+            <svg
+              className="mt-0.5 shrink-0 text-primary"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              aria-hidden
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <p className="text-[12px] font-semibold leading-relaxed text-primary/80">
+              {moodReachKm != null
+                ? `Only people within ${moodReachKm}km of your meetup location will see this plan in Discover.`
+                : 'This plan will be visible in Discover across all cities.'}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <PremiumSectionHead title="Visibility" />

@@ -1,23 +1,38 @@
 import { distanceKm } from '@/lib/location/distance';
 import { planMeetupCoords } from '@/lib/plans/planMeetupCoords';
+import type { SubscriptionTier } from '@/lib/subscription/types';
 import type { PlanFeedRow } from '@/services/plans.service';
 
 export type MoodReach = 'city' | 'city_adjacent' | 'city_widest' | 'all_cities';
 
 /** Flat absolute km from plan meetup location — not tied to viewer `radius_km`. */
 export const MOOD_REACH_KM: Record<MoodReach, number | null> = {
-  city: 25,
-  city_adjacent: 50,
-  city_widest: 20,
+  city: 20,
+  city_adjacent: 35,
+  city_widest: 50,
   all_cities: null,
 };
 
 export const MOOD_REACH_LABELS: Record<MoodReach, string> = {
-  city: 'City-wide · 25km',
-  city_adjacent: 'City + nearby · 50km',
-  city_widest: 'Widest reach · 20km',
+  city: 'City-wide · 20km',
+  city_adjacent: 'City + nearby · 35km',
+  city_widest: 'Widest reach · 50km',
   all_cities: 'All cities',
 };
+
+export const MOOD_REACH_LABELS_BY_TIER: Record<SubscriptionTier, string> = {
+  FREE: MOOD_REACH_LABELS.city,
+  SILVER: MOOD_REACH_LABELS.city_adjacent,
+  GOLD: MOOD_REACH_LABELS.city_widest,
+  PLATINUM: MOOD_REACH_LABELS.all_cities,
+};
+
+export function moodReachKeyForTier(tier: SubscriptionTier): MoodReach {
+  if (tier === 'PLATINUM') return 'all_cities';
+  if (tier === 'GOLD') return 'city_widest';
+  if (tier === 'SILVER') return 'city_adjacent';
+  return 'city';
+}
 
 export function moodReachVisibleToViewer(
   plan: PlanFeedRow,

@@ -1037,3 +1037,14 @@ export interface DbPrivacyPolicyConsent {
   consented_at: string;
   consent_method: PrivacyConsentMethod;
 }
+
+export interface DbWebPushSubscription {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string | null;
+  created_at: string;
+  last_used_at: string;
+}

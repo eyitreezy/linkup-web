@@ -1,5 +1,6 @@
 'use client';
 
+import { MoodPlanPushPrompt } from '@/components/notifications/MoodPlanPushPrompt';
 import { FirstSessionModalQueue } from '@/components/discover/FirstSessionModalQueue';
 import { TravelModeBanner } from '@/components/discover/TravelModeBanner';
 import { TabPageHeader } from '@/components/layout/TabPageHeader';
@@ -614,6 +615,8 @@ export function DiscoverFeed() {
           className={cn(isMobileLayout ? 'shrink-0' : undefined)}
         />
       ) : null}
+
+      {moodRows.length > 0 ? <MoodPlanPushPrompt /> : null}
 
       <MoodTimelineCarousel
         plans={moodRows}
