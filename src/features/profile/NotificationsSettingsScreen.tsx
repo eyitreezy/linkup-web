@@ -35,12 +35,15 @@ export function NotificationsSettingsScreen() {
     isSubscribed: moodPushEnabled,
     subscribing: moodPushSubscribing,
     lastError: moodPushError,
+    browserSupported,
     vapidConfigured,
     subscribe,
     unsubscribe,
     clearError: clearMoodPushError,
   } = useWebPush();
-  const moodPushUnsupported = webPushStatus === 'unsupported';
+
+  const moodPushToggleDisabled =
+    !browserSupported || moodPushSubscribing || (webPushStatus === 'denied' && !moodPushEnabled);
 
   const { data, isLoading } = useQuery({
     queryKey: ['profile-bundle', user?.id],
@@ -166,18 +169,18 @@ export function NotificationsSettingsScreen() {
         <ToggleRow
           label="Mood plan alerts"
           hint={
-            moodPushUnsupported
-              ? 'Browser push is not supported on this device.'
+            !browserSupported
+              ? 'Browser push is not supported in this browser or context (use Chrome/Edge on desktop, HTTPS or localhost).'
               : !vapidConfigured
-                ? 'Push is not configured on this deployment yet.'
-                : moodPushSubscribing
-                  ? 'Enabling browser notifications…'
-                  : 'Get a browser notification when a mood plan appears near you.'
+                ? 'VAPID key missing on this deployment. Add NEXT_PUBLIC_VAPID_PUBLIC_KEY and restart/redeploy.'
+                : webPushStatus === 'denied'
+                  ? 'Notifications are blocked in your browser. Reset site permissions to enable.'
+                  : moodPushSubscribing
+                    ? 'Enabling browser notifications…'
+                    : 'Get a browser notification when a mood plan appears near you.'
           }
           checked={moodPushEnabled}
-          disabled={
-            moodPushUnsupported || webPushStatus === 'denied' || moodPushSubscribing || !vapidConfigured
-          }
+          disabled={moodPushToggleDisabled}
           onChange={(v) => {
             clearMoodPushError();
             if (v) {
@@ -193,6 +196,12 @@ export function NotificationsSettingsScreen() {
 
       {moodPushError ? (
         <p className="text-[13px] font-semibold text-red-600">{moodPushError}</p>
+      ) : null}
+
+      {!browserSupported && webPushStatus === 'loading' ? null : !browserSupported ? (
+        <p className="text-[13px] font-semibold text-muted">
+          Mood plan alerts need a browser with service worker and push support (Chrome or Edge recommended).
+        </p>
       ) : null}
 
       <PremiumSectionHead title="Visibility" />

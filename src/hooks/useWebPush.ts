@@ -1,5 +1,6 @@
 'use client';
 
+import { isSecureWebPushContext, isWebPushSupported } from '@/lib/notifications/webPushSupport';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -24,54 +25,59 @@ function friendlySubscribeError(err: unknown): string {
   return 'Could not enable browser notifications. Try again or check site permissions.';
 }
 
+async function waitForServiceWorkerRegistration(
+  existing: ServiceWorkerRegistration | null
+): Promise<ServiceWorkerRegistration> {
+  if (existing?.active) return existing;
+  const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  await navigator.serviceWorker.ready;
+  return reg;
+}
+
 export function useWebPush() {
   const user = useAuthStore((s) => s.user);
   const [status, setStatus] = useState<WebPushStatus>('loading');
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState(false);
+  const [browserSupported, setBrowserSupported] = useState(true);
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
 
   const syncSubscriptionState = useCallback(async () => {
-    if (typeof window === 'undefined') return;
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    if (!isWebPushSupported()) {
+      setBrowserSupported(false);
       setStatus('unsupported');
       setIsSubscribed(false);
       return;
     }
 
+    if (!isSecureWebPushContext()) {
+      setBrowserSupported(false);
+      setStatus('unsupported');
+      setLastError('Browser notifications require HTTPS or localhost.');
+      setIsSubscribed(false);
+      return;
+    }
+
+    setBrowserSupported(true);
     setStatus(Notification.permission as WebPushStatus);
 
     try {
-      const reg = registrationRef.current ?? (await navigator.serviceWorker.ready);
+      const reg = await waitForServiceWorkerRegistration(registrationRef.current);
       registrationRef.current = reg;
       const existing = await reg.pushManager.getSubscription();
       setIsSubscribed(!!existing);
       if (existing && Notification.permission === 'granted') {
         setStatus('granted');
       }
-    } catch {
+    } catch (err) {
       setIsSubscribed(false);
+      setLastError(friendlySubscribeError(err));
     }
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      setStatus('unsupported');
-      return;
-    }
-
-    navigator.serviceWorker
-      .register('/sw.js', { scope: '/' })
-      .then((reg) => {
-        registrationRef.current = reg;
-        return syncSubscriptionState();
-      })
-      .catch(() => {
-        setStatus('unsupported');
-        setLastError('Could not register the notification service worker.');
-      });
+    void syncSubscriptionState();
   }, [syncSubscriptionState]);
 
   const subscribe = useCallback(async (): Promise<WebPushSubscribeResult> => {
@@ -90,10 +96,17 @@ export function useWebPush() {
       return { ok: false, message };
     }
 
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    if (!isWebPushSupported()) {
       const message = 'Browser push is not supported on this device.';
       setLastError(message);
       setStatus('unsupported');
+      setBrowserSupported(false);
+      return { ok: false, message };
+    }
+
+    if (!isSecureWebPushContext()) {
+      const message = 'Browser notifications require HTTPS or localhost.';
+      setLastError(message);
       return { ok: false, message };
     }
 
@@ -111,7 +124,7 @@ export function useWebPush() {
         return { ok: false, message };
       }
 
-      const reg = registrationRef.current ?? (await navigator.serviceWorker.ready);
+      const reg = await waitForServiceWorkerRegistration(registrationRef.current);
       registrationRef.current = reg;
 
       let subscription = await reg.pushManager.getSubscription();
@@ -169,7 +182,7 @@ export function useWebPush() {
     if (!user?.id) return;
     setSubscribing(true);
     try {
-      const reg = registrationRef.current ?? (await navigator.serviceWorker.ready);
+      const reg = await waitForServiceWorkerRegistration(registrationRef.current);
       const sub = await reg.pushManager.getSubscription();
       if (sub) {
         const endpoint = sub.endpoint;
@@ -195,6 +208,7 @@ export function useWebPush() {
     isSubscribed,
     subscribing,
     lastError,
+    browserSupported,
     vapidConfigured: !!VAPID_PUBLIC_KEY,
     subscribe,
     unsubscribe,
