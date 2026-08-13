@@ -34,16 +34,14 @@ export function NotificationsSettingsScreen() {
     status: webPushStatus,
     isSubscribed: moodPushEnabled,
     subscribing: moodPushSubscribing,
-    lastError: moodPushError,
     browserSupported,
-    vapidConfigured,
+    vapidReady,
     subscribe,
     unsubscribe,
-    clearError: clearMoodPushError,
   } = useWebPush();
 
   const moodPushToggleDisabled =
-    !browserSupported || moodPushSubscribing || (webPushStatus === 'denied' && !moodPushEnabled);
+    moodPushSubscribing || (webPushStatus === 'denied' && !moodPushEnabled);
 
   const { data, isLoading } = useQuery({
     queryKey: ['profile-bundle', user?.id],
@@ -166,43 +164,25 @@ export function NotificationsSettingsScreen() {
             patch({ email: v });
           }}
         />
-        <ToggleRow
-          label="Mood plan alerts"
-          hint={
-            !browserSupported
-              ? 'Browser push is not supported in this browser or context (use Chrome/Edge on desktop, HTTPS or localhost).'
-              : !vapidConfigured
-                ? 'VAPID key missing on this deployment. Add NEXT_PUBLIC_VAPID_PUBLIC_KEY and restart/redeploy.'
-                : webPushStatus === 'denied'
-                  ? 'Notifications are blocked in your browser. Reset site permissions to enable.'
-                  : moodPushSubscribing
-                    ? 'Enabling browser notifications…'
-                    : 'Get a browser notification when a mood plan appears near you.'
-          }
-          checked={moodPushEnabled}
-          disabled={moodPushToggleDisabled}
-          onChange={(v) => {
-            clearMoodPushError();
-            if (v) {
-              void subscribe().then((result) => {
-                if (!result.ok) setError(result.message);
-              });
-            } else {
-              void unsubscribe();
+        {vapidReady && browserSupported ? (
+          <ToggleRow
+            label="Mood plan alerts"
+            hint={
+              webPushStatus === 'denied'
+                ? 'Notifications are blocked in your browser. Reset site permissions to enable.'
+                : moodPushSubscribing
+                  ? 'Enabling browser notifications…'
+                  : 'Get a browser notification when a mood plan appears near you.'
             }
-          }}
-        />
+            checked={moodPushEnabled}
+            disabled={moodPushToggleDisabled}
+            onChange={(v) => {
+              if (v) void subscribe();
+              else void unsubscribe();
+            }}
+          />
+        ) : null}
       </FormCard>
-
-      {moodPushError ? (
-        <p className="text-[13px] font-semibold text-red-600">{moodPushError}</p>
-      ) : null}
-
-      {!browserSupported && webPushStatus === 'loading' ? null : !browserSupported ? (
-        <p className="text-[13px] font-semibold text-muted">
-          Mood plan alerts need a browser with service worker and push support (Chrome or Edge recommended).
-        </p>
-      ) : null}
 
       <PremiumSectionHead title="Visibility" />
       <FormCard>
@@ -253,7 +233,7 @@ export function NotificationsSettingsScreen() {
         />
       </FormCard>
 
-      {webPushStatus === 'denied' ? (
+      {vapidReady && browserSupported && webPushStatus === 'denied' ? (
         <p className="text-[13px] font-semibold text-muted">
           Mood plan alerts are blocked in your browser settings. Allow notifications for this site to
           enable them.

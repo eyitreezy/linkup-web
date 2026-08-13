@@ -1,11 +1,7 @@
 'use client';
 
 import { isSecureWebPushContext, isWebPushSupported } from '@/lib/notifications/webPushSupport';
-import {
-  getCachedVapidPublicKey,
-  isVapidPublicKeyConfigured,
-  resolveVapidPublicKey,
-} from '@/lib/notifications/vapidPublicKey';
+import { resolveVapidPublicKey } from '@/lib/notifications/vapidPublicKey';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -19,9 +15,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 export type WebPushStatus = 'unsupported' | 'denied' | 'granted' | 'default' | 'loading';
 
-export type WebPushSubscribeResult =
-  | { ok: true }
-  | { ok: false; message: string };
+export type WebPushSubscribeResult = { ok: true } | { ok: false; message?: string };
 
 function friendlySubscribeError(err: unknown): string {
   if (err instanceof Error && err.message) return err.message;
@@ -41,16 +35,23 @@ export function useWebPush() {
   const user = useAuthStore((s) => s.user);
   const [status, setStatus] = useState<WebPushStatus>('loading');
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [lastError, setLastError] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState(false);
   const [browserSupported, setBrowserSupported] = useState(true);
-  const [vapidConfigured, setVapidConfigured] = useState(isVapidPublicKeyConfigured());
+  const [vapidReady, setVapidReady] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
+  const vapidPublicKeyRef = useRef('');
 
   useEffect(() => {
     let cancelled = false;
     void resolveVapidPublicKey().then((key) => {
-      if (!cancelled) setVapidConfigured(!!key);
+      if (cancelled) return;
+      if (key) {
+        vapidPublicKeyRef.current = key;
+        setVapidReady(true);
+      } else {
+        setVapidReady(false);
+      }
     });
     return () => {
       cancelled = true;
@@ -68,7 +69,6 @@ export function useWebPush() {
     if (!isSecureWebPushContext()) {
       setBrowserSupported(false);
       setStatus('unsupported');
-      setLastError('Browser notifications require HTTPS or localhost.');
       setIsSubscribed(false);
       return;
     }
@@ -84,9 +84,8 @@ export function useWebPush() {
       if (existing && Notification.permission === 'granted') {
         setStatus('granted');
       }
-    } catch (err) {
+    } catch {
       setIsSubscribed(false);
-      setLastError(friendlySubscribeError(err));
     }
   }, []);
 
@@ -95,36 +94,26 @@ export function useWebPush() {
   }, [syncSubscriptionState]);
 
   const subscribe = useCallback(async (): Promise<WebPushSubscribeResult> => {
-    setLastError(null);
+    setErrorMsg(null);
+
+    if (!vapidReady || !vapidPublicKeyRef.current) {
+      const key = await resolveVapidPublicKey();
+      if (!key) {
+        setVapidReady(false);
+        return { ok: false };
+      }
+      vapidPublicKeyRef.current = key;
+      setVapidReady(true);
+    }
 
     if (!user?.id) {
-      const message = 'Sign in to enable mood plan alerts.';
-      setLastError(message);
-      return { ok: false, message };
+      return { ok: false };
     }
 
-    const vapidPublicKey = await resolveVapidPublicKey();
-    if (!vapidPublicKey) {
-      const message =
-        'Push is not configured on this site yet (missing VAPID public key). Add NEXT_PUBLIC_VAPID_PUBLIC_KEY to .env.local, restart the dev server, or set it on Vercel and redeploy.';
-      setLastError(message);
-      setVapidConfigured(false);
-      return { ok: false, message };
-    }
-    setVapidConfigured(true);
-
-    if (!isWebPushSupported()) {
-      const message = 'Browser push is not supported on this device.';
-      setLastError(message);
-      setStatus('unsupported');
+    if (!isWebPushSupported() || !isSecureWebPushContext()) {
       setBrowserSupported(false);
-      return { ok: false, message };
-    }
-
-    if (!isSecureWebPushContext()) {
-      const message = 'Browser notifications require HTTPS or localhost.';
-      setLastError(message);
-      return { ok: false, message };
+      setStatus('unsupported');
+      return { ok: false };
     }
 
     setSubscribing(true);
@@ -132,13 +121,13 @@ export function useWebPush() {
       const permission = await Notification.requestPermission();
       setStatus(permission as WebPushStatus);
       if (permission !== 'granted') {
-        const message =
-          permission === 'denied'
-            ? 'Notifications are blocked. Allow them in your browser settings for this site.'
-            : 'Notification permission was not granted.';
-        setLastError(message);
+        if (permission === 'denied') {
+          setErrorMsg(
+            'Notifications are blocked. Allow them in your browser settings for this site.'
+          );
+        }
         setIsSubscribed(false);
-        return { ok: false, message };
+        return { ok: false };
       }
 
       const reg = await waitForServiceWorkerRegistration(registrationRef.current);
@@ -148,15 +137,14 @@ export function useWebPush() {
       if (!subscription) {
         subscription = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKeyRef.current) as BufferSource,
         });
       }
 
       const json = subscription.toJSON();
       if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
-        const message = 'Browser did not return a valid push subscription.';
-        setLastError(message);
-        return { ok: false, message };
+        setErrorMsg('Could not enable browser notifications. Try again.');
+        return { ok: false };
       }
 
       const client = createClient();
@@ -173,29 +161,26 @@ export function useWebPush() {
       );
 
       if (upsertErr) {
-        const message = upsertErr.message.includes('web_push_subscriptions')
-          ? 'Push storage is not set up yet. Apply the web_push_subscriptions migration in Supabase.'
-          : upsertErr.message;
-        setLastError(message);
+        setErrorMsg('Could not save your notification preference. Try again.');
         setIsSubscribed(false);
-        return { ok: false, message };
+        return { ok: false };
       }
 
       setIsSubscribed(true);
       setStatus('granted');
+      setErrorMsg(null);
       return { ok: true };
     } catch (err) {
-      const message = friendlySubscribeError(err);
-      setLastError(message);
+      setErrorMsg(friendlySubscribeError(err));
       setIsSubscribed(false);
-      return { ok: false, message };
+      return { ok: false };
     } finally {
       setSubscribing(false);
     }
-  }, [user?.id]);
+  }, [user?.id, vapidReady]);
 
   const unsubscribe = useCallback(async (): Promise<void> => {
-    setLastError(null);
+    setErrorMsg(null);
     if (!user?.id) return;
     setSubscribing(true);
     try {
@@ -214,7 +199,7 @@ export function useWebPush() {
       setIsSubscribed(false);
       setStatus(Notification.permission as WebPushStatus);
     } catch (err) {
-      setLastError(friendlySubscribeError(err));
+      setErrorMsg(friendlySubscribeError(err));
     } finally {
       setSubscribing(false);
     }
@@ -224,11 +209,10 @@ export function useWebPush() {
     status,
     isSubscribed,
     subscribing,
-    lastError,
     browserSupported,
-    vapidConfigured: vapidConfigured || isVapidPublicKeyConfigured(),
+    vapidReady,
     subscribe,
     unsubscribe,
-    clearError: () => setLastError(null),
+    errorMsg,
   };
 }

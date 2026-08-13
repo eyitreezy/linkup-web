@@ -4,10 +4,17 @@ import { useWebPush } from '@/hooks/useWebPush';
 import { useState } from 'react';
 
 export function MoodPlanPushPrompt() {
-  const { status, isSubscribed, subscribing, browserSupported, subscribe } = useWebPush();
+  const { status, isSubscribed, subscribing, browserSupported, vapidReady, subscribe } = useWebPush();
   const [dismissed, setDismissed] = useState(false);
 
-  if (!browserSupported || isSubscribed || status === 'granted' || status === 'denied' || dismissed) {
+  if (
+    !vapidReady ||
+    !browserSupported ||
+    isSubscribed ||
+    status === 'granted' ||
+    status === 'denied' ||
+    dismissed
+  ) {
     return null;
   }
 
