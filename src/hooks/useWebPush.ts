@@ -1,11 +1,14 @@
 'use client';
 
 import { isSecureWebPushContext, isWebPushSupported } from '@/lib/notifications/webPushSupport';
+import {
+  getCachedVapidPublicKey,
+  isVapidPublicKeyConfigured,
+  resolveVapidPublicKey,
+} from '@/lib/notifications/vapidPublicKey';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -41,7 +44,18 @@ export function useWebPush() {
   const [lastError, setLastError] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState(false);
   const [browserSupported, setBrowserSupported] = useState(true);
+  const [vapidConfigured, setVapidConfigured] = useState(isVapidPublicKeyConfigured());
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void resolveVapidPublicKey().then((key) => {
+      if (!cancelled) setVapidConfigured(!!key);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const syncSubscriptionState = useCallback(async () => {
     if (!isWebPushSupported()) {
@@ -89,12 +103,15 @@ export function useWebPush() {
       return { ok: false, message };
     }
 
-    if (!VAPID_PUBLIC_KEY) {
+    const vapidPublicKey = await resolveVapidPublicKey();
+    if (!vapidPublicKey) {
       const message =
-        'Push is not configured on this site yet (missing VAPID public key). Add NEXT_PUBLIC_VAPID_PUBLIC_KEY and redeploy.';
+        'Push is not configured on this site yet (missing VAPID public key). Add NEXT_PUBLIC_VAPID_PUBLIC_KEY to .env.local, restart the dev server, or set it on Vercel and redeploy.';
       setLastError(message);
+      setVapidConfigured(false);
       return { ok: false, message };
     }
+    setVapidConfigured(true);
 
     if (!isWebPushSupported()) {
       const message = 'Browser push is not supported on this device.';
@@ -131,7 +148,7 @@ export function useWebPush() {
       if (!subscription) {
         subscription = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
         });
       }
 
@@ -209,7 +226,7 @@ export function useWebPush() {
     subscribing,
     lastError,
     browserSupported,
-    vapidConfigured: !!VAPID_PUBLIC_KEY,
+    vapidConfigured: vapidConfigured || isVapidPublicKeyConfigured(),
     subscribe,
     unsubscribe,
     clearError: () => setLastError(null),

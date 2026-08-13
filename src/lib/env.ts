@@ -11,6 +11,7 @@ export const env = {
   /** Must match the URL in your browser and Supabase → Auth → URL Configuration. */
   siteUrl: (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, ''),
   googleMapsWebApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_WEB_API_KEY ?? '',
+  vapidPublicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '',
 } as const;
 
 export const isSupabaseConfigured = Boolean(env.supabaseUrl && env.supabaseAnonKey);
