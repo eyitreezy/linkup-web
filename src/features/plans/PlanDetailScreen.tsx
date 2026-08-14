@@ -27,6 +27,7 @@ import {
   formatOfferAmount,
   formatProposalSnippet,
   offerStatusChip,
+  planStatusChip,
   planningPartnerContext,
 } from '@/features/plans/planDetailUtils';
 import { resolvePlanAgreementHref } from '@/lib/plans/planAgreementRoute';
@@ -571,27 +572,46 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
       <section className="overflow-hidden rounded-2xl border border-primary/10 bg-white shadow-[0_8px_28px_rgba(42,31,85,0.08)]">
         <PlanCardHero plan={plan} className="h-52 md:h-60" />
         <div className="space-y-4 p-5 md:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <h2 className="font-display text-xl font-extrabold text-foreground md:text-2xl">{plan.title}</h2>
-            <div className="flex flex-wrap gap-2">
-              {plan.is_group_plan ? (
-                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-extrabold text-blue-700 ring-1 ring-blue-200">
-                  Group
-                </span>
-              ) : null}
-              {plan.is_group_plan ? (
-                <GroupPlanMemberCountBadge
-                  planId={plan.id}
-                  initialCount={plan.accepted_guest_count ?? 0}
-                  totalCapacity={(plan.max_guests ?? 0) + 1}
-                  minimumCount={plan.minimum_member_count ?? 5}
-                />
-              ) : null}
-              {boosted ? <BoostPill /> : null}
-              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-extrabold capitalize text-primary">
-                {plan.status.replace(/_/g, ' ')}
-              </span>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <h2 className="font-display text-xl font-extrabold text-foreground md:text-2xl">{plan.title}</h2>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {plan.is_group_plan ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#5E52FF] px-2.5 py-1 text-[11px] font-extrabold text-white shadow-sm">
+                    <IoPeople size={12} />
+                    Group
+                  </span>
+                ) : null}
+                {plan.is_mood_plan ? (
+                  <span className="inline-flex items-center rounded-full bg-[#FF4A72]/90 px-2.5 py-1 text-[11px] font-extrabold text-white shadow-sm">
+                    Mood
+                  </span>
+                ) : null}
+                {boosted ? <BoostPill /> : null}
+                {(() => {
+                  const chip = planStatusChip(plan.status);
+                  return (
+                    <span
+                      className={cn(
+                        'rounded-full px-2.5 py-1 text-[11px] font-extrabold capitalize',
+                        chip.className
+                      )}
+                    >
+                      {chip.label}
+                    </span>
+                  );
+                })()}
+              </div>
             </div>
+
+            {plan.is_group_plan ? (
+              <GroupPlanMemberCountBadge
+                planId={plan.id}
+                initialCount={plan.accepted_guest_count ?? 0}
+                totalCapacity={(plan.max_guests ?? 0) + 1}
+                minimumCount={plan.minimum_member_count ?? 5}
+              />
+            ) : null}
           </div>
           {plan.description ? (
             <p className="text-[14px] font-semibold leading-relaxed text-muted">{plan.description}</p>

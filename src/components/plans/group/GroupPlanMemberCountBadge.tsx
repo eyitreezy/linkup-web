@@ -1,6 +1,7 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
+import { cn } from '@/utils/cn';
 import { useEffect, useState } from 'react';
 import { IoPeopleOutline } from 'react-icons/io5';
 
@@ -57,24 +58,52 @@ export function GroupPlanMemberCountBadge({
     };
   }, [planId]);
 
-  const belowMinimum = count < minimum;
   const displayCapacity = Math.max(capacity, 1);
+  const belowMinimum = count < minimum;
+  const fillPct = Math.min(100, Math.round((count / displayCapacity) * 100));
 
   return (
-    <div className="inline-flex flex-col gap-1">
-      <div
-        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-extrabold ${
-          belowMinimum ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
-        }`}
-      >
-        <IoPeopleOutline size={14} />
-        {count} of {displayCapacity} members confirmed
+    <div className="rounded-xl border border-primary/10 bg-[#F8F9FC] px-3.5 py-3">
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#EDE8FF] text-primary">
+          <IoPeopleOutline size={18} />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <p className="text-[13px] font-extrabold leading-tight text-foreground">
+              <span className="text-primary">{count}</span>
+              <span className="text-muted"> of {displayCapacity}</span>
+              <span className="font-semibold text-muted"> members confirmed</span>
+            </p>
+
+            {belowMinimum ? (
+              <span className="inline-flex shrink-0 items-center rounded-full bg-amber-500/12 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-800">
+                Min {minimum} required
+              </span>
+            ) : (
+              <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-emerald-700">
+                Minimum met
+              </span>
+            )}
+          </div>
+
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border/40">
+            <div
+              className={cn(
+                'h-full rounded-full transition-all duration-500 ease-out',
+                belowMinimum ? 'bg-amber-500' : 'bg-primary'
+              )}
+              style={{ width: `${fillPct}%` }}
+              role="progressbar"
+              aria-valuenow={count}
+              aria-valuemin={0}
+              aria-valuemax={displayCapacity}
+              aria-label={`${count} of ${displayCapacity} members confirmed`}
+            />
+          </div>
+        </div>
       </div>
-      {belowMinimum ? (
-        <span className="text-[11px] font-semibold text-amber-800">
-          Minimum {minimum} required
-        </span>
-      ) : null}
     </div>
   );
 }

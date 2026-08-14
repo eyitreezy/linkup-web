@@ -1,5 +1,5 @@
 import type { ProfileMini } from '@/services/planDetail.service';
-import type { DbPlan, DbPlanOffer, OfferStatus } from '@/types/database';
+import type { DbPlan, DbPlanOffer, OfferStatus, PlanStatus } from '@/types/database';
 
 export function planningPartnerContext(
   plan: DbPlan,
@@ -37,6 +37,28 @@ export function planningPartnerContext(
     profile: profiles[plan.creator_id],
     otherUserId: plan.creator_id,
   };
+}
+
+export function planStatusChip(status: PlanStatus): { label: string; className: string } {
+  const label = status.replace(/_/g, ' ');
+  switch (status) {
+    case 'negotiating':
+      return { label: 'Negotiating', className: 'bg-[#EDE8FF] text-primary' };
+    case 'agreed':
+      return { label: 'Agreed', className: 'bg-emerald-500/12 text-emerald-700' };
+    case 'awaiting_payment':
+      return { label: 'Awaiting payment', className: 'bg-amber-500/12 text-amber-800' };
+    case 'active':
+      return { label: 'Active', className: 'bg-emerald-500/12 text-emerald-700' };
+    case 'completed':
+      return { label: 'Completed', className: 'bg-muted/15 text-muted' };
+    case 'cancelled':
+      return { label: 'Cancelled', className: 'bg-red-500/12 text-red-700' };
+    case 'draft':
+      return { label: 'Draft', className: 'bg-slate-500/12 text-slate-600' };
+    default:
+      return { label, className: 'bg-primary/10 text-primary capitalize' };
+  }
 }
 
 export function offerStatusChip(status: OfferStatus): { label: string; className: string } {
