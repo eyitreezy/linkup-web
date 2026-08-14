@@ -22,7 +22,7 @@ export function SidebarProfileFooter() {
   const queryClient = useQueryClient();
   const notificationInbox = useNotificationInboxOptional();
   const unreadCount = notificationInbox?.unreadCount ?? 0;
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
   const profileActive = isMainNavItemActive(pathname, PROFILE_NAV_ITEM.href);
 
