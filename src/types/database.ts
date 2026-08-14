@@ -356,6 +356,8 @@ export interface DbPlanInvitation {
   created_at: string;
   expires_at: string;
   responded_at: string | null;
+  decline_reason?: string | null;
+  decline_reason_other?: string | null;
 }
 
 export interface DbPlanOffer {

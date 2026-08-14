@@ -23,6 +23,8 @@ export type PlanInvitationRow = {
   created_at: string;
   expires_at: string;
   responded_at: string | null;
+  decline_reason?: string | null;
+  decline_reason_other?: string | null;
   invitee?: {
     display_name: string | null;
     avatar_url: string | null;
@@ -117,7 +119,9 @@ export async function sendInvitationByEmail(
 
 export async function respondToInvitation(
   invitationId: string,
-  action: 'accept' | 'decline'
+  action: 'accept' | 'decline',
+  declineReason?: string | null,
+  declineReasonOther?: string | null
 ): Promise<{
   action: string;
   isNegotiable: boolean;
@@ -129,13 +133,31 @@ export async function respondToInvitation(
   const { data, error } = await supabase.rpc('respond_to_plan_invitation', {
     p_invitation_id: invitationId,
     p_action: action,
+    p_decline_reason: declineReason ?? null,
+    p_decline_reason_other: declineReasonOther ?? null,
   });
 
   if (error) {
+    const msg = error.message ?? '';
     const code = rpcErrorCode(error);
-    if (code.includes('kyc_required')) throw new Error('KYC_REQUIRED');
-    if (code.includes('invitation_expired')) throw new Error('EXPIRED');
-    throw error;
+    if (code.includes('kyc_required') || msg.includes('KYC') || msg.includes('verif')) {
+      throw new Error('KYC_REQUIRED');
+    }
+    if (code.includes('invitation_expired') || msg.includes('expired') || msg.includes('EXPIRED')) {
+      throw new Error('EXPIRED');
+    }
+    if (
+      code.includes('no_slots_available') ||
+      msg.toLowerCase().includes('full') ||
+      msg.toLowerCase().includes('no slot')
+    ) {
+      throw new Error('PLAN_FULL');
+    }
+    if (code.includes('invitation_not_pending') || msg.toLowerCase().includes('already')) {
+      throw new Error('ALREADY_RESPONDED');
+    }
+    console.error('[respondToInvitation]', error);
+    throw new Error(msg || 'UNKNOWN_ERROR');
   }
 
   return data as {

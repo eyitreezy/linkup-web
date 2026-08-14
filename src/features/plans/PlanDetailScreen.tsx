@@ -583,6 +583,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
                 <GroupPlanMemberCountBadge
                   planId={plan.id}
                   initialCount={plan.accepted_guest_count ?? 0}
+                  totalCapacity={(plan.max_guests ?? 0) + 1}
                   minimumCount={plan.minimum_member_count ?? 5}
                 />
               ) : null}

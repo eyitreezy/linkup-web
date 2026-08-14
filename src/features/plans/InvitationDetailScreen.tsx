@@ -15,6 +15,17 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { IoShieldCheckmarkOutline, IoTimeOutline } from 'react-icons/io5';
 
+const DECLINE_REASONS = [
+  'I can no longer make it',
+  'Schedule conflict',
+  'Budget constraints',
+  'Personal reasons',
+  'Found alternative plans',
+  'Other',
+] as const;
+
+type DeclineReason = (typeof DECLINE_REASONS)[number];
+
 type Props = {
   invitation: PlanInvitationRow;
   plan: DbPlan;
@@ -33,6 +44,9 @@ export function InvitationDetailClient({
   const router = useRouter();
   const [invitation, setInvitation] = useState(initialInvitation);
   const [isResponding, setIsResponding] = useState(false);
+  const [showDeclineModal, setShowDeclineModal] = useState(false);
+  const [declineReason, setDeclineReason] = useState<DeclineReason | null>(null);
+  const [declineOther, setDeclineOther] = useState('');
   const [statusDialog, setStatusDialog] = useState<{
     title: string;
     message: string;
@@ -74,12 +88,54 @@ export function InvitationDetailClient({
 
   const isExpired =
     invitation.status === 'expired' || new Date(invitation.expires_at).getTime() < Date.now();
-  const daysUntilExpiry = Math.max(
-    0,
-    Math.ceil((new Date(invitation.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-  );
+
+  const msLeft = new Date(invitation.expires_at).getTime() - Date.now();
+  const hoursLeft = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60)));
+  const expiryLabel =
+    hoursLeft <= 0
+      ? 'Expired'
+      : hoursLeft < 24
+        ? `${hoursLeft}h left`
+        : `${Math.ceil(hoursLeft / 24)}d left`;
+
   const shareLabel = resolveJoinRequestSlotCentsLabel(plan);
   const hostLabel = hostName?.trim() || 'Your host';
+
+  function handleRespondError(msg: string) {
+    if (msg === 'KYC_REQUIRED') {
+      setStatusDialog({
+        title: 'Verification required',
+        message: 'Complete your identity verification to accept this invitation.',
+        variant: 'info',
+      });
+    } else if (msg === 'EXPIRED') {
+      setStatusDialog({
+        title: 'Invitation expired',
+        message: 'This invitation is no longer valid.',
+        variant: 'error',
+      });
+      router.replace('/discover');
+    } else if (msg === 'PLAN_FULL') {
+      setStatusDialog({
+        title: 'Plan is full',
+        message: 'All slots have been filled. You can no longer accept this invitation.',
+        variant: 'error',
+      });
+    } else if (msg === 'ALREADY_RESPONDED') {
+      setStatusDialog({
+        title: 'Already responded',
+        message: 'You have already responded to this invitation.',
+        variant: 'info',
+      });
+      void load();
+    } else {
+      setStatusDialog({
+        title: 'Could not respond',
+        message: 'Something went wrong. Please try again or contact support.',
+        variant: 'error',
+      });
+    }
+  }
 
   async function handleRespond(action: 'accept' | 'decline') {
     setIsResponding(true);
@@ -103,33 +159,39 @@ export function InvitationDetailClient({
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '';
-      if (msg === 'KYC_REQUIRED') {
-        setStatusDialog({
-          title: 'Verification required',
-          message: 'Complete your identity verification to accept this invitation.',
-          variant: 'info',
-        });
-      } else if (msg === 'EXPIRED') {
-        setStatusDialog({
-          title: 'Invitation expired',
-          message: 'This invitation is no longer valid.',
-          variant: 'error',
-        });
-        router.replace('/discover');
-      } else {
-        setStatusDialog({
-          title: 'Could not respond',
-          message: 'Please try again.',
-          variant: 'error',
-        });
-      }
+      handleRespondError(msg);
+    } finally {
+      setIsResponding(false);
+    }
+  }
+
+  async function handleDeclineWithReason(reason: DeclineReason, other?: string) {
+    setIsResponding(true);
+    try {
+      await respondToInvitation(
+        invitation.id,
+        'decline',
+        reason,
+        reason === 'Other' ? other : undefined
+      );
+      setShowDeclineModal(false);
+      setDeclineReason(null);
+      setDeclineOther('');
+      router.replace('/discover');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '';
+      setStatusDialog({
+        title: 'Could not decline',
+        message: msg && msg !== 'UNKNOWN_ERROR' ? msg : 'Something went wrong. Please try again.',
+        variant: 'error',
+      });
     } finally {
       setIsResponding(false);
     }
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 px-1 py-2 sm:px-0">
+    <div className="mx-auto max-w-2xl space-y-4 px-4 py-2 sm:px-6">
       <PlanFlowHeader
         kicker="Invitation"
         title="You are invited"
@@ -172,11 +234,13 @@ export function InvitationDetailClient({
         </div>
       ) : null}
 
-      {!isExpired && invitation.status === 'pending' && daysUntilExpiry > 0 ? (
+      {!isExpired && invitation.status === 'pending' && hoursLeft > 0 ? (
         <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
           <IoTimeOutline className="shrink-0 text-amber-600" size={16} />
           <p className="text-[13px] font-semibold text-amber-800">
-            {`Invitation expires in ${daysUntilExpiry} day${daysUntilExpiry === 1 ? '' : 's'}`}
+            {expiryLabel === 'Expired'
+              ? 'This invitation has expired.'
+              : `Invitation expires in ${expiryLabel.replace(' left', '')}`}
           </p>
         </div>
       ) : null}
@@ -214,7 +278,7 @@ export function InvitationDetailClient({
           </button>
           <button
             type="button"
-            onClick={() => void handleRespond('decline')}
+            onClick={() => setShowDeclineModal(true)}
             disabled={isResponding}
             className="flex min-h-[44px] w-full items-center justify-center rounded-full border border-border px-5 py-2.5 text-[14px] font-extrabold text-muted transition hover:bg-[#EDE8FF]/50 disabled:opacity-50"
           >
@@ -232,6 +296,76 @@ export function InvitationDetailClient({
       {invitation.status === 'declined' ? (
         <div className="rounded-xl bg-muted/10 p-3 text-center text-[13px] font-semibold text-muted">
           You declined this invitation.
+        </div>
+      ) : null}
+
+      {showDeclineModal ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+          <div className="w-full max-w-md rounded-3xl border border-border bg-white p-6 shadow-xl">
+            <h3 className="font-display text-[18px] font-extrabold text-foreground">
+              Why are you declining?
+            </h3>
+            <p className="mt-1 text-[13px] font-semibold text-muted">
+              Your reason helps the host understand.
+            </p>
+
+            <div className="mt-4 space-y-2">
+              {DECLINE_REASONS.map((reason) => (
+                <button
+                  key={reason}
+                  type="button"
+                  onClick={() => setDeclineReason(reason)}
+                  className={[
+                    'w-full rounded-2xl border px-4 py-3 text-left text-[14px] font-semibold transition',
+                    declineReason === reason
+                      ? 'border-primary bg-[#EDE8FF]/40 text-primary'
+                      : 'border-border bg-white text-foreground hover:border-primary/30',
+                  ].join(' ')}
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+
+            {declineReason === 'Other' ? (
+              <textarea
+                value={declineOther}
+                onChange={(e) => setDeclineOther(e.target.value)}
+                placeholder="Please tell us more..."
+                maxLength={300}
+                rows={3}
+                className="mt-3 w-full rounded-2xl border border-border bg-[#F8F9FC] px-4 py-3 text-[14px] font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            ) : null}
+
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeclineModal(false);
+                  setDeclineReason(null);
+                  setDeclineOther('');
+                }}
+                className="flex-1 rounded-full border border-border py-3 text-[14px] font-extrabold text-muted"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!declineReason || isResponding}
+                onClick={() => {
+                  if (!declineReason) return;
+                  void handleDeclineWithReason(
+                    declineReason,
+                    declineReason === 'Other' ? declineOther : undefined
+                  );
+                }}
+                className="flex-1 rounded-full border border-red-200 bg-red-50 py-3 text-[14px] font-extrabold text-red-600 disabled:opacity-40"
+              >
+                {isResponding ? 'Declining...' : 'Confirm decline'}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
 

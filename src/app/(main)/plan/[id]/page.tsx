@@ -3,7 +3,7 @@ import { getServerAuthUser } from '@/lib/auth/server-session';
 import { isSupabaseConfigured } from '@/lib/env';
 import { createClient } from '@/lib/supabase/server';
 import { fetchPlanDetailBundle } from '@/services/planDetail.service';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,10 +26,14 @@ export default async function PlanDetailPage({ params }: Props) {
     );
   }
 
-  const supabase = await createClient();
   const user = await getServerAuthUser();
   const currentUserId = user?.id ?? null;
 
+  if (!currentUserId) {
+    redirect(`/plan/${id}/preview`);
+  }
+
+  const supabase = await createClient();
   const { data: initialBundle, error } = await fetchPlanDetailBundle(supabase, id, currentUserId);
 
   if (error || !initialBundle) notFound();
