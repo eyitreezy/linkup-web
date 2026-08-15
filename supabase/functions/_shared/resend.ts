@@ -16,7 +16,32 @@ export type ResendSendParams = {
 
 export type ResendSendResult =
   | { ok: true; id: string }
-  | { ok: false; status: number; error: string };
+  | { ok: false; status: number; error: string; code?: ResendErrorCode };
+
+/** Stable codes for UI + logs (parsed from Resend API responses). */
+export type ResendErrorCode =
+  | 'domain_not_verified'
+  | 'sandbox_recipient_only'
+  | 'resend_validation_error'
+  | 'email_failed';
+
+/** Map Resend HTTP error bodies to stable codes for the client. */
+export function classifyResendError(raw: string, status?: number): ResendErrorCode {
+  const lower = raw.toLowerCase();
+  if (lower.includes('domain is not verified') || lower.includes('verify your domain')) {
+    return 'domain_not_verified';
+  }
+  if (
+    status === 403 &&
+    (lower.includes('onboarding@resend.dev') || lower.includes('testing emails'))
+  ) {
+    return 'sandbox_recipient_only';
+  }
+  if (lower.includes('validation_error') || lower.includes('invalid')) {
+    return 'resend_validation_error';
+  }
+  return 'email_failed';
+}
 
 /** Resend accepts `Name <email@domain.com>` or bare `email@domain.com`. */
 export function normalizeResendFrom(raw: string): string {
@@ -37,7 +62,7 @@ export function getResendConfig(): { apiKey: string; from: string } | null {
 /** Plain-text footer used by notification-email and meet-type mail. */
 export function withLinkUpTextFooter(body: string): string {
   const trimmed = body.trimEnd();
-  return `${trimmed}\n\n— LinkUp`;
+  return `${trimmed}\n\nLinkUp`;
 }
 
 export async function sendResendEmail(params: ResendSendParams): Promise<ResendSendResult> {
@@ -70,7 +95,12 @@ export async function sendResendEmail(params: ResendSendParams): Promise<ResendS
   if (!response.ok) {
     const errText = await response.text();
     console.error('[resend] send failed', response.status, errText);
-    return { ok: false, status: response.status, error: errText || 'Resend failed' };
+    return {
+      ok: false,
+      status: response.status,
+      error: errText || 'Resend failed',
+      code: classifyResendError(errText, response.status),
+    };
   }
 
   let body: { id?: string } = {};

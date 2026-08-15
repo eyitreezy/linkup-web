@@ -6,65 +6,19 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { handleCors, jsonError, jsonResponse } from '../_shared/http.ts';
-import { getResendConfig, sendResendEmail, withLinkUpTextFooter } from '../_shared/resend.ts';
+import {
+  buildInvitationEmailHtml,
+  buildInvitationEmailText,
+  INVITATION_EMAIL_SUBJECT,
+  type InvitationEmailParams,
+} from '../_shared/invitationEmail.ts';
+import { getResendConfig, sendResendEmail } from '../_shared/resend.ts';
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
 
 const APP_URL = (Deno.env.get('APP_URL') ?? Deno.env.get('NEXT_PUBLIC_APP_URL') ?? 'https://linkup.app').replace(
   /\/$/,
   ''
 );
-
-type InvitationEmailParams = {
-  hostName: string;
-  planName?: string;
-  meetType?: string;
-  planDate?: string;
-  shareAmount?: string;
-  magicLink: string;
-};
-
-function buildNewUserInvitationText(p: InvitationEmailParams): string {
-  const lines = [
-    'Hi,',
-    '',
-    `${p.hostName} has invited you to join ${p.planName ?? 'a meetup'} on LinkUp, a verified meetup platform.`,
-  ];
-  if (p.meetType) lines.push('', `Meet type: ${p.meetType}`);
-  if (p.planDate) lines.push('', `Date: ${p.planDate}`);
-  if (p.shareAmount) lines.push('', `Your share if you join: ${p.shareAmount}`);
-  lines.push(
-    '',
-    'Create your free LinkUp account to view and respond to this invitation.',
-    '',
-    `Accept invitation: ${p.magicLink}`,
-    '',
-    'This link expires in 72 hours. If you did not expect this email, you can ignore it.'
-  );
-  return withLinkUpTextFooter(lines.join('\n'));
-}
-
-function buildNewUserInvitationHtml(p: InvitationEmailParams): string {
-  return `
-    <p>Hi,</p>
-    <p><strong>${p.hostName}</strong> has invited you to join
-    <strong>${p.planName ?? 'a meetup'}</strong> on LinkUp,
-    a verified meetup platform.</p>
-    ${p.meetType ? `<p>Meet type: ${p.meetType}</p>` : ''}
-    ${p.planDate ? `<p>Date: ${p.planDate}</p>` : ''}
-    ${p.shareAmount ? `<p>Your share if you join: <strong>${p.shareAmount}</strong></p>` : ''}
-    <p>Create your free LinkUp account to view and respond to this invitation.</p>
-    <p>
-      <a href="${p.magicLink}"
-        style="background:#6C63FF;color:#fff;padding:12px 24px;
-        border-radius:50px;text-decoration:none;font-weight:600;">
-        Accept invitation
-      </a>
-    </p>
-    <p style="font-size:12px;color:#999;">
-      This link expires in 72 hours. If you did not expect this email, you can ignore it.
-    </p>
-  `;
-}
 
 function invitationExpiresAt(planScheduledAt: string | null): Date {
   const now = Date.now();
@@ -296,9 +250,9 @@ Deno.serve(async (req) => {
 
   const emailResult = await sendResendEmail({
     to: [inviteeEmail],
-    subject: 'LinkUp — you have been invited to a meetup',
-    text: buildNewUserInvitationText(emailParams),
-    html: buildNewUserInvitationHtml(emailParams),
+    subject: INVITATION_EMAIL_SUBJECT,
+    text: buildInvitationEmailText(emailParams),
+    html: buildInvitationEmailHtml(emailParams),
   });
 
   if (!emailResult.ok) {
@@ -307,7 +261,7 @@ Deno.serve(async (req) => {
       invitationId: invitation.id,
       delivery: 'email',
       emailSent: false,
-      emailError: 'email_failed',
+      emailError: emailResult.code ?? 'email_failed',
     });
   }
 

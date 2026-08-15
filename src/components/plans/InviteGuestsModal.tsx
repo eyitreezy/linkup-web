@@ -239,7 +239,8 @@ export function InviteGuestsModal({
         inviteSuccessDialogContent(
           result.delivery === 'in_app' ? undefined : email,
           result.delivery === 'in_app' ? 'in_app' : 'email',
-          result.emailSent !== false
+          result.emailSent !== false,
+          result.emailError
         )
       );
     } catch (err: unknown) {

@@ -129,7 +129,7 @@ export async function sendInvitationByEmail(
   planId: string,
   inviteeEmail: string,
   planDetails: PlanInviteDetails
-): Promise<{ invitationId: string; delivery?: 'email' | 'in_app'; emailSent?: boolean }> {
+): Promise<{ invitationId: string; delivery?: 'email' | 'in_app'; emailSent?: boolean; emailError?: string }> {
   const normalizedEmail = inviteeEmail.trim().toLowerCase();
 
   const shareLabel = planDetails.shareAmountCents
@@ -179,6 +179,7 @@ export async function sendInvitationByEmail(
         invitationId,
         delivery: payload?.delivery ?? 'email',
         emailSent: payload?.emailSent ?? false,
+        emailError: payload?.emailError,
       };
     }
     throw new Error(mapEmailInviteError(String(payload?.error ?? 'INVITE_FAILED')));
@@ -196,6 +197,7 @@ export async function sendInvitationByEmail(
     invitationId,
     delivery: payload?.delivery ?? 'email',
     emailSent: payload?.emailSent ?? payload?.delivery !== 'in_app',
+    emailError: payload?.emailError,
   };
 }
 
