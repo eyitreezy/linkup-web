@@ -1,8 +1,10 @@
 /**
  * Send magic-link invitation email to a non-platform user.
  *
- * Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, RESEND_FROM, APP_URL
+ * Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY,
+ *      RESEND_API_KEY, RESEND_FROM, APP_URL
  */
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { handleCors, jsonError, jsonResponse } from '../_shared/http.ts';
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
 
@@ -66,11 +68,18 @@ Deno.serve(async (req) => {
     return jsonError('misconfigured', 500);
   }
 
-  let supabase;
+  let admin;
   try {
-    supabase = getSupabaseAdmin();
+    admin = getSupabaseAdmin();
   } catch (e) {
     console.error('[send-plan-invitation-email]', e);
+    return jsonError('misconfigured', 500);
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!supabaseUrl || !anonKey) {
+    console.error('[send-plan-invitation-email] Missing SUPABASE_URL or SUPABASE_ANON_KEY');
     return jsonError('misconfigured', 500);
   }
 
@@ -79,12 +88,17 @@ Deno.serve(async (req) => {
     return jsonError('unauthorized', 401);
   }
 
-  const token = authHeader.replace('Bearer ', '');
-  const { data: authData, error: authErr } = await supabase.auth.getUser(token);
+  const userClient = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: authData, error: authErr } = await userClient.auth.getUser();
   const host = authData?.user;
   if (authErr || !host) {
+    console.error('[send-plan-invitation-email] auth', authErr?.message ?? 'no user');
     return jsonError('unauthorized', 401);
   }
+
+  const supabase = admin;
 
   let body: {
     planId?: string;
@@ -166,7 +180,7 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (existingUser?.id) {
-    const { data: invId, error: rpcErr } = await supabase.rpc('send_plan_invitation_to_user', {
+    const { data: invId, error: rpcErr } = await userClient.rpc('send_plan_invitation_to_user', {
       p_plan_id: planId,
       p_invitee_user_id: existingUser.id,
     });

@@ -1,10 +1,6 @@
-import { readEdgeFunctionErrorBody } from '@/lib/supabase/readEdgeFunctionError';
-import { edgeFunctionAuthHeaders, ensureSupabaseAccessToken } from '@/lib/supabase/ensureAccessToken';
-import {
-  mapInviteClientError,
-  type InviteClientErrorCode,
-} from '@/lib/plans/inviteErrorMessages';
+import { mapInviteClientError, type InviteClientErrorCode } from '@/lib/plans/inviteErrorMessages';
 import { createClient } from '@/lib/supabase/client';
+import { ensureSupabaseAccessToken } from '@/lib/supabase/ensureAccessToken';
 import type { InvitationStatus } from '@/types/database';
 
 export type InvitationSearchResult = {
@@ -134,17 +130,17 @@ export async function sendInvitationByEmail(
   inviteeEmail: string,
   planDetails: PlanInviteDetails
 ): Promise<{ invitationId: string; delivery?: 'email' | 'in_app' }> {
-  const supabase = createClient();
   const normalizedEmail = inviteeEmail.trim().toLowerCase();
-  const authHeaders = await edgeFunctionAuthHeaders(supabase);
 
   const shareLabel = planDetails.shareAmountCents
     ? formatInviteShare(planDetails.shareAmountCents, 'NGN')
     : undefined;
 
-  const { data, error } = await supabase.functions.invoke('send-plan-invitation-email', {
-    headers: authHeaders,
-    body: {
+  const res = await fetch('/api/plans/invite-by-email', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
       planId,
       inviteeEmail: normalizedEmail,
       planDetails: {
@@ -154,16 +150,27 @@ export async function sendInvitationByEmail(
         planDate: planDetails.planDate,
         shareAmount: shareLabel,
       },
-    },
+    }),
   });
 
-  if (error) {
-    console.error('[sendInvitationByEmail] invoke', error);
-    const body = await readEdgeFunctionErrorBody(error);
-    if (body?.error) throw new Error(mapEmailInviteError(String(body.error)));
-    throw new Error(mapEmailInviteError(error.message ?? 'INVITE_FAILED'));
+  type InviteEmailResponse = {
+    invitationId?: string;
+    error?: string;
+    delivery?: 'email' | 'in_app';
+  };
+
+  let payload: InviteEmailResponse | null = null;
+  try {
+    payload = (await res.json()) as InviteEmailResponse;
+  } catch {
+    throw new Error('INVITE_FAILED');
   }
-  const payload = data as { invitationId?: string; error?: string; delivery?: 'email' | 'in_app' } | null;
+
+  if (!res.ok) {
+    console.error('[sendInvitationByEmail]', res.status, payload);
+    throw new Error(mapEmailInviteError(String(payload?.error ?? 'INVITE_FAILED')));
+  }
+
   if (payload?.error) throw new Error(mapEmailInviteError(payload.error));
   if (!payload?.invitationId) throw new Error('INVITE_FAILED');
   return { invitationId: payload.invitationId, delivery: payload.delivery ?? 'email' };

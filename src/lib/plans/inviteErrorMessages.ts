@@ -23,6 +23,7 @@ export function mapInviteClientError(raw: string): InviteClientErrorCode {
   if (code.includes('plan_listing_expired') || code.includes('plan_expired')) return 'PLAN_EXPIRED';
   if (code.includes('plan_not_found')) return 'PLAN_NOT_FOUND';
   if (code.includes('unauthorized') || code.includes('not_authenticated')) return 'NOT_AUTHENTICATED';
+  if (code.includes('host_auth_required')) return 'NOT_AUTHENTICATED';
   if (
     code.includes('misconfigured') ||
     code.includes('email_failed') ||
