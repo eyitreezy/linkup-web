@@ -14,6 +14,7 @@ export type InviteClientErrorCode =
 
 export function mapInviteClientError(raw: string): InviteClientErrorCode {
   const code = raw.toLowerCase();
+  if (raw === 'NOT_AUTHENTICATED' || code.includes('not_authenticated')) return 'NOT_AUTHENTICATED';
   if (code.includes('no_slots')) return 'NO_SLOTS';
   if (code.includes('invalid_email')) return 'INVALID_EMAIL';
   if (code.includes('not_plan_host')) return 'NOT_HOST';

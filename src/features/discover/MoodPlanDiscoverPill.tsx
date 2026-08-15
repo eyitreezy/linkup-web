@@ -4,6 +4,7 @@ import { MoodLiveBorder } from '@/components/discovery/MoodLiveBorder';
 import { MoodPlanCountdown } from '@/components/plans/MoodPlanCountdown';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { moodDiscoverMeta } from '@/lib/plans/moodDiscoverUi';
+import { PLAN_DETAIL_FROM, planDetailHref } from '@/lib/plans/planDetailNavigation';
 import { MOOD_REACH_DISPLAY } from '@/lib/plans/moodPlanTierConfig';
 import type { PlanFeedRow } from '@/services/plans.service';
 import { cn } from '@/utils/cn';
@@ -64,7 +65,7 @@ export function MoodPlanDiscoverPill({ plan, className, viewerUserId }: Props) {
           </span>
         ) : null}
         <Link
-          href={`/plan/${plan.id}`}
+          href={planDetailHref(plan.id, PLAN_DETAIL_FROM.discover)}
           className={cn(
             'relative block transition active:scale-[0.995]',
             expanded ? 'px-5 py-5' : 'px-4 py-3.5'

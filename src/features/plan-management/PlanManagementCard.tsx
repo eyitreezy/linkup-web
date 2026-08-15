@@ -9,6 +9,7 @@ import {
   planStripeKind,
   type CreatorPlanRow,
 } from '@/lib/plans/planManagement';
+import { PLAN_DETAIL_FROM, planDetailHref } from '@/lib/plans/planDetailNavigation';
 import { pmActionBtn, pmActionScroller } from '@/features/plan-management/planManagementLayout';
 import { cn } from '@/utils/cn';
 import Link from 'next/link';
@@ -128,7 +129,11 @@ export function PlanManagementCard({
         </div>
 
         <div className={cn(pmActionScroller)}>
-          <Link href={`/plan/${plan.id}`} className={pmActionBtn} onClick={() => onMarkRead()}>
+          <Link
+            href={planDetailHref(plan.id, PLAN_DETAIL_FROM.planManagement)}
+            className={pmActionBtn}
+            onClick={() => onMarkRead()}
+          >
             Open
           </Link>
           {plan.status !== 'draft' ? (

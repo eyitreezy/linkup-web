@@ -1,4 +1,5 @@
 import { readEdgeFunctionErrorBody } from '@/lib/supabase/readEdgeFunctionError';
+import { edgeFunctionAuthHeaders, ensureSupabaseAccessToken } from '@/lib/supabase/ensureAccessToken';
 import {
   mapInviteClientError,
   type InviteClientErrorCode,
@@ -114,6 +115,8 @@ export async function sendInvitationToUser(
   _planDetails?: PlanInviteDetails
 ): Promise<{ invitationId: string; delivery?: 'email' | 'in_app' }> {
   const supabase = createClient();
+  await ensureSupabaseAccessToken(supabase);
+
   const { data, error } = await supabase.rpc('send_plan_invitation_to_user', {
     p_plan_id: planId,
     p_invitee_user_id: inviteeUserId,
@@ -133,12 +136,14 @@ export async function sendInvitationByEmail(
 ): Promise<{ invitationId: string; delivery?: 'email' | 'in_app' }> {
   const supabase = createClient();
   const normalizedEmail = inviteeEmail.trim().toLowerCase();
+  const authHeaders = await edgeFunctionAuthHeaders(supabase);
 
   const shareLabel = planDetails.shareAmountCents
     ? formatInviteShare(planDetails.shareAmountCents, 'NGN')
     : undefined;
 
   const { data, error } = await supabase.functions.invoke('send-plan-invitation-email', {
+    headers: authHeaders,
     body: {
       planId,
       inviteeEmail: normalizedEmail,

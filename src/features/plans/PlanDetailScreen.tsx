@@ -54,6 +54,11 @@ import { countPendingInvitations, getPlanAvailableSlots } from '@/lib/plans/plan
 import { usePermission } from '@/hooks/usePermission';
 import { extendMoodPlan } from '@/lib/plans/moodPlanCooldown';
 import { useGatedAction } from '@/contexts/UpgradeGateContext';
+import { useSearchParams } from 'next/navigation';
+import {
+  parsePlanDetailFrom,
+  resolvePlanDetailBack,
+} from '@/lib/plans/planDetailNavigation';
 import type { BoostQuotaMeta } from '@/lib/subscription/boostQuota';
 import { requiresVerificationGate } from '@/lib/verification/access';
 import { createClient } from '@/lib/supabase/client';
@@ -102,6 +107,8 @@ type Props = {
 
 export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const planDetailBack = resolvePlanDetailBack(parsePlanDetailFrom(searchParams.get('from')));
   const user = useAuthStore((s) => s.user);
   /** Server-resolved id is correct on first paint before the auth store hydrates. */
   const viewerUserId = user?.id ?? currentUserId ?? undefined;
@@ -488,8 +495,8 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
       <div className="linkup-card px-6 py-12 text-center">
         <p className="font-extrabold text-foreground">Plan not found</p>
         <p className="mt-2 text-[14px] font-semibold text-muted">This plan may have been removed.</p>
-        <Link href="/discover" className="mt-4 inline-block font-extrabold text-primary underline">
-          Back to Discover
+        <Link href={planDetailBack.href} className="mt-4 inline-block font-extrabold text-primary underline">
+          {planDetailBack.label}
         </Link>
       </div>
     );
@@ -572,8 +579,8 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         kicker="Meetup details"
         title={plan.title}
         subtitle={plan.location_label ?? undefined}
-        backHref="/discover"
-        backLabel="Back to Discover"
+        backHref={planDetailBack.href}
+        backLabel={planDetailBack.label}
         right={
           <button
             type="button"

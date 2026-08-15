@@ -17,6 +17,7 @@ import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { moodDiscoverMeta } from '@/lib/plans/moodDiscoverUi';
 import { planHeroUri } from '@/lib/plans/planHero';
 import { publicProfileHref } from '@/lib/profile/profileRoutes';
+import { PLAN_DETAIL_FROM, planDetailHref } from '@/lib/plans/planDetailNavigation';
 import type { PlanFeedRow } from '@/services/plans.service';
 import type { DbProfile } from '@/types/database';
 import Link from 'next/link';
@@ -91,11 +92,12 @@ export function DiscoverPlanListCard({
       : null;
   const suggestedShareGrossLabel =
     suggestedShareCents != null ? formatNGN(grossAmountCents(suggestedShareCents)) : null;
+  const planHref = planDetailHref(plan.id, PLAN_DETAIL_FROM.discover);
 
   return (
     <article className="group flex w-full min-w-0 max-w-full flex-col overflow-hidden rounded-2xl border border-primary/10 bg-white shadow-[0_6px_20px_rgba(42,31,85,0.07)] transition hover:border-primary/25 hover:shadow-[0_10px_28px_rgba(108,99,255,0.12)] sm:flex-row sm:items-stretch">
       <Link
-        href={`/plan/${plan.id}`}
+        href={planHref}
         className="relative aspect-[16/10] w-full shrink-0 sm:aspect-auto sm:w-[38%] sm:max-w-[220px] sm:min-h-[128px] md:w-[40%] md:max-w-[240px]"
       >
         <div className="absolute inset-0 bg-gradient-to-br from-[#EDE8FF] to-[#FFF0F5]" />
@@ -128,7 +130,7 @@ export function DiscoverPlanListCard({
       </Link>
 
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-2 p-3.5 sm:gap-2.5 sm:px-4 sm:py-3.5">
-        <Link href={`/plan/${plan.id}`} className="block">
+        <Link href={planHref} className="block">
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
               <h3 className="line-clamp-2 font-display text-[15px] font-extrabold leading-snug text-foreground group-hover:text-primary sm:text-base">
@@ -160,7 +162,7 @@ export function DiscoverPlanListCard({
               showDot={showPresence && !!presenceUi?.dot}
             />
           </Link>
-          <Link href={`/plan/${plan.id}`} className="min-w-0 flex-1">
+          <Link href={planHref} className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
               <p className="truncate text-[13px] font-extrabold text-foreground">{name}</p>
               {isPlatinum ? <TierBadge tier="PLATINUM" size="sm" /> : null}
@@ -187,7 +189,7 @@ export function DiscoverPlanListCard({
           </Link>
         </div>
 
-        <Link href={`/plan/${plan.id}`} className="block">
+        <Link href={planHref} className="block">
           {moodMeta.showMood ? (
             <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-secondary/15 bg-secondary/5 px-2 py-1">
               {moodMeta.urgencyLabel ? (
@@ -223,7 +225,7 @@ export function DiscoverPlanListCard({
       </div>
 
       <Link
-        href={`/plan/${plan.id}`}
+        href={planHref}
         className="hidden w-9 shrink-0 items-center justify-center border-l border-border/40 bg-[#FAFAFF]/80 text-muted group-hover:text-primary sm:flex"
         aria-hidden
       >

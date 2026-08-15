@@ -15,6 +15,7 @@ import { derivePresenceUi, type PresenceUi } from '@/lib/presence/hostPresenceSt
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { MOOD_REACH_DISPLAY } from '@/lib/plans/moodPlanTierConfig';
 import { publicProfileHref } from '@/lib/profile/profileRoutes';
+import { PLAN_DETAIL_FROM, planDetailHref } from '@/lib/plans/planDetailNavigation';
 import type { PlanFeedRow } from '@/services/plans.service';
 import type { DbProfile } from '@/types/database';
 import Link from 'next/link';
@@ -56,9 +57,11 @@ export function DiscoverPlanCard({
         ))
     : null;
 
+  const planHref = planDetailHref(plan.id, PLAN_DETAIL_FROM.discover);
+
   return (
     <article className="group min-w-0 overflow-hidden rounded-[18px] border border-primary/10 bg-white shadow-[0_8px_28px_rgba(42,31,85,0.08)] transition hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-[0_14px_36px_rgba(108,99,255,0.14)] min-[360px]:rounded-[22px]">
-      <Link href={`/plan/${plan.id}`} className="block">
+      <Link href={planHref} className="block">
         <div className="relative">
           <PlanCardHero plan={plan} className="h-36 min-[360px]:h-44" />
           <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent" />
@@ -74,7 +77,7 @@ export function DiscoverPlanCard({
         </div>
       </Link>
       <div className="p-3 min-[360px]:p-4">
-        <Link href={`/plan/${plan.id}`} className="block">
+        <Link href={planHref} className="block">
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-display text-lg font-extrabold leading-snug text-foreground group-hover:text-primary">
               {plan.title}
@@ -107,7 +110,7 @@ export function DiscoverPlanCard({
               showDot={showPresence && !!presenceUi?.dot}
             />
           </Link>
-          <Link href={`/plan/${plan.id}`} className="min-w-0 flex-1">
+          <Link href={planHref} className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
               <p className="truncate text-[13px] font-extrabold text-foreground">{name}</p>
               {isPlatinum ? <TierBadge tier="PLATINUM" size="sm" /> : null}
@@ -123,7 +126,7 @@ export function DiscoverPlanCard({
             </p>
           </Link>
         </div>
-        <Link href={`/plan/${plan.id}`} className="block">
+        <Link href={planHref} className="block">
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <HostPresenceChip presence={presenceUi} />
             {boosted ? <BoostPill /> : null}

@@ -8,6 +8,7 @@ import { PlanCreatorEditModal } from '@/features/plan-management/PlanCreatorEdit
 import { PlanManagementCard } from '@/features/plan-management/PlanManagementCard';
 import { usePlanManagementPage } from '@/features/plan-management/PlanManagementPageContext';
 import { PlanManagementSortFilterRail } from '@/features/plan-management/PlanManagementSortFilterRail';
+import { planDetailHref, PLAN_DETAIL_FROM } from '@/lib/plans/planDetailNavigation';
 import { distanceKm } from '@/lib/location/distance';
 import { planMeetupCoords } from '@/lib/plans/planMeetupCoords';
 import {
@@ -152,7 +153,7 @@ export function PlanManagementScreen() {
     const { plan: dup, error: loadErr } = await fetchCreatorPlanById(client, id);
     if (loadErr || !dup) {
       setFeedback(loadErr ?? 'Duplicated, but could not open the editor.');
-      router.push(`/plan/${id}`);
+      router.push(planDetailHref(id, PLAN_DETAIL_FROM.planManagement));
       return;
     }
     setEditPlan(dup);
