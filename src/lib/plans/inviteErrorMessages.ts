@@ -101,15 +101,25 @@ export function inviteErrorDialogContent(code: InviteClientErrorCode): {
   }
 }
 
-export function inviteSuccessDialogContent(email?: string): { title: string; message: string } {
+export function inviteSuccessDialogContent(
+  email?: string,
+  delivery: 'email' | 'in_app' = email ? 'email' : 'in_app'
+): { title: string; message: string } {
+  if (delivery === 'in_app') {
+    return {
+      title: 'Invitation sent successfully',
+      message:
+        'This person already has a LinkUp account. They were notified in the app — no email was sent.',
+    };
+  }
   if (email) {
     return {
       title: 'Invitation sent successfully',
-      message: `We sent an invitation to ${email}. They can sign up and accept from their inbox.`,
+      message: `We handed off an invitation email to ${email}. Delivery can take a few minutes — ask them to check spam if nothing arrives.`,
     };
   }
   return {
     title: 'Invitation sent successfully',
-    message: 'They will receive a notification on LinkUp.',
+    message: 'The invitation email was accepted for delivery.',
   };
 }

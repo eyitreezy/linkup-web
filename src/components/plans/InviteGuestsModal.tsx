@@ -213,7 +213,7 @@ export function InviteGuestsModal({
       setSearchResults((prev) =>
         prev.map((r) => (r.user_id === userId ? { ...r, already_invited: true } : r))
       );
-      setStatusDialog(inviteSuccessDialogContent());
+      setStatusDialog(inviteSuccessDialogContent(undefined, 'in_app'));
     } catch (err: unknown) {
       showInviteError(err);
     } finally {
@@ -232,9 +232,10 @@ export function InviteGuestsModal({
       setEmailInput('');
       await refreshInvitations();
       setStatusDialog(
-        result.delivery === 'in_app'
-          ? inviteSuccessDialogContent()
-          : inviteSuccessDialogContent(email)
+        inviteSuccessDialogContent(
+          result.delivery === 'in_app' ? undefined : email,
+          result.delivery === 'in_app' ? 'in_app' : 'email'
+        )
       );
     } catch (err: unknown) {
       showInviteError(err);

@@ -4,11 +4,12 @@
  * Invoked from web (and mobile) after DB notification RPCs.
  *
  * Secrets (Supabase Dashboard → Edge Functions):
- *   RESEND_API_KEY, RESEND_FROM (e.g. LinkUp <onboarding@yourdomain.com>)
+ *   RESEND_API_KEY, RESEND_FROM (same as notification-email, e.g. LinkUp <noreply@flowdecklabs.com>)
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { handleCors, jsonError, jsonResponse } from '../_shared/http.ts';
+import { getResendConfig, sendResendEmail, withLinkUpTextFooter } from '../_shared/resend.ts';
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
 
 type EmailType = 'meet_type_submitted' | 'meet_type_approved' | 'meet_type_rejected';
@@ -70,31 +71,24 @@ async function isAdminUser(
   return !!data;
 }
 
-async function sendResend(to: string[], subject: string, text: string): Promise<Response | null> {
-  const resendKey = Deno.env.get('RESEND_API_KEY');
-  const resendFrom = Deno.env.get('RESEND_FROM');
-  if (!resendKey || !resendFrom) {
+async function sendTransactionalEmail(
+  to: string[],
+  subject: string,
+  text: string
+): Promise<Response | null> {
+  if (!getResendConfig()) {
     console.error('Missing RESEND_API_KEY or RESEND_FROM');
     return jsonError('Email not configured', 503, 'resend_not_configured');
   }
 
-  const r = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${resendKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: resendFrom,
-      to,
-      subject,
-      text: `${text}\n\n— LinkUp`,
-    }),
+  const result = await sendResendEmail({
+    to,
+    subject,
+    text: withLinkUpTextFooter(text),
   });
 
-  if (!r.ok) {
-    const errText = await r.text();
-    console.error('Resend error', r.status, errText);
+  if (!result.ok) {
+    console.error('Resend error', result.status, result.error);
     return jsonError('Resend failed', 502, 'resend_failed');
   }
   return null;
@@ -174,7 +168,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: true, skipped: 'no_admin_emails' });
     }
 
-    const resendErr = await sendResend(recipients, subject, text);
+    const resendErr = await sendTransactionalEmail(recipients, subject, text);
     if (resendErr) return resendErr;
     return jsonResponse({ ok: true, sent: recipients.length });
   }
@@ -194,7 +188,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true, skipped: 'no_recipient_email' });
   }
 
-  const resendErr = await sendResend([recipientEmail], subject, text);
+  const resendErr = await sendTransactionalEmail([recipientEmail], subject, text);
   if (resendErr) return resendErr;
   return jsonResponse({ ok: true, sent: 1 });
 });

@@ -2,10 +2,11 @@
  * Send magic-link invitation email to a non-platform user.
  *
  * Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY,
- *      RESEND_API_KEY, RESEND_FROM, APP_URL
+ *      RESEND_API_KEY, RESEND_FROM (same as notification-email), APP_URL
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { handleCors, jsonError, jsonResponse } from '../_shared/http.ts';
+import { getResendConfig, sendResendEmail, withLinkUpTextFooter } from '../_shared/resend.ts';
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
 
 const APP_URL = (Deno.env.get('APP_URL') ?? Deno.env.get('NEXT_PUBLIC_APP_URL') ?? 'https://linkup.app').replace(
@@ -13,14 +14,36 @@ const APP_URL = (Deno.env.get('APP_URL') ?? Deno.env.get('NEXT_PUBLIC_APP_URL') 
   ''
 );
 
-function buildNewUserInvitationEmail(p: {
+type InvitationEmailParams = {
   hostName: string;
   planName?: string;
   meetType?: string;
   planDate?: string;
   shareAmount?: string;
   magicLink: string;
-}): string {
+};
+
+function buildNewUserInvitationText(p: InvitationEmailParams): string {
+  const lines = [
+    'Hi,',
+    '',
+    `${p.hostName} has invited you to join ${p.planName ?? 'a meetup'} on LinkUp, a verified meetup platform.`,
+  ];
+  if (p.meetType) lines.push('', `Meet type: ${p.meetType}`);
+  if (p.planDate) lines.push('', `Date: ${p.planDate}`);
+  if (p.shareAmount) lines.push('', `Your share if you join: ${p.shareAmount}`);
+  lines.push(
+    '',
+    'Create your free LinkUp account to view and respond to this invitation.',
+    '',
+    `Accept invitation: ${p.magicLink}`,
+    '',
+    'This link expires in 72 hours. If you did not expect this email, you can ignore it.'
+  );
+  return withLinkUpTextFooter(lines.join('\n'));
+}
+
+function buildNewUserInvitationHtml(p: InvitationEmailParams): string {
   return `
     <p>Hi,</p>
     <p><strong>${p.hostName}</strong> has invited you to join
@@ -61,9 +84,7 @@ Deno.serve(async (req) => {
     return jsonError('method_not_allowed', 405);
   }
 
-  const resendKey = Deno.env.get('RESEND_API_KEY');
-  const resendFrom = Deno.env.get('RESEND_FROM');
-  if (!resendKey || !resendFrom) {
+  if (!getResendConfig()) {
     console.error('[send-plan-invitation-email] Missing RESEND_API_KEY or RESEND_FROM');
     return jsonError('misconfigured', 500);
   }
@@ -188,7 +209,16 @@ Deno.serve(async (req) => {
       console.error('[send-plan-invitation-email] in-app invite', rpcErr.message);
       return jsonError(rpcErr.message, 400);
     }
-    return jsonResponse({ invitationId: String(invId), delivery: 'in_app' });
+    console.log('[send-plan-invitation-email] delivery=in_app', {
+      invitationId: String(invId),
+      planId,
+      inviteeUserId: existingUser.id,
+    });
+    return jsonResponse({
+      invitationId: String(invId),
+      delivery: 'in_app',
+      emailSent: false,
+    });
   }
 
   const expiresAt = invitationExpiresAt(plan.scheduled_at ?? null);
@@ -229,35 +259,39 @@ Deno.serve(async (req) => {
   }
 
   const details = body.planDetails ?? {};
-  const html = buildNewUserInvitationEmail({
+  const emailParams: InvitationEmailParams = {
     hostName: details.hostName ?? 'Someone',
     planName: details.name,
     meetType: details.meetType,
     planDate: details.planDate,
     shareAmount: details.shareAmount,
     magicLink,
+  };
+
+  const emailResult = await sendResendEmail({
+    to: [inviteeEmail],
+    subject: 'LinkUp — you have been invited to a meetup',
+    text: buildNewUserInvitationText(emailParams),
+    html: buildNewUserInvitationHtml(emailParams),
   });
 
-  const emailRes = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${resendKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: resendFrom,
-      to: [inviteeEmail],
-      subject: 'You have been invited to join a meetup on LinkUp',
-      html,
-    }),
-  });
-
-  if (!emailRes.ok) {
-    const errText = await emailRes.text();
-    console.error('[send-plan-invitation-email] Resend', emailRes.status, errText);
+  if (!emailResult.ok) {
+    console.error('[send-plan-invitation-email] Resend', emailResult.status, emailResult.error);
     await supabase.from('plan_invitations').delete().eq('id', invitation.id);
     return jsonError('email_failed', 502);
   }
 
-  return jsonResponse({ invitationId: invitation.id, delivery: 'email' });
+  console.log('[send-plan-invitation-email] delivery=email', {
+    invitationId: invitation.id,
+    planId,
+    resendEmailId: emailResult.id,
+    toDomain: inviteeEmail.split('@')[1] ?? 'unknown',
+  });
+
+  return jsonResponse({
+    invitationId: invitation.id,
+    delivery: 'email',
+    emailSent: true,
+    resendEmailId: emailResult.id,
+  });
 });
