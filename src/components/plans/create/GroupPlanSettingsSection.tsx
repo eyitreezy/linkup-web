@@ -5,8 +5,14 @@ import { TierBadge } from '@/components/subscription/TierBadge';
 import { ToggleSwitch } from '@/components/settings/ToggleRow';
 import { useGatedAction } from '@/contexts/UpgradeGateContext';
 import { usePermission } from '@/hooks/usePermission';
+import {
+  clampGroupMaxGuests,
+  MIN_GROUP_MAX_GUESTS,
+  parseGroupMaxGuestsInput,
+} from '@/lib/plans/groupPlanLimits';
 import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import { cn } from '@/utils/cn';
+import { useEffect, useState } from 'react';
 import { IoAdd, IoRemove } from 'react-icons/io5';
 
 export type GroupPlanDraft = {
@@ -31,6 +37,14 @@ export function GroupPlanSettingsSection({ visible, draft, onChange, showCityVal
   const { effectiveTier, metadata } = usePermission('group_plan.host', { skip: !visible });
   const multiCityPerm = usePermission('group_plan.multi_city', { skip: !visible || !draft.isGroupPlan });
   const runGated = useGatedAction();
+  const [focused, setFocused] = useState(false);
+  const [draftInput, setDraftInput] = useState(String(draft.maxGuests));
+
+  useEffect(() => {
+    if (!focused) {
+      setDraftInput(String(clampGroupMaxGuests(draft.maxGuests)));
+    }
+  }, [draft.maxGuests, focused]);
 
   if (!visible || !draft.isGroupPlan) return null;
 
@@ -43,14 +57,20 @@ export function GroupPlanSettingsSection({ visible, draft, onChange, showCityVal
     };
   })();
 
-  const minGuests = 2;
-  const maxGuests = Math.max(minGuests, draft.maxGuests);
+  const maxGuests = clampGroupMaxGuests(draft.maxGuests);
 
-  function bumpGuests(delta: number) {
+  function commitGuests(next: number) {
+    const clamped = clampGroupMaxGuests(next);
     onChange({
-      maxGuests: Math.max(minGuests, draft.maxGuests + delta),
+      maxGuests: clamped,
       maxFreeGuests: caps.maxFreeGuests,
     });
+    setDraftInput(String(clamped));
+  }
+
+  function handleBlurInput() {
+    setFocused(false);
+    commitGuests(parseGroupMaxGuestsInput(draftInput, maxGuests));
   }
 
   return (
@@ -59,21 +79,54 @@ export function GroupPlanSettingsSection({ visible, draft, onChange, showCityVal
 
       <div>
         <p className="text-[12px] font-extrabold uppercase tracking-wide text-muted">Maximum guests</p>
-        <div className="mt-2 flex items-center gap-3">
+        <p className="mt-0.5 text-[12px] font-semibold text-muted">
+          Minimum {MIN_GROUP_MAX_GUESTS} guests required for group plans.
+        </p>
+        <div className="mt-2 inline-flex items-center gap-2 rounded-2xl border border-primary/20 bg-white p-1.5 shadow-sm">
           <button
             type="button"
-            onClick={() => bumpGuests(-1)}
-            disabled={maxGuests <= minGuests}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/25 bg-white disabled:opacity-40"
+            onClick={() => commitGuests(maxGuests - 1)}
+            disabled={maxGuests <= MIN_GROUP_MAX_GUESTS}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-[#FAFBFF] text-primary transition hover:bg-[#EDE8FF]/60 disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Decrease guests"
           >
             <IoRemove size={18} />
           </button>
-          <span className="min-w-[2rem] text-center text-xl font-extrabold">{maxGuests}</span>
+
+          <div className="relative min-w-[3.25rem]">
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={focused ? draftInput : String(maxGuests)}
+              onFocus={() => {
+                setFocused(true);
+                setDraftInput(String(maxGuests));
+              }}
+              onChange={(e) => {
+                const next = e.target.value.replace(/[^\d]/g, '');
+                setDraftInput(next);
+              }}
+              onBlur={handleBlurInput}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.currentTarget.blur();
+                }
+              }}
+              aria-label="Maximum guests"
+              className={cn(
+                'w-full bg-transparent text-center text-xl font-extrabold text-foreground outline-none transition',
+                focused
+                  ? 'rounded-lg border border-primary/30 bg-[#EDE8FF]/30 px-2 py-1 ring-2 ring-primary/15'
+                  : 'border border-transparent px-2 py-1'
+              )}
+            />
+          </div>
+
           <button
             type="button"
-            onClick={() => bumpGuests(1)}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/25 bg-white"
+            onClick={() => commitGuests(maxGuests + 1)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-[#FAFBFF] text-primary transition hover:bg-[#EDE8FF]/60"
             aria-label="Increase guests"
           >
             <IoAdd size={18} />

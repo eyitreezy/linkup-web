@@ -7,7 +7,8 @@ import { PlanFlowHeader } from '@/features/plans/PlanFlowHeader';
 import { formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { resolveJoinRequestSlotCentsLabel } from '@/lib/plans/joinRequestSlotDisplay';
 import { planNegotiateHref } from '@/lib/plans/negotiateRoute';
-import { respondToInvitation, type PlanInvitationRow } from '@/lib/plans/planInvitations';
+import { formatInvitationExpiryLabel } from '@/lib/plans/invitationExpiryLabel';
+import { respondToInvitation, claimPlanInvitationForUser, type PlanInvitationRow } from '@/lib/plans/planInvitations';
 import { createClient } from '@/lib/supabase/client';
 import type { DbPlan } from '@/types/database';
 import Link from 'next/link';
@@ -86,17 +87,20 @@ export function InvitationDetailClient({
     };
   }, [initialInvitation.id, load]);
 
+  useEffect(() => {
+    void claimPlanInvitationForUser(initialInvitation.id).catch(() => {
+      /* claim is best-effort; accept flow also links email invitations */
+    });
+  }, [initialInvitation.id]);
+
   const isExpired =
     invitation.status === 'expired' || new Date(invitation.expires_at).getTime() < Date.now();
 
-  const msLeft = new Date(invitation.expires_at).getTime() - Date.now();
-  const hoursLeft = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60)));
-  const expiryLabel =
-    hoursLeft <= 0
-      ? 'Expired'
-      : hoursLeft < 24
-        ? `${hoursLeft}h left`
-        : `${Math.ceil(hoursLeft / 24)}d left`;
+  const expiryLabel = formatInvitationExpiryLabel(invitation.expires_at);
+  const hoursLeft = Math.max(
+    0,
+    Math.ceil((new Date(invitation.expires_at).getTime() - Date.now()) / (1000 * 60 * 60))
+  );
 
   const shareLabel = resolveJoinRequestSlotCentsLabel(plan);
   const hostLabel = hostName?.trim() || 'Your host';
@@ -121,13 +125,39 @@ export function InvitationDetailClient({
         message: 'All slots have been filled. You can no longer accept this invitation.',
         variant: 'error',
       });
-    } else if (msg === 'ALREADY_RESPONDED') {
+    } else if (msg === 'ALREADY_RESPONDED' || msg === 'ALREADY_DECLINED') {
       setStatusDialog({
         title: 'Already responded',
         message: 'You have already responded to this invitation.',
         variant: 'info',
       });
       void load();
+    } else if (msg === 'NOT_INVITEE') {
+      setStatusDialog({
+        title: 'Not your invitation',
+        message: 'This invitation was sent to a different account.',
+        variant: 'error',
+      });
+    } else if (msg === 'PLAN_CANCELLED') {
+      setStatusDialog({
+        title: 'Plan unavailable',
+        message: 'This plan is no longer available.',
+        variant: 'error',
+      });
+      router.replace('/discover');
+    } else if (msg === 'INVALID_SLOT_AMOUNT') {
+      setStatusDialog({
+        title: 'Cannot accept yet',
+        message: 'This plan does not have a valid share amount yet. Ask the host to review pricing.',
+        variant: 'error',
+      });
+    } else if (msg === 'NOT_FOUND') {
+      setStatusDialog({
+        title: 'Invitation not found',
+        message: 'This invitation may have been removed.',
+        variant: 'error',
+      });
+      router.replace('/discover');
     } else {
       setStatusDialog({
         title: 'Could not respond',
@@ -240,7 +270,7 @@ export function InvitationDetailClient({
           <p className="text-[13px] font-semibold text-amber-800">
             {expiryLabel === 'Expired'
               ? 'This invitation has expired.'
-              : `Invitation expires in ${expiryLabel.replace(' left', '')}`}
+              : `Invitation expires in ${expiryLabel}`}
           </p>
         </div>
       ) : null}

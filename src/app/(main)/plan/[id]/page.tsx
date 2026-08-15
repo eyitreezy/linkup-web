@@ -30,7 +30,7 @@ export default async function PlanDetailPage({ params }: Props) {
   const currentUserId = user?.id ?? null;
 
   if (!currentUserId) {
-    redirect(`/plan/${id}/preview`);
+    redirect(`/login?next=${encodeURIComponent(`/plan/${id}`)}`);
   }
 
   const supabase = await createClient();

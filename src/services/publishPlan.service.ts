@@ -4,6 +4,7 @@ import {
   moodNegotiationExpiresAt,
   type MoodListingHours,
 } from '@/lib/plans/moodPlanComputations';
+import { clampGroupMaxGuests, validateGroupMaxGuests } from '@/lib/plans/groupPlanLimits';
 import { validateMultiCitySelection } from '@/lib/plans/nigerianCities';
 import { MIN_ESCROW_CENTS } from '@/lib/plans/planFinancialConfig';
 import type { EscrowPattern } from '@/types/database';
@@ -55,6 +56,11 @@ export function validatePublishDraft(draft: PublishPlanDraft): string | null {
   if (draft.isGroupPlan && draft.multiCity) {
     const cityErr = validateMultiCitySelection(draft.cityIds ?? []);
     if (cityErr) return cityErr;
+  }
+
+  if (draft.isGroupPlan) {
+    const guestErr = validateGroupMaxGuests(draft.maxGuests ?? null);
+    if (guestErr) return guestErr;
   }
 
   return null;
@@ -128,7 +134,7 @@ export async function publishPlan(
     is_group_plan: !!draft.isGroupPlan,
     max_free_guests: draft.isGroupPlan ? draft.maxFreeGuests ?? null : null,
     max_premium_guests: draft.isGroupPlan ? draft.maxPremiumGuests ?? null : null,
-    max_guests: draft.isGroupPlan ? draft.maxGuests ?? null : null,
+    max_guests: draft.isGroupPlan ? clampGroupMaxGuests(draft.maxGuests ?? 5) : null,
     multi_city: draft.isGroupPlan && draft.multiCity,
     city_ids: draft.isGroupPlan && draft.cityIds?.length ? draft.cityIds : null,
     hide_from_discovery: !!draft.hideFromDiscovery,

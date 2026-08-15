@@ -4,6 +4,7 @@ import { HostRatingBadge } from '@/components/reviews/HostRatingBadge';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { HostPresenceChip } from '@/components/presence/HostPresenceChip';
 import { CreatorSpotlightChip } from '@/components/plans/CreatorSpotlightChip';
+import { DiscoverPlanTypePillBadge } from '@/components/plans/discover/DiscoverPlanTypePillBadge';
 import { BoostPill } from '@/components/plans/BoostPill';
 import { MoodPlanCountdown } from '@/components/plans/MoodPlanCountdown';
 import { TierBadge } from '@/components/subscription/TierBadge';
@@ -112,9 +113,12 @@ export function DiscoverPlanListCard({
           </div>
         )}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent sm:bg-gradient-to-r sm:from-black/35 sm:via-black/10 sm:to-transparent" />
-        <span className="absolute left-2.5 top-2.5 inline-flex max-w-[calc(100%-1rem)] items-center gap-1 truncate rounded-full px-2 py-0.5 text-[10px] font-extrabold text-white linkup-gradient-primary shadow-sm">
-          <IoNavigateOutline size={11} className="shrink-0" />
-          <span className="truncate">{distanceLabel}</span>
+        <span className="absolute left-2.5 top-2.5 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-1">
+          <span className="inline-flex max-w-full items-center gap-1 truncate rounded-full px-2 py-0.5 text-[10px] font-extrabold text-white linkup-gradient-primary shadow-sm">
+            <IoNavigateOutline size={11} className="shrink-0" />
+            <span className="truncate">{distanceLabel}</span>
+          </span>
+          <DiscoverPlanTypePillBadge plan={plan} />
         </span>
         {boosted ? (
           <span className="absolute bottom-2.5 left-2.5">

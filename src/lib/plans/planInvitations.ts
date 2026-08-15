@@ -46,6 +46,55 @@ function rpcErrorCode(error: { message?: string; details?: string }): string {
   return (error.message ?? error.details ?? '').toLowerCase();
 }
 
+/** Map Supabase invitation RPC errors to stable client error codes. */
+export function mapInvitationRpcError(error: { message?: string; details?: string }): string {
+  const msg = error.message ?? '';
+  const code = rpcErrorCode(error);
+  if (code.includes('not_authenticated')) return 'NOT_AUTHENTICATED';
+  if (code.includes('not_invitee')) return 'NOT_INVITEE';
+  if (code.includes('invitation_not_found') || code.includes('plan_not_found')) return 'NOT_FOUND';
+  if (code.includes('plan_cancelled')) return 'PLAN_CANCELLED';
+  if (code.includes('kyc_required') || msg.includes('KYC') || msg.includes('verif')) return 'KYC_REQUIRED';
+  if (code.includes('invitation_expired') || code.includes('expired')) return 'EXPIRED';
+  if (code.includes('no_slots_available') || code.includes('full') || code.includes('no slot')) {
+    return 'PLAN_FULL';
+  }
+  if (code.includes('invitation_already_declined')) return 'ALREADY_DECLINED';
+  if (code.includes('invitation_cancelled')) return 'INVITATION_CANCELLED';
+  if (code.includes('invitation_not_pending') || code.includes('already')) return 'ALREADY_RESPONDED';
+  if (code.includes('invalid_slot_amount')) return 'INVALID_SLOT_AMOUNT';
+  if (code.includes('invalid_action')) return 'INVALID_ACTION';
+  return msg || 'UNKNOWN_ERROR';
+}
+
+function mapEmailInviteError(raw: string): string {
+  const code = raw.toLowerCase();
+  if (code.includes('no_slots') || code.includes('no_slots_available')) return 'NO_SLOTS';
+  if (code.includes('invalid_email')) return 'INVALID_EMAIL';
+  if (code.includes('misconfigured') || code.includes('email_failed') || code.includes('magic_link')) {
+    return 'EMAIL_DELIVERY_FAILED';
+  }
+  if (code.includes('not_plan_host')) return 'NOT_HOST';
+  if (code.includes('invitations_group_only')) return 'GROUP_ONLY';
+  if (code.includes('group_already_closed')) return 'GROUP_CLOSED';
+  if (code.includes('duplicate') || code.includes('already')) return 'ALREADY_INVITED';
+  return raw || 'EMAIL_INVITE_FAILED';
+}
+
+export async function claimPlanInvitationForUser(invitationId: string): Promise<boolean> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('claim_plan_invitation_for_user', {
+    p_invitation_id: invitationId,
+  });
+  if (error) {
+    const mapped = mapInvitationRpcError(error);
+    if (mapped === 'NOT_INVITEE') throw new Error('NOT_INVITEE');
+    throw error;
+  }
+  const row = data as { claimed?: boolean };
+  return Boolean(row?.claimed);
+}
+
 export async function getPlanAvailableSlots(planId: string): Promise<number> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('get_plan_available_slots', {
@@ -110,9 +159,12 @@ export async function sendInvitationByEmail(
     },
   });
 
-  if (error) throw error;
+  if (error) {
+    console.error('[sendInvitationByEmail] invoke', error);
+    throw new Error(mapEmailInviteError(error.message ?? 'EMAIL_INVITE_FAILED'));
+  }
   const payload = data as { invitationId?: string; error?: string };
-  if (payload?.error) throw new Error(payload.error);
+  if (payload?.error) throw new Error(mapEmailInviteError(payload.error));
   if (!payload?.invitationId) throw new Error('invitation_failed');
   return { invitationId: payload.invitationId };
 }
@@ -138,26 +190,9 @@ export async function respondToInvitation(
   });
 
   if (error) {
-    const msg = error.message ?? '';
-    const code = rpcErrorCode(error);
-    if (code.includes('kyc_required') || msg.includes('KYC') || msg.includes('verif')) {
-      throw new Error('KYC_REQUIRED');
-    }
-    if (code.includes('invitation_expired') || msg.includes('expired') || msg.includes('EXPIRED')) {
-      throw new Error('EXPIRED');
-    }
-    if (
-      code.includes('no_slots_available') ||
-      msg.toLowerCase().includes('full') ||
-      msg.toLowerCase().includes('no slot')
-    ) {
-      throw new Error('PLAN_FULL');
-    }
-    if (code.includes('invitation_not_pending') || msg.toLowerCase().includes('already')) {
-      throw new Error('ALREADY_RESPONDED');
-    }
+    const mapped = mapInvitationRpcError(error);
     console.error('[respondToInvitation]', error);
-    throw new Error(msg || 'UNKNOWN_ERROR');
+    throw new Error(mapped);
   }
 
   return data as {

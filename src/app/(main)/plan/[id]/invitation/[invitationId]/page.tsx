@@ -25,12 +25,22 @@ export default async function InvitationDetailPage({ params }: Props) {
     redirect(`/login?next=${encodeURIComponent(`/plan/${planId}/invitation/${invitationId}`)}`);
   }
 
+  await supabase.rpc('claim_plan_invitation_for_user', { p_invitation_id: invitationId });
+
   const [{ data: invitation }, { data: plan }] = await Promise.all([
     supabase.from('plan_invitations').select('*').eq('id', invitationId).single(),
     supabase.from('plans').select('*').eq('id', planId).single(),
   ]);
 
   if (!invitation || !plan || invitation.plan_id !== planId) notFound();
+
+  const isInvitee =
+    invitation.invitee_user_id === user.id ||
+    (invitation.invitee_email != null &&
+      user.email != null &&
+      invitation.invitee_email.toLowerCase() === user.email.toLowerCase());
+
+  if (!isInvitee) notFound();
 
   const { data: hostProf } = await supabase
     .from('profiles')

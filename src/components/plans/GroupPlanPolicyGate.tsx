@@ -22,6 +22,11 @@ export function GroupPlanPolicyGate({ children, active = true }: Props) {
       setShowModal(false);
       return;
     }
+
+    setLoading(true);
+    setSigned(false);
+    setShowModal(false);
+
     let cancelled = false;
     void hasGroupPolicySignoff().then((ok) => {
       if (cancelled) return;

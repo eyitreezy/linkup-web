@@ -4,6 +4,7 @@ import { HostRatingBadge } from '@/components/reviews/HostRatingBadge';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { HostPresenceChip } from '@/components/presence/HostPresenceChip';
 import { CreatorSpotlightChip } from '@/components/plans/CreatorSpotlightChip';
+import { DiscoverPlanTypePillBadge } from '@/components/plans/discover/DiscoverPlanTypePillBadge';
 import { BoostPill } from '@/components/plans/BoostPill';
 import { PlanCardHero } from '@/components/plans/PlanCardHero';
 import { TierBadge } from '@/components/subscription/TierBadge';
@@ -56,11 +57,7 @@ export function DiscoverPlanCard({
         ))
     : null;
 
-  const planTypePill = plan.is_group_plan
-    ? { label: 'Group', colorClass: 'bg-[#5E52FF]/80 text-white' }
-    : plan.is_mood_plan
-      ? { label: 'Mood', colorClass: 'bg-[#FF4A72]/80 text-white' }
-      : null;
+  const showPlanTypePill = plan.is_group_plan || plan.is_mood_plan;
 
   return (
     <article className="group min-w-0 overflow-hidden rounded-[18px] border border-primary/10 bg-white shadow-[0_8px_28px_rgba(42,31,85,0.08)] transition hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-[0_14px_36px_rgba(108,99,255,0.14)] min-[360px]:rounded-[22px]">
@@ -74,16 +71,7 @@ export function DiscoverPlanCard({
                 {distanceLabel}
               </span>
             ) : null}
-            {planTypePill ? (
-              <span
-                className={cn(
-                  'rounded-full px-2 py-0.5 text-[10px] font-extrabold backdrop-blur-sm',
-                  planTypePill.colorClass
-                )}
-              >
-                {planTypePill.label}
-              </span>
-            ) : null}
+            {showPlanTypePill ? <DiscoverPlanTypePillBadge plan={plan} /> : null}
             {boosted ? <BoostPill variant="mini" /> : null}
           </div>
         </div>

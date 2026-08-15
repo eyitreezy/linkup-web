@@ -220,11 +220,38 @@ export function InviteGuestsModal({
       await sendInvitationByEmail(planId, email, planDetails);
       setEmailInput('');
       await refreshInvitations();
-    } catch {
       setStatusDialog({
-        title: 'Could not send invitation',
-        message: 'Please check the email and try again.',
+        title: 'Invitation sent successfully',
+        message: `We sent an invitation to ${email}. They can sign up and accept from their inbox.`,
       });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg === 'NO_SLOTS') {
+        setStatusDialog({
+          title: 'No slots available',
+          message: 'Slots free up when invitations expire or are declined.',
+        });
+      } else if (msg === 'INVALID_EMAIL') {
+        setStatusDialog({
+          title: 'Invalid email',
+          message: 'Enter a valid email address and try again.',
+        });
+      } else if (msg === 'ALREADY_INVITED') {
+        setStatusDialog({
+          title: 'Already invited',
+          message: 'This email already has an active invitation for this plan.',
+        });
+      } else if (msg === 'EMAIL_DELIVERY_FAILED') {
+        setStatusDialog({
+          title: 'Could not send email',
+          message: 'The invitation could not be delivered. Please try again in a few minutes.',
+        });
+      } else {
+        setStatusDialog({
+          title: 'Could not send invitation',
+          message: 'Please check the email and try again.',
+        });
+      }
     } finally {
       setIsSending(false);
     }

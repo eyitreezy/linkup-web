@@ -16,6 +16,7 @@ import { useGatedAction, useUpgradeGate } from '@/contexts/UpgradeGateContext';
 import { FlexibleHourSelector } from '@/components/plans/FlexibleHourSelector';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
 import { usePermission } from '@/hooks/usePermission';
+import { clampGroupMaxGuests } from '@/lib/plans/groupPlanLimits';
 import { getMoodPlanCooldown } from '@/lib/plans/moodPlanCooldown';
 import {
   isFridayActivation,
@@ -102,7 +103,7 @@ export function CreatePlanScreen() {
   const [coords, setCoords] = useState<LocationSuggestion | null>(null);
   const [visibility, setVisibility] = useState<'public' | 'radius' | 'friends' | 'premium'>('public');
   const [isGroupPlan, setIsGroupPlan] = useState(false);
-  const [maxGuests, setMaxGuests] = useState(4);
+  const [maxGuests, setMaxGuests] = useState(5);
   const [maxFreeGuests, setMaxFreeGuests] = useState(5);
   const [maxPremiumGuests, setMaxPremiumGuests] = useState<number | null>(null);
   const [multiCity, setMultiCity] = useState(false);
@@ -408,7 +409,7 @@ export function CreatePlanScreen() {
             showCityValidation={showCityValidation}
             draft={{ isGroupPlan, maxGuests, maxFreeGuests, maxPremiumGuests, multiCity, cityIds }}
             onChange={(patch) => {
-              if (patch.maxGuests != null) setMaxGuests(patch.maxGuests);
+              if (patch.maxGuests != null) setMaxGuests(clampGroupMaxGuests(patch.maxGuests));
               if (patch.maxFreeGuests != null) setMaxFreeGuests(patch.maxFreeGuests);
               if (patch.maxPremiumGuests !== undefined) setMaxPremiumGuests(patch.maxPremiumGuests);
               if (patch.multiCity != null) setMultiCity(patch.multiCity);
