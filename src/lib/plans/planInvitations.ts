@@ -1,3 +1,4 @@
+import { readEdgeFunctionErrorBody } from '@/lib/supabase/readEdgeFunctionError';
 import { createClient } from '@/lib/supabase/client';
 import type { InvitationStatus } from '@/types/database';
 
@@ -62,7 +63,8 @@ export function mapInvitationRpcError(error: { message?: string; details?: strin
   if (code.includes('invitation_already_declined')) return 'ALREADY_DECLINED';
   if (code.includes('invitation_cancelled')) return 'INVITATION_CANCELLED';
   if (code.includes('invitation_not_pending') || code.includes('already')) return 'ALREADY_RESPONDED';
-  if (code.includes('invalid_slot_amount')) return 'INVALID_SLOT_AMOUNT';
+  if (code.includes('join_request_not_applicable')) return 'INVALID_SLOT_AMOUNT';
+  if (code.includes('pgrst202') || code.includes('could not find the function')) return 'RPC_NOT_DEPLOYED';
   if (code.includes('invalid_action')) return 'INVALID_ACTION';
   return msg || 'UNKNOWN_ERROR';
 }
@@ -131,15 +133,7 @@ export async function sendInvitationByEmail(
   planDetails: PlanInviteDetails
 ): Promise<{ invitationId: string }> {
   const supabase = createClient();
-  const { data: existingUser } = await supabase
-    .from('users')
-    .select('id')
-    .ilike('email', inviteeEmail.trim())
-    .maybeSingle();
-
-  if (existingUser?.id) {
-    return sendInvitationToUser(planId, existingUser.id, planDetails);
-  }
+  const normalizedEmail = inviteeEmail.trim().toLowerCase();
 
   const shareLabel = planDetails.shareAmountCents
     ? formatInviteShare(planDetails.shareAmountCents, 'NGN')
@@ -148,7 +142,7 @@ export async function sendInvitationByEmail(
   const { data, error } = await supabase.functions.invoke('send-plan-invitation-email', {
     body: {
       planId,
-      inviteeEmail: inviteeEmail.trim(),
+      inviteeEmail: normalizedEmail,
       planDetails: {
         name: planDetails.name,
         hostName: planDetails.hostName,
@@ -161,9 +155,11 @@ export async function sendInvitationByEmail(
 
   if (error) {
     console.error('[sendInvitationByEmail] invoke', error);
+    const body = await readEdgeFunctionErrorBody(error);
+    if (body?.error) throw new Error(mapEmailInviteError(String(body.error)));
     throw new Error(mapEmailInviteError(error.message ?? 'EMAIL_INVITE_FAILED'));
   }
-  const payload = data as { invitationId?: string; error?: string };
+  const payload = data as { invitationId?: string; error?: string } | null;
   if (payload?.error) throw new Error(mapEmailInviteError(payload.error));
   if (!payload?.invitationId) throw new Error('invitation_failed');
   return { invitationId: payload.invitationId };

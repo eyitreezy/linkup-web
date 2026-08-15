@@ -104,7 +104,7 @@ export function NotificationsInboxScreen() {
       <SettingsPageHeader
         kicker="Inbox"
         title="Notifications"
-        subtitle="Offers, escrow, and updates — sorted by what matters first."
+        subtitle="Offers, escrow, and updates, sorted by what matters first."
         actions={
           <div className="flex items-center gap-3">
             {hasUnread ? (
@@ -176,7 +176,7 @@ export function NotificationsInboxScreen() {
           emoji="🔔"
           title="You're all caught up"
           titleAccent="caught up"
-          description="New offers, escrow updates, and plan activity will land here — same inbox as the LinkUp app."
+          description="New offers, escrow updates, and plan activity will land here, same inbox as the LinkUp app."
           tips={[
             { icon: IoPricetagOutline, text: 'Turn on offer alerts in Notifications & visibility' },
             {

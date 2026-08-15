@@ -3,6 +3,7 @@
  *
  * Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, RESEND_FROM, APP_URL
  */
+import { handleCors, jsonError, jsonResponse } from '../_shared/http.ts';
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
 
 const APP_URL = (Deno.env.get('APP_URL') ?? Deno.env.get('NEXT_PUBLIC_APP_URL') ?? 'https://linkup.app').replace(
@@ -51,18 +52,18 @@ function invitationExpiresAt(planScheduledAt: string | null): Date {
 }
 
 Deno.serve(async (req) => {
+  const cors = handleCors(req);
+  if (cors) return cors;
+
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return jsonError('method_not_allowed', 405);
   }
 
   const resendKey = Deno.env.get('RESEND_API_KEY');
   const resendFrom = Deno.env.get('RESEND_FROM');
   if (!resendKey || !resendFrom) {
     console.error('[send-plan-invitation-email] Missing RESEND_API_KEY or RESEND_FROM');
-    return new Response(JSON.stringify({ error: 'misconfigured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError('misconfigured', 500);
   }
 
   let supabase;
@@ -70,28 +71,19 @@ Deno.serve(async (req) => {
     supabase = getSupabaseAdmin();
   } catch (e) {
     console.error('[send-plan-invitation-email]', e);
-    return new Response(JSON.stringify({ error: 'misconfigured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError('misconfigured', 500);
   }
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return new Response(JSON.stringify({ error: 'unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError('unauthorized', 401);
   }
 
   const token = authHeader.replace('Bearer ', '');
   const { data: authData, error: authErr } = await supabase.auth.getUser(token);
   const host = authData?.user;
   if (authErr || !host) {
-    return new Response(JSON.stringify({ error: 'unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError('unauthorized', 401);
   }
 
   let body: {
@@ -109,27 +101,18 @@ Deno.serve(async (req) => {
   try {
     body = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: 'invalid_json' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError('invalid_json', 400);
   }
 
   const planId = body.planId?.trim();
   const inviteeEmail = body.inviteeEmail?.trim().toLowerCase();
   if (!planId || !inviteeEmail) {
-    return new Response(JSON.stringify({ error: 'planId and inviteeEmail required' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError('planId and inviteeEmail required', 400);
   }
 
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailPattern.test(inviteeEmail)) {
-    return new Response(JSON.stringify({ error: 'invalid_email' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError('invalid_email', 400);
   }
 
   const { data: plan, error: planErr } = await supabase
@@ -139,41 +122,44 @@ Deno.serve(async (req) => {
     .single();
 
   if (planErr || !plan) {
-    return new Response(JSON.stringify({ error: 'plan_not_found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError('plan_not_found', 404);
   }
 
   if (plan.creator_id !== host.id) {
-    return new Response(JSON.stringify({ error: 'not_plan_host' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError('not_plan_host', 403);
   }
 
   if (!plan.is_group_plan) {
-    return new Response(JSON.stringify({ error: 'invitations_group_only' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError('invitations_group_only', 400);
   }
 
   if (plan.group_closed_at) {
-    return new Response(JSON.stringify({ error: 'group_already_closed' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError('group_already_closed', 400);
   }
 
   const { data: slots, error: slotsErr } = await supabase.rpc('get_plan_available_slots', {
     p_plan_id: planId,
   });
   if (slotsErr || (typeof slots === 'number' && slots <= 0)) {
-    return new Response(JSON.stringify({ error: 'no_slots_available' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
+    return jsonError('no_slots_available', 400);
+  }
+
+  const { data: existingUser } = await supabase
+    .from('users')
+    .select('id')
+    .ilike('email', inviteeEmail)
+    .maybeSingle();
+
+  if (existingUser?.id) {
+    const { data: invId, error: rpcErr } = await supabase.rpc('send_plan_invitation_to_user', {
+      p_plan_id: planId,
+      p_invitee_user_id: existingUser.id,
     });
+    if (rpcErr) {
+      console.error('[send-plan-invitation-email] in-app invite', rpcErr.message);
+      return jsonError(rpcErr.message, 400);
+    }
+    return jsonResponse({ invitationId: String(invId) });
   }
 
   const expiresAt = invitationExpiresAt(plan.scheduled_at ?? null);
@@ -191,10 +177,7 @@ Deno.serve(async (req) => {
 
   if (insertError) {
     console.error('[send-plan-invitation-email] insert', insertError.message);
-    return new Response(JSON.stringify({ error: insertError.message }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError(insertError.message, 400);
   }
 
   const redirectTo = `${APP_URL}/onboarding?invitation_token=${invitation.invitation_token}`;
@@ -207,19 +190,13 @@ Deno.serve(async (req) => {
   if (linkError) {
     await supabase.from('plan_invitations').delete().eq('id', invitation.id);
     console.error('[send-plan-invitation-email] magic link', linkError.message);
-    return new Response(JSON.stringify({ error: 'magic_link_failed' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError('magic_link_failed', 500);
   }
 
   const magicLink = linkData.properties?.action_link;
   if (!magicLink) {
     await supabase.from('plan_invitations').delete().eq('id', invitation.id);
-    return new Response(JSON.stringify({ error: 'magic_link_failed' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError('magic_link_failed', 500);
   }
 
   const details = body.planDetails ?? {};
@@ -250,13 +227,8 @@ Deno.serve(async (req) => {
     const errText = await emailRes.text();
     console.error('[send-plan-invitation-email] Resend', emailRes.status, errText);
     await supabase.from('plan_invitations').delete().eq('id', invitation.id);
-    return new Response(JSON.stringify({ error: 'email_failed' }), {
-      status: 502,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError('email_failed', 502);
   }
 
-  return new Response(JSON.stringify({ invitationId: invitation.id }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return jsonResponse({ invitationId: invitation.id });
 });

@@ -1,75 +1,5 @@
--- Email invitees can read pending invitations addressed to their account email.
-DROP POLICY IF EXISTS "invitee_read_email_invitations" ON public.plan_invitations;
-CREATE POLICY "invitee_read_email_invitations"
-  ON public.plan_invitations FOR SELECT
-  USING (
-    invitee_user_id IS NULL
-    AND invitee_email IS NOT NULL
-    AND status = 'pending'
-    AND EXISTS (
-      SELECT 1
-      FROM public.users u
-      WHERE u.id = auth.uid()
-        AND u.email IS NOT NULL
-        AND lower(trim(u.email)) = lower(trim(invitee_email))
-    )
-  );
-
--- Link an email invitation to the authenticated user when emails match.
-CREATE OR REPLACE FUNCTION public.claim_plan_invitation_for_user(p_invitation_id UUID)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  _user_id UUID := auth.uid();
-  _invitation public.plan_invitations%ROWTYPE;
-BEGIN
-  IF _user_id IS NULL THEN
-    RAISE EXCEPTION 'not_authenticated';
-  END IF;
-
-  SELECT * INTO _invitation
-  FROM public.plan_invitations
-  WHERE id = p_invitation_id
-  FOR UPDATE;
-
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('claimed', false, 'reason', 'not_found');
-  END IF;
-
-  IF _invitation.invitee_user_id = _user_id THEN
-    RETURN jsonb_build_object('claimed', true, 'alreadyLinked', true);
-  END IF;
-
-  IF _invitation.invitee_user_id IS NOT NULL
-     AND _invitation.invitee_user_id IS DISTINCT FROM _user_id THEN
-    RAISE EXCEPTION 'not_invitee';
-  END IF;
-
-  IF _invitation.invitee_email IS NULL THEN
-    RETURN jsonb_build_object('claimed', false, 'reason', 'not_email_invitation');
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM public.users u
-    WHERE u.id = _user_id
-      AND u.email IS NOT NULL
-      AND lower(trim(u.email)) = lower(trim(_invitation.invitee_email))
-  ) THEN
-    RAISE EXCEPTION 'not_invitee';
-  END IF;
-
-  UPDATE public.plan_invitations
-  SET invitee_user_id = _user_id
-  WHERE id = p_invitation_id;
-
-  RETURN jsonb_build_object('claimed', true, 'alreadyLinked', false);
-END;
-$$;
-
-GRANT EXECUTE ON FUNCTION public.claim_plan_invitation_for_user(UUID) TO authenticated;
+-- Patch invitation accept for free group plans.
+-- Run after 000004 if accept still fails with "Could not respond".
 
 CREATE OR REPLACE FUNCTION public.resolve_invitation_accept_slot_cents(p_plan public.plans)
 RETURNS BIGINT
@@ -158,7 +88,6 @@ BEGIN
     RAISE EXCEPTION 'plan_cancelled';
   END IF;
 
-  -- Auto-link email invitations to the authenticated invitee.
   IF _invitation.invitee_user_id IS NULL AND _invitation.invitee_email IS NOT NULL THEN
     IF NOT EXISTS (
       SELECT 1 FROM public.users u
@@ -176,7 +105,6 @@ BEGIN
     RAISE EXCEPTION 'not_invitee';
   END IF;
 
-  -- Idempotent accept: return existing negotiation state without duplicating rows.
   IF _invitation.status = 'accepted' AND p_action = 'accept' THEN
     SELECT po.id INTO _offer_id
     FROM public.plan_offers po
@@ -491,17 +419,3 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.respond_to_plan_invitation(UUID, TEXT, TEXT, TEXT) TO authenticated;
-
--- Enforce minimum group max_guests at the database layer.
--- Backfill legacy rows first (old UI allowed 2-4); constraint add fails without this.
-UPDATE public.plans
-SET max_guests = 5,
-    updated_at = NOW()
-WHERE is_group_plan = true
-  AND max_guests IS NOT NULL
-  AND max_guests < 5;
-
-ALTER TABLE public.plans DROP CONSTRAINT IF EXISTS plans_group_max_guests_min;
-ALTER TABLE public.plans
-  ADD CONSTRAINT plans_group_max_guests_min
-  CHECK (NOT is_group_plan OR max_guests IS NULL OR max_guests >= 5);

@@ -151,6 +151,18 @@ export function InvitationDetailClient({
         message: 'This plan does not have a valid share amount yet. Ask the host to review pricing.',
         variant: 'error',
       });
+    } else if (msg === 'RPC_NOT_DEPLOYED') {
+      setStatusDialog({
+        title: 'Service unavailable',
+        message: 'Invitation response is not available yet. Please try again shortly or contact support.',
+        variant: 'error',
+      });
+    } else if (msg === 'NOT_AUTHENTICATED') {
+      setStatusDialog({
+        title: 'Sign in required',
+        message: 'Please sign in again to respond to this invitation.',
+        variant: 'error',
+      });
     } else if (msg === 'NOT_FOUND') {
       setStatusDialog({
         title: 'Invitation not found',
@@ -173,16 +185,18 @@ export function InvitationDetailClient({
       const result = await respondToInvitation(invitation.id, action);
 
       if (action === 'accept') {
-        if (result.isNegotiable) {
+        if (result.isNegotiable && result.offerId) {
           router.replace(
             planNegotiateHref(plan.id, {
               offerId: result.offerId,
             })
           );
+        } else if (result.isNegotiable) {
+          router.replace(`/plan/${plan.id}`);
         } else if (result.escrowId) {
           router.replace(`/escrow/${result.escrowId}`);
         } else {
-          router.replace(`/plan/${plan.id}/agreement`);
+          router.replace(`/plan/${plan.id}`);
         }
       } else {
         router.replace('/discover');
@@ -297,12 +311,12 @@ export function InvitationDetailClient({
       ) : null}
 
       {!isExpired && invitation.status === 'pending' ? (
-        <div className="space-y-2 pt-2">
+        <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-stretch">
           <button
             type="button"
             onClick={() => void handleRespond('accept')}
             disabled={!isKycApproved || isResponding}
-            className="flex min-h-[48px] w-full items-center justify-center rounded-full linkup-gradient-primary px-5 py-3 text-[15px] font-extrabold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex min-h-[48px] flex-1 items-center justify-center rounded-full linkup-gradient-primary px-5 py-3 text-[15px] font-extrabold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isResponding ? 'Confirming…' : 'Accept invitation'}
           </button>
@@ -310,7 +324,7 @@ export function InvitationDetailClient({
             type="button"
             onClick={() => setShowDeclineModal(true)}
             disabled={isResponding}
-            className="flex min-h-[44px] w-full items-center justify-center rounded-full border border-border px-5 py-2.5 text-[14px] font-extrabold text-muted transition hover:bg-[#EDE8FF]/50 disabled:opacity-50"
+            className="flex min-h-[48px] flex-1 items-center justify-center rounded-full border border-border px-5 py-3 text-[14px] font-extrabold text-muted transition hover:bg-[#EDE8FF]/50 disabled:opacity-50"
           >
             Decline
           </button>
