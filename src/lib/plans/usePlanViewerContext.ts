@@ -16,6 +16,8 @@ export function usePlanViewerContext(
   currentUserId: string | undefined,
   offers: DbPlanOffer[],
   opts?: {
+    listingExpired?: boolean;
+    /** @deprecated Use listingExpired */
     moodClosed?: boolean;
     completionSelfAcked?: boolean;
     myJoinRequest?: { id: string; status: JoinRequestStatus } | null;
@@ -24,5 +26,5 @@ export function usePlanViewerContext(
   return useMemo(() => {
     if (!plan) return null;
     return derivePlanViewerContext(plan, currentUserId, offers, opts);
-  }, [plan, currentUserId, offers, opts?.moodClosed, opts?.completionSelfAcked, opts?.myJoinRequest]);
+  }, [plan, currentUserId, offers, opts?.listingExpired, opts?.moodClosed, opts?.completionSelfAcked, opts?.myJoinRequest]);
 }

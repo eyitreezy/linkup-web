@@ -12,7 +12,7 @@ import { NegotiationOfferCard } from '@/features/plans/negotiation/NegotiationOf
 import { OfferBubble } from '@/features/plans/negotiation/OfferBubble';
 import { PlanFlowHeader } from '@/features/plans/PlanFlowHeader';
 import { openPlanMeetupChatPath } from '@/lib/messaging/openPlanMeetupChat';
-import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
+import { isPlanListingExpired } from '@/lib/plans/planExpiry';
 import {
   bidderHasActiveGroupSlotOffer,
   countOffersTowardLimit,
@@ -104,8 +104,8 @@ export function PlanNegotiateScreen({ planId, offerId, openAction }: Props) {
   const offers = offersQuery.data ?? [];
   const isCreator = !!user?.id && plan?.creator_id === user.id;
   const isGroupSplit = plan ? isGroupSplitPlan(plan) : false;
-  const moodClosed = plan ? isPlanMoodWindowClosed(plan) : false;
-  const canNegotiate = plan?.status === 'negotiating' && !moodClosed;
+  const planListingExpired = plan ? isPlanListingExpired(plan) : false;
+  const canNegotiate = plan?.status === 'negotiating' && !planListingExpired;
   const dbUser = profileQuery.data?.dbUser ?? null;
 
   const sortedOffers = useMemo(
@@ -471,7 +471,7 @@ export function PlanNegotiateScreen({ planId, offerId, openAction }: Props) {
         {sortedOffers.map((offer) => {
           const mine = offer.bidder_id === user?.id;
           const liveSelectable =
-            isCreator && isOfferLive(offer) && offer.bidder_id !== plan.creator_id && !moodClosed;
+            isCreator && isOfferLive(offer) && offer.bidder_id !== plan.creator_id && !planListingExpired;
           return (
             <OfferBubble
               key={offer.id}
@@ -604,9 +604,9 @@ export function PlanNegotiateScreen({ planId, offerId, openAction }: Props) {
         </form>
       ) : null}
 
-      {moodClosed ? (
-        <p className="text-center text-[13px] font-semibold text-amber-800">
-          Mood window closed. New offers are not accepted.
+      {planListingExpired ? (
+        <p className="text-center text-[13px] font-semibold text-slate-700">
+          This plan has ended. New offers are not accepted.
         </p>
       ) : null}
     </div>

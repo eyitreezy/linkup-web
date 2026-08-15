@@ -8,7 +8,6 @@ type Props = {
 
 export function DiscoverPlanTypePillBadge({ plan, className }: Props) {
   const pill = discoverPlanTypePill(plan);
-  if (!pill) return null;
 
   return (
     <span

@@ -245,6 +245,10 @@ export function PlanCreatorEditModal({ plan, offersCount, onClose, onSaved }: Pr
                 />
               </label>
               <Input label="Category" value={category} onChange={(e) => setCategory(e.target.value)} />
+              <p className="-mt-2 text-[12px] font-semibold leading-snug text-muted">
+                Optional legacy tag for plan-management search. Activity type is set by meet type; mood
+                plans use mood type. Not shown in Discover filters.
+              </p>
             </>
           ) : null}
 

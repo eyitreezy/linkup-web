@@ -46,7 +46,8 @@ import { resolveDiscoverViewerCoords } from '@/lib/discovery/viewerLocation';
 import { planMeetupCoords } from '@/lib/plans/planMeetupCoords';
 import { daysUntilIso, isPlanActiveWindowExpiringSoon } from '@/lib/plans/planActiveWindow';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
-import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
+import { isPlanListingExpired, isPlanMoodWindowClosed, planListingExpiresAt } from '@/lib/plans/planExpiry';
+import { planExpiredDialogContent } from '@/lib/plans/planExpiredDialog';
 import { planShareCity, planSharePriceLabel } from '@/lib/plans/planSharePreview';
 import { formatPlanAppFee, formatPlanCreated, formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { countPendingInvitations, getPlanAvailableSlots } from '@/lib/plans/planInvitations';
@@ -162,6 +163,16 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     },
     initialData: initialBundle,
     staleTime: 15_000,
+    refetchInterval: (query) => {
+      const p = query.state.data?.plan;
+      if (!p || isPlanListingExpired(p)) return false;
+      const expiresAt = planListingExpiresAt(p);
+      if (!expiresAt) return false;
+      const msUntil = expiresAt.getTime() - Date.now();
+      if (msUntil <= 0) return 5_000;
+      if (msUntil <= 5 * 60_000) return 30_000;
+      return false;
+    },
   });
 
   const bundle = detailQuery.data;
@@ -182,10 +193,11 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     isGroupPlan &&
     (availableSlots > 0 || pendingInvitationCount > 0);
   const moodClosed = plan ? isPlanMoodWindowClosed(plan) : false;
+  const planListingExpired = plan ? isPlanListingExpired(plan) : false;
   const boosted = plan ? isPlanBoostActive(plan.boosted_until) : false;
 
   const ctx = usePlanViewerContext(plan ?? null, viewerUserId, bundle?.offers ?? [], {
-    moodClosed,
+    listingExpired: planListingExpired,
     completionSelfAcked: bundle?.completionSelfAcked ?? false,
     myJoinRequest: bundle?.myJoinRequest ?? null,
   });
@@ -299,7 +311,16 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     router.push(planNegotiateHref(planId, { offerId: ctx.myOffer.id }));
   }
 
+  function showPlanExpired(action: 'offer' | 'join' | 'share' | 'invite') {
+    const dialog = planExpiredDialogContent(action);
+    setStatusDialog({ ...dialog, variant: 'info' });
+  }
+
   function goNegotiate() {
+    if (planListingExpired) {
+      showPlanExpired('offer');
+      return;
+    }
     if (!isCreator && requiresVerificationGate(dbUser?.verification_status)) {
       setGateOpen(true);
       return;
@@ -516,9 +537,11 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
             shareAmountCents: plan.current_suggested_share_cents ?? undefined,
           }}
           availableSlots={availableSlots}
+          planListingExpired={planListingExpired}
           open={inviteModalOpen}
           onOpenChange={setInviteModalOpen}
           onSlotsChanged={refreshInvitationSlots}
+          onPlanExpired={() => showPlanExpired('invite')}
         />
       ) : null}
 
@@ -554,7 +577,13 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         right={
           <button
             type="button"
-            onClick={() => setShareModalOpen(true)}
+            onClick={() => {
+              if (planListingExpired) {
+                showPlanExpired('share');
+                return;
+              }
+              setShareModalOpen(true);
+            }}
             className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/20 bg-white/90 text-foreground shadow-sm transition hover:bg-[#EDE8FF]/60"
             aria-label="Share this plan"
           >
@@ -563,9 +592,10 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         }
       />
 
-      {moodClosed ? (
-        <div className="rounded-2xl border border-amber-200/80 bg-amber-50 px-4 py-3 text-[13px] font-semibold text-amber-900">
-          This mood moment has ended. You can still view details, but new offers are closed.
+      {planListingExpired ? (
+        <div className="rounded-2xl border border-slate-200/80 bg-slate-50 px-4 py-3 text-[13px] font-semibold text-slate-700">
+          This plan has ended. You can still view details, but new offers, join requests, invitations,
+          and sharing are closed.
         </div>
       ) : null}
 
@@ -821,7 +851,17 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
             </button>
           ) : null}
           {showInvite ? (
-            <button type="button" className={actionSecondary} onClick={() => setInviteModalOpen(true)}>
+            <button
+              type="button"
+              className={actionSecondary}
+              onClick={() => {
+                if (planListingExpired) {
+                  showPlanExpired('invite');
+                  return;
+                }
+                setInviteModalOpen(true);
+              }}
+            >
               <span className="inline-flex items-center gap-2">
                 <IoPersonAddOutline size={18} />
                 Invite
@@ -847,7 +887,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
           planId={planId}
           suggestedAmountCents={plan.current_suggested_share_cents}
           currency={plan.currency}
-          moodClosed={moodClosed}
+          listingExpired={planListingExpired}
           saved={!!bundle?.saved}
           saveBusy={toggleSaved.isPending}
           chatBusy={chatBusy}
@@ -860,6 +900,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
           onChat={() => void openCounterpartyChat()}
           onCalendar={handleAddToCalendar}
           onJoinRequestSuccess={() => void detailQuery.refetch()}
+          onJoinPlanExpired={() => showPlanExpired('join')}
         />
       ) : null}
 
@@ -1095,7 +1136,7 @@ function ActionRail({
   planId,
   suggestedAmountCents,
   currency,
-  moodClosed,
+  listingExpired,
   saved,
   saveBusy,
   chatBusy,
@@ -1108,12 +1149,13 @@ function ActionRail({
   onChat,
   onCalendar,
   onJoinRequestSuccess,
+  onJoinPlanExpired,
 }: {
   ctx: PlanViewerContext;
   planId: string;
   suggestedAmountCents?: number | null;
   currency?: string;
-  moodClosed: boolean;
+  listingExpired: boolean;
   saved: boolean;
   saveBusy: boolean;
   chatBusy: boolean;
@@ -1126,6 +1168,7 @@ function ActionRail({
   onChat: () => void;
   onCalendar: () => void;
   onJoinRequestSuccess?: () => void;
+  onJoinPlanExpired?: () => void;
 }) {
   const guestCalendarSaveRow = !!(ctx.showCalendar && ctx.showSave);
 
@@ -1136,7 +1179,7 @@ function ActionRail({
           <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
             {saved ? 'Saved' : 'Save plan'}
           </button>
-          <button type="button" className={actionPrimary} onClick={onNegotiate} disabled={moodClosed}>
+          <button type="button" className={actionPrimary} onClick={onNegotiate} disabled={listingExpired}>
             Make offer
           </button>
         </div>
@@ -1151,6 +1194,8 @@ function ActionRail({
             planId={planId}
             suggestedAmountCents={suggestedAmountCents}
             currency={currency ?? 'NGN'}
+            planListingExpired={listingExpired}
+            onPlanExpired={onJoinPlanExpired}
             onSuccess={onJoinRequestSuccess}
           />
         </div>

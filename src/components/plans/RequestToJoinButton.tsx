@@ -1,7 +1,9 @@
 'use client';
 
+import { AppStatusDialog } from '@/components/ui/AppStatusDialog';
 import { formatEscrowMoney } from '@/lib/escrow/escrowPaymentPreview';
 import { submitJoinRequest } from '@/lib/plans/joinRequests';
+import { planExpiredDialogContent } from '@/lib/plans/planExpiredDialog';
 import { cn } from '@/utils/cn';
 import { useState } from 'react';
 import { IoPersonAddOutline } from 'react-icons/io5';
@@ -13,7 +15,9 @@ type Props = {
   planId: string;
   suggestedAmountCents?: number | null;
   currency?: string;
+  planListingExpired?: boolean;
   onSuccess?: () => void;
+  onPlanExpired?: () => void;
   className?: string;
 };
 
@@ -21,15 +25,34 @@ export function RequestToJoinButton({
   planId,
   suggestedAmountCents,
   currency = 'NGN',
+  planListingExpired = false,
   onSuccess,
+  onPlanExpired,
   className,
 }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expiredDialog, setExpiredDialog] = useState<{ title: string; message: string } | null>(
+    null
+  );
+
+  function openJoinDialog() {
+    if (planListingExpired) {
+      const content = planExpiredDialogContent('join');
+      setExpiredDialog(content);
+      onPlanExpired?.();
+      return;
+    }
+    setDialogOpen(true);
+  }
 
   async function handleSubmit() {
+    if (planListingExpired) {
+      setExpiredDialog(planExpiredDialogContent('join'));
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     try {
@@ -39,6 +62,18 @@ export function RequestToJoinButton({
       onSuccess?.();
     } catch (err) {
       console.error('[join-request]', err);
+      const raw =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object' && err && 'message' in err
+            ? String((err as { message?: string }).message)
+            : '';
+      if (raw.toLowerCase().includes('plan_listing_expired')) {
+        setDialogOpen(false);
+        setExpiredDialog(planExpiredDialogContent('join'));
+        onPlanExpired?.();
+        return;
+      }
       setError('Could not send your request. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -47,11 +82,7 @@ export function RequestToJoinButton({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setDialogOpen(true)}
-        className={cn(actionPrimary, className)}
-      >
+      <button type="button" onClick={openJoinDialog} className={cn(actionPrimary, className)}>
         <IoPersonAddOutline size={18} />
         Request to join
       </button>
@@ -75,7 +106,10 @@ export function RequestToJoinButton({
             ) : null}
 
             <div className="mt-4">
-              <label htmlFor="join-request-message" className="mb-1 block text-[11px] font-extrabold uppercase tracking-wide text-muted">
+              <label
+                htmlFor="join-request-message"
+                className="mb-1 block text-[11px] font-extrabold uppercase tracking-wide text-muted"
+              >
                 Message to host (optional)
               </label>
               <textarea
@@ -89,9 +123,7 @@ export function RequestToJoinButton({
               />
             </div>
 
-            {error ? (
-              <p className="mt-2 text-[13px] font-semibold text-red-600">{error}</p>
-            ) : null}
+            {error ? <p className="mt-2 text-[13px] font-semibold text-red-600">{error}</p> : null}
 
             <div className="mt-5 flex flex-col-reverse gap-2 min-[425px]:mt-6 min-[425px]:flex-row min-[425px]:justify-end min-[425px]:gap-3">
               <button
@@ -114,6 +146,14 @@ export function RequestToJoinButton({
           </div>
         </div>
       ) : null}
+
+      <AppStatusDialog
+        open={expiredDialog !== null}
+        variant="info"
+        title={expiredDialog?.title ?? ''}
+        message={expiredDialog?.message ?? ''}
+        onClose={() => setExpiredDialog(null)}
+      />
     </>
   );
 }

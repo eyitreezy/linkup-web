@@ -1,3 +1,4 @@
+import { isPlanListingExpired } from '@/lib/plans/planExpiry';
 import { createClient } from '@/lib/supabase/client';
 import type {
   AccountStatus,
@@ -496,8 +497,5 @@ export async function resolveEscrowDispute(disputeId: string, note?: string) {
 }
 
 export function isPlanExpired(p: DbPlan): boolean {
-  return (
-    !!p.is_expired ||
-    (!!p.is_mood_plan && !!p.mood_expires_at && new Date(p.mood_expires_at).getTime() <= Date.now())
-  );
+  return isPlanListingExpired(p);
 }

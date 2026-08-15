@@ -1,7 +1,7 @@
 import { fetchAgreementsRail } from '@/lib/plans/fetchAgreementsRail';
 import { LIVE_NEGOTIATION_OFFER_STATUSES } from '@/lib/plans/negotiationState';
 import { isOfferExpired } from '@/lib/plans/offerRules';
-import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
+import { isPlanListingExpired } from '@/lib/plans/planExpiry';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DbPlan, DbPlanOffer } from '@/types/database';
 
@@ -96,7 +96,7 @@ export async function fetchFeedEngagementCarousel(
     for (const o of offers) {
       const p = planById.get(o.plan_id);
       if (!p || p.status !== 'negotiating') continue;
-      if (isPlanMoodWindowClosed(p)) continue;
+      if (isPlanListingExpired(p)) continue;
       if (isOfferExpired(o)) continue;
       if (seen.has(o.plan_id)) continue;
       seen.add(o.plan_id);
@@ -143,7 +143,7 @@ export async function fetchFeedEngagementCarousel(
         | Pick<DbPlan, 'id' | 'title' | 'updated_at' | 'is_mood_plan' | 'is_expired' | 'mood_expires_at'>
         | undefined;
       if (!pl) continue;
-      if (isPlanMoodWindowClosed(pl)) continue;
+      if (isPlanListingExpired(pl)) continue;
       const pr = bidders.get(o.bidder_id);
       out.push({
         key: `recv-${o.id}`,

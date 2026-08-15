@@ -8,13 +8,13 @@ type PlanKindSource = {
   is_mood_plan?: boolean | null;
 };
 
-/** Shared plan-type pill config for Discover grid and list views. */
-export function discoverPlanTypePill(plan: PlanKindSource): DiscoverPlanTypePill | null {
+/** Shared plan-type pill config for Discover grid, list, and plan management. */
+export function discoverPlanTypePill(plan: PlanKindSource): DiscoverPlanTypePill {
   if (plan.is_group_plan) {
     return { label: 'Group', colorClass: 'bg-[#5E52FF]/80 text-white' };
   }
   if (plan.is_mood_plan) {
     return { label: 'Mood', colorClass: 'bg-[#FF4A72]/80 text-white' };
   }
-  return null;
+  return { label: 'Standard', colorClass: 'bg-primary/15 text-primary' };
 }

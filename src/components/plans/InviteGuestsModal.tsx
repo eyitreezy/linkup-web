@@ -13,7 +13,13 @@ import {
   type PlanInvitationRow,
   type PlanInviteDetails,
 } from '@/lib/plans/planInvitations';
+import {
+  inviteErrorDialogContent,
+  inviteSuccessDialogContent,
+  mapInviteClientError,
+} from '@/lib/plans/inviteErrorMessages';
 import { invitationSearchAlreadyMemberLabel } from '@/lib/plans/invitationSearchMemberLabel';
+import { planExpiredDialogContent } from '@/lib/plans/planExpiredDialog';
 import { cn } from '@/utils/cn';
 import { useCallback, useEffect, useState } from 'react';
 import { IoCheckmarkCircle, IoPeopleOutline } from 'react-icons/io5';
@@ -125,18 +131,22 @@ type Props = {
   planId: string;
   planDetails: PlanInviteDetails;
   availableSlots: number;
+  planListingExpired?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSlotsChanged?: () => void;
+  onPlanExpired?: () => void;
 };
 
 export function InviteGuestsModal({
   planId,
   planDetails,
   availableSlots,
+  planListingExpired = false,
   open,
   onOpenChange,
   onSlotsChanged,
+  onPlanExpired,
 }: Props) {
   const [activeTab, setActiveTab] = useState<'search' | 'email'>('search');
   const [searchQuery, setSearchQuery] = useState('');
@@ -153,6 +163,12 @@ export function InviteGuestsModal({
     setSentInvitations(updated);
     onSlotsChanged?.();
   }, [planId, onSlotsChanged]);
+
+  function showInviteError(err: unknown) {
+    const raw = err instanceof Error ? err.message : '';
+    const code = mapInviteClientError(raw);
+    setStatusDialog(inviteErrorDialogContent(code));
+  }
 
   useEffect(() => {
     if (searchQuery.trim().length < 2) {
@@ -176,7 +192,16 @@ export function InviteGuestsModal({
     void refreshInvitations();
   }, [open, refreshInvitations]);
 
+  function guardExpiredInvite(): boolean {
+    if (!planListingExpired) return false;
+    const dialog = planExpiredDialogContent('invite');
+    setStatusDialog(dialog);
+    onPlanExpired?.();
+    return true;
+  }
+
   async function handleSendToUser(userId: string) {
+    if (guardExpiredInvite()) return;
     if (availableSlots <= 0) return;
     const target = searchResults.find((r) => r.user_id === userId);
     if (target?.already_member) return;
@@ -188,24 +213,9 @@ export function InviteGuestsModal({
       setSearchResults((prev) =>
         prev.map((r) => (r.user_id === userId ? { ...r, already_invited: true } : r))
       );
+      setStatusDialog(inviteSuccessDialogContent());
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : '';
-      if (msg === 'NO_SLOTS') {
-        setStatusDialog({
-          title: 'No slots available',
-          message: 'Slots free up when invitations expire or are declined.',
-        });
-      } else if (msg === 'ALREADY_INVITED') {
-        setStatusDialog({
-          title: 'Already invited',
-          message: 'This person already has an active invitation.',
-        });
-      } else {
-        setStatusDialog({
-          title: 'Could not send invitation',
-          message: 'Please try again.',
-        });
-      }
+      showInviteError(err);
     } finally {
       setIsSending(false);
       setInvitingUserId(null);
@@ -213,45 +223,21 @@ export function InviteGuestsModal({
   }
 
   async function handleSendByEmail() {
+    if (guardExpiredInvite()) return;
     const email = emailInput.trim();
     if (!email || availableSlots <= 0) return;
     setIsSending(true);
     try {
-      await sendInvitationByEmail(planId, email, planDetails);
+      const result = await sendInvitationByEmail(planId, email, planDetails);
       setEmailInput('');
       await refreshInvitations();
-      setStatusDialog({
-        title: 'Invitation sent successfully',
-        message: `We sent an invitation to ${email}. They can sign up and accept from their inbox.`,
-      });
+      setStatusDialog(
+        result.delivery === 'in_app'
+          ? inviteSuccessDialogContent()
+          : inviteSuccessDialogContent(email)
+      );
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : '';
-      if (msg === 'NO_SLOTS') {
-        setStatusDialog({
-          title: 'No slots available',
-          message: 'Slots free up when invitations expire or are declined.',
-        });
-      } else if (msg === 'INVALID_EMAIL') {
-        setStatusDialog({
-          title: 'Invalid email',
-          message: 'Enter a valid email address and try again.',
-        });
-      } else if (msg === 'ALREADY_INVITED') {
-        setStatusDialog({
-          title: 'Already invited',
-          message: 'This email already has an active invitation for this plan.',
-        });
-      } else if (msg === 'EMAIL_DELIVERY_FAILED') {
-        setStatusDialog({
-          title: 'Could not send email',
-          message: 'The invitation could not be delivered. Please try again in a few minutes.',
-        });
-      } else {
-        setStatusDialog({
-          title: 'Could not send invitation',
-          message: 'Please check the email and try again.',
-        });
-      }
+      showInviteError(err);
     } finally {
       setIsSending(false);
     }
@@ -271,6 +257,12 @@ export function InviteGuestsModal({
           <h2 id="invite-guests-title" className="font-display text-lg font-extrabold text-foreground">
             Invite guests
           </h2>
+
+          {planListingExpired ? (
+            <p className="mt-2 rounded-xl bg-slate-500/10 px-3 py-2 text-[13px] font-semibold text-slate-700">
+              This plan has ended and is no longer accepting invitations.
+            </p>
+          ) : null}
 
           <div
             className={cn(
@@ -316,6 +308,7 @@ export function InviteGuestsModal({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by name, username or phone"
                   autoComplete="off"
+                  disabled={planListingExpired}
                 />
                 {isSearching ? (
                   <p className="py-3 text-center text-[13px] font-semibold text-muted">Searching…</p>
@@ -326,7 +319,12 @@ export function InviteGuestsModal({
                       key={user.user_id}
                       user={user}
                       onInvite={() => void handleSendToUser(user.user_id)}
-                      disabled={user.already_invited || user.already_member || availableSlots <= 0}
+                      disabled={
+                        planListingExpired ||
+                        user.already_invited ||
+                        user.already_member ||
+                        availableSlots <= 0
+                      }
                       inviting={isSending && invitingUserId === user.user_id}
                     />
                   ))}
@@ -344,6 +342,7 @@ export function InviteGuestsModal({
                 onChange={(e) => setEmailInput(e.target.value)}
                 placeholder="Enter email address"
                 autoComplete="email"
+                disabled={planListingExpired}
               />
             )}
 
@@ -389,7 +388,7 @@ export function InviteGuestsModal({
               <button
                 type="button"
                 onClick={() => void handleSendByEmail()}
-                disabled={!emailInput.trim() || availableSlots <= 0 || isSending}
+                disabled={planListingExpired || !emailInput.trim() || availableSlots <= 0 || isSending}
                 className="flex min-h-[44px] flex-1 items-center justify-center rounded-full linkup-gradient-primary px-4 text-[14px] font-extrabold text-white transition hover:opacity-95 disabled:opacity-40"
               >
                 {isSending ? 'Sending…' : 'Send invitation'}

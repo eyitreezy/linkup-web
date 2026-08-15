@@ -100,12 +100,15 @@ export function derivePlanViewerContext(
   userId: string | undefined,
   offers: DbPlanOffer[],
   opts?: {
+    /** Discover/listing window ended — blocks new offers and join requests. */
+    listingExpired?: boolean;
+    /** @deprecated Use listingExpired */
     moodClosed?: boolean;
     completionSelfAcked?: boolean;
     myJoinRequest?: { id: string; status: JoinRequestStatus } | null;
   }
 ): PlanViewerContext {
-  const moodClosed = opts?.moodClosed ?? false;
+  const listingExpired = opts?.listingExpired ?? opts?.moodClosed ?? false;
   const completionSelfAcked = opts?.completionSelfAcked ?? false;
   const myJoinRequest = opts?.myJoinRequest ?? null;
   const isNegotiable = plan.is_negotiable !== false;
@@ -161,14 +164,14 @@ export function derivePlanViewerContext(
         // Save only
       } else {
         const canRequest =
-          !moodClosed && (lockState === 'open' || (isGroup && lockState === 'partial'));
+          !listingExpired && (lockState === 'open' || (isGroup && lockState === 'partial'));
         showRequestToJoin = canRequest;
       }
     } else if (isNegotiatingGuest) {
       showViewOffer = true;
     } else if (isBrowsingGuest) {
       const canOffer =
-        !moodClosed && (lockState === 'open' || (isGroup && lockState === 'partial'));
+        !listingExpired && (lockState === 'open' || (isGroup && lockState === 'partial'));
       showMakeOffer = canOffer && isNegotiable;
     }
   }

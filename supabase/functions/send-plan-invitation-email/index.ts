@@ -117,7 +117,9 @@ Deno.serve(async (req) => {
 
   const { data: plan, error: planErr } = await supabase
     .from('plans')
-    .select('id, creator_id, scheduled_at, is_group_plan, group_closed_at, max_guests, accepted_guest_count')
+    .select(
+      'id, creator_id, scheduled_at, is_group_plan, group_closed_at, max_guests, accepted_guest_count, is_mood_plan, is_expired, mood_expires_at, active_expires_at'
+    )
     .eq('id', planId)
     .single();
 
@@ -135,6 +137,19 @@ Deno.serve(async (req) => {
 
   if (plan.group_closed_at) {
     return jsonError('group_already_closed', 400);
+  }
+
+  const listingExpired =
+    !!plan.is_expired ||
+    (plan.is_mood_plan &&
+      plan.mood_expires_at &&
+      new Date(plan.mood_expires_at).getTime() <= Date.now()) ||
+    (!plan.is_mood_plan &&
+      plan.active_expires_at &&
+      new Date(plan.active_expires_at).getTime() <= Date.now());
+
+  if (listingExpired) {
+    return jsonError('plan_listing_expired', 400);
   }
 
   const { data: slots, error: slotsErr } = await supabase.rpc('get_plan_available_slots', {
@@ -159,7 +174,7 @@ Deno.serve(async (req) => {
       console.error('[send-plan-invitation-email] in-app invite', rpcErr.message);
       return jsonError(rpcErr.message, 400);
     }
-    return jsonResponse({ invitationId: String(invId) });
+    return jsonResponse({ invitationId: String(invId), delivery: 'in_app' });
   }
 
   const expiresAt = invitationExpiresAt(plan.scheduled_at ?? null);
@@ -230,5 +245,5 @@ Deno.serve(async (req) => {
     return jsonError('email_failed', 502);
   }
 
-  return jsonResponse({ invitationId: invitation.id });
+  return jsonResponse({ invitationId: invitation.id, delivery: 'email' });
 });

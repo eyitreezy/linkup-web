@@ -1,4 +1,4 @@
-import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
+import { isPlanListingExpired, isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
 import type { DbMeetType, DbPlan } from '@/types/database';
 
 export type CreatorPlanRow = DbPlan & { meet_types?: DbMeetType | null };
@@ -14,15 +14,17 @@ export type PlanManagementSection =
 export type PlanSortKey = 'newest' | 'oldest' | 'expiring';
 
 export function isMoodExpired(p: CreatorPlanRow): boolean {
-  return (
-    !!p.is_mood_plan &&
-    (!!p.is_expired || (p.mood_expires_at != null && new Date(p.mood_expires_at).getTime() <= Date.now()))
-  );
+  return !!p.is_mood_plan && isPlanListingExpired(p);
+}
+
+/** Listing window ended (mood or standard active window). */
+export function isCreatorPlanListingExpired(p: CreatorPlanRow): boolean {
+  return isPlanListingExpired(p);
 }
 
 export function planMatchesSection(p: CreatorPlanRow, section: PlanManagementSection): boolean {
   const archived = p.archived_at != null;
-  const expiredMood = isMoodExpired(p);
+  const listingExpired = isCreatorPlanListingExpired(p);
 
   switch (section) {
     case 'all':
@@ -30,13 +32,13 @@ export function planMatchesSection(p: CreatorPlanRow, section: PlanManagementSec
     case 'active':
       return (
         !archived &&
-        !expiredMood &&
+        !listingExpired &&
         ['negotiating', 'active', 'agreed', 'awaiting_payment'].includes(p.status)
       );
     case 'mood':
       return !archived && !!p.is_mood_plan;
     case 'expired':
-      return !archived && expiredMood;
+      return !archived && listingExpired;
     case 'drafts':
       return p.status === 'draft' && !archived;
     case 'archived':
@@ -90,7 +92,7 @@ export function planStripeKind(
 ): 'default' | 'mood' | 'draft' | 'expired' | 'archived' {
   if (p.archived_at) return 'archived';
   if (p.status === 'draft') return 'draft';
-  if (isMoodExpired(p)) return 'expired';
+  if (isCreatorPlanListingExpired(p)) return 'expired';
   if (p.is_mood_plan) return 'mood';
   return 'default';
 }

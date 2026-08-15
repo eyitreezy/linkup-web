@@ -1,4 +1,8 @@
 import { readEdgeFunctionErrorBody } from '@/lib/supabase/readEdgeFunctionError';
+import {
+  mapInviteClientError,
+  type InviteClientErrorCode,
+} from '@/lib/plans/inviteErrorMessages';
 import { createClient } from '@/lib/supabase/client';
 import type { InvitationStatus } from '@/types/database';
 
@@ -69,18 +73,16 @@ export function mapInvitationRpcError(error: { message?: string; details?: strin
   return msg || 'UNKNOWN_ERROR';
 }
 
-function mapEmailInviteError(raw: string): string {
-  const code = raw.toLowerCase();
-  if (code.includes('no_slots') || code.includes('no_slots_available')) return 'NO_SLOTS';
-  if (code.includes('invalid_email')) return 'INVALID_EMAIL';
-  if (code.includes('misconfigured') || code.includes('email_failed') || code.includes('magic_link')) {
-    return 'EMAIL_DELIVERY_FAILED';
-  }
-  if (code.includes('not_plan_host')) return 'NOT_HOST';
-  if (code.includes('invitations_group_only')) return 'GROUP_ONLY';
-  if (code.includes('group_already_closed')) return 'GROUP_CLOSED';
-  if (code.includes('duplicate') || code.includes('already')) return 'ALREADY_INVITED';
-  return raw || 'EMAIL_INVITE_FAILED';
+function mapEmailInviteError(raw: string): InviteClientErrorCode {
+  return mapInviteClientError(raw);
+}
+
+function mapUserInviteRpcError(error: { message?: string; details?: string }): InviteClientErrorCode {
+  const code = rpcErrorCode(error);
+  if (code.includes('no_slots_available')) return 'NO_SLOTS';
+  if (code.includes('invitation_already_exists')) return 'ALREADY_INVITED';
+  if (code.includes('plan_listing_expired') || code.includes('plan_expired')) return 'PLAN_EXPIRED';
+  return mapInviteClientError(code);
 }
 
 export async function claimPlanInvitationForUser(invitationId: string): Promise<boolean> {
@@ -110,7 +112,7 @@ export async function sendInvitationToUser(
   planId: string,
   inviteeUserId: string,
   _planDetails?: PlanInviteDetails
-): Promise<{ invitationId: string }> {
+): Promise<{ invitationId: string; delivery?: 'email' | 'in_app' }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('send_plan_invitation_to_user', {
     p_plan_id: planId,
@@ -118,10 +120,7 @@ export async function sendInvitationToUser(
   });
 
   if (error) {
-    const code = rpcErrorCode(error);
-    if (code.includes('no_slots_available')) throw new Error('NO_SLOTS');
-    if (code.includes('invitation_already_exists')) throw new Error('ALREADY_INVITED');
-    throw error;
+    throw new Error(mapUserInviteRpcError(error));
   }
 
   return { invitationId: data as string };
@@ -131,7 +130,7 @@ export async function sendInvitationByEmail(
   planId: string,
   inviteeEmail: string,
   planDetails: PlanInviteDetails
-): Promise<{ invitationId: string }> {
+): Promise<{ invitationId: string; delivery?: 'email' | 'in_app' }> {
   const supabase = createClient();
   const normalizedEmail = inviteeEmail.trim().toLowerCase();
 
@@ -157,12 +156,12 @@ export async function sendInvitationByEmail(
     console.error('[sendInvitationByEmail] invoke', error);
     const body = await readEdgeFunctionErrorBody(error);
     if (body?.error) throw new Error(mapEmailInviteError(String(body.error)));
-    throw new Error(mapEmailInviteError(error.message ?? 'EMAIL_INVITE_FAILED'));
+    throw new Error(mapEmailInviteError(error.message ?? 'INVITE_FAILED'));
   }
-  const payload = data as { invitationId?: string; error?: string } | null;
+  const payload = data as { invitationId?: string; error?: string; delivery?: 'email' | 'in_app' } | null;
   if (payload?.error) throw new Error(mapEmailInviteError(payload.error));
-  if (!payload?.invitationId) throw new Error('invitation_failed');
-  return { invitationId: payload.invitationId };
+  if (!payload?.invitationId) throw new Error('INVITE_FAILED');
+  return { invitationId: payload.invitationId, delivery: payload.delivery ?? 'email' };
 }
 
 export async function respondToInvitation(

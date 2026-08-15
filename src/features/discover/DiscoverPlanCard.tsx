@@ -18,7 +18,6 @@ import { publicProfileHref } from '@/lib/profile/profileRoutes';
 import type { PlanFeedRow } from '@/services/plans.service';
 import type { DbProfile } from '@/types/database';
 import Link from 'next/link';
-import { cn } from '@/utils/cn';
 import { IoGlobeOutline, IoShieldCheckmark } from 'react-icons/io5';
 
 type Props = {
@@ -57,8 +56,6 @@ export function DiscoverPlanCard({
         ))
     : null;
 
-  const showPlanTypePill = plan.is_group_plan || plan.is_mood_plan;
-
   return (
     <article className="group min-w-0 overflow-hidden rounded-[18px] border border-primary/10 bg-white shadow-[0_8px_28px_rgba(42,31,85,0.08)] transition hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-[0_14px_36px_rgba(108,99,255,0.14)] min-[360px]:rounded-[22px]">
       <Link href={`/plan/${plan.id}`} className="block">
@@ -71,7 +68,7 @@ export function DiscoverPlanCard({
                 {distanceLabel}
               </span>
             ) : null}
-            {showPlanTypePill ? <DiscoverPlanTypePillBadge plan={plan} /> : null}
+            <DiscoverPlanTypePillBadge plan={plan} />
             {boosted ? <BoostPill variant="mini" /> : null}
           </div>
         </div>

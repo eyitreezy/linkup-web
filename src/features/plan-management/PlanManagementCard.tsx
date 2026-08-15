@@ -1,8 +1,10 @@
 'use client';
 
+import { DiscoverPlanTypePillBadge } from '@/components/plans/discover/DiscoverPlanTypePillBadge';
 import { getCreatorEditCapabilities } from '@/lib/plans/planCreatorEditPolicy';
+import { formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import {
-  isMoodExpired,
+  isCreatorPlanListingExpired,
   moodLive,
   planStripeKind,
   type CreatorPlanRow,
@@ -10,7 +12,7 @@ import {
 import { pmActionBtn, pmActionScroller } from '@/features/plan-management/planManagementLayout';
 import { cn } from '@/utils/cn';
 import Link from 'next/link';
-import { IoBookmarkOutline, IoChatbubblesOutline, IoEyeOutline } from 'react-icons/io5';
+import { IoBookmarkOutline, IoChatbubblesOutline, IoEyeOutline, IoLocationOutline } from 'react-icons/io5';
 
 const STRIPE: Record<ReturnType<typeof planStripeKind>, string> = {
   default: 'bg-primary',
@@ -54,38 +56,60 @@ export function PlanManagementCard({
 }: Props) {
   const caps = getCreatorEditCapabilities(plan, offers);
   const live = moodLive(plan);
-  const ended = plan.is_mood_plan && isMoodExpired(plan);
+  const listingExpired = isCreatorPlanListingExpired(plan);
   const engagementTotal = views + saves;
+  const whenLabel = formatPlanWhen(plan);
+  const priceLabel =
+    plan.starting_price_cents && plan.starting_price_cents > 0
+      ? `From ₦${(plan.starting_price_cents / 100).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`
+      : 'Free';
 
   return (
-    <article className="pm-card flex w-full min-w-0 overflow-hidden rounded-2xl border border-border/80 bg-white/90 shadow-sm transition hover:border-primary/20 hover:shadow-md min-[425px]:rounded-[18px]">
+    <article
+      className={cn(
+        'pm-card flex w-full min-w-0 overflow-hidden rounded-2xl border bg-white/90 shadow-sm transition min-[425px]:rounded-[18px]',
+        listingExpired
+          ? 'border-slate-200/90 opacity-[0.92] hover:border-slate-300'
+          : 'border-border/80 hover:border-primary/20 hover:shadow-md'
+      )}
+    >
       <div className={cn('w-1 shrink-0', STRIPE[planStripeKind(plan)])} aria-hidden />
       <div className="min-w-0 flex-1 p-3 min-[425px]:p-4">
         <div className="pm-card-head">
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="pm-card-title font-display text-foreground">{plan.title}</h3>
+              <DiscoverPlanTypePillBadge plan={plan} className="px-2.5 py-1 text-[10px]" />
+              {listingExpired ? (
+                <span className="inline-flex rounded-full bg-slate-500/12 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-slate-600">
+                  Expired
+                </span>
+              ) : live ? (
+                <span className="inline-flex rounded-full bg-secondary/15 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-secondary">
+                  Live
+                </span>
+              ) : null}
               {hasNewActivity ? (
                 <span className="inline-flex items-center rounded-full bg-secondary/90 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-white">
                   new
                 </span>
               ) : null}
             </div>
-            <p className="pm-card-meta mt-1 font-semibold text-muted">
-              {plan.status}
-              {plan.is_mood_plan ? ' · Mood' : ''}
+            <h3 className="pm-card-title font-display text-foreground">{plan.title}</h3>
+            <p className="pm-card-meta font-semibold capitalize text-muted">
+              {plan.status.replace(/_/g, ' ')}
               {distanceKm != null ? ` · ${Math.round(distanceKm)} km` : ''}
             </p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] font-semibold text-muted">
+              {whenLabel ? <span>{whenLabel}</span> : null}
+              {plan.location_label ? (
+                <span className="inline-flex max-w-full items-center gap-1 truncate">
+                  <IoLocationOutline className="shrink-0" size={14} />
+                  {plan.location_label}
+                </span>
+              ) : null}
+              <span>{priceLabel}</span>
+            </div>
           </div>
-          {live && plan.mood_expires_at ? (
-            <span className="pm-status-badge inline-flex shrink-0 self-start rounded-full bg-secondary/15 px-3 py-1 text-secondary">
-              Live
-            </span>
-          ) : ended ? (
-            <span className="pm-status-badge inline-flex shrink-0 self-start rounded-full bg-slate-500/15 px-3 py-1 text-slate-600">
-              Ended
-            </span>
-          ) : null}
         </div>
 
         <div className="pm-card-metrics mt-3 min-[425px]:mt-3">
@@ -104,11 +128,7 @@ export function PlanManagementCard({
         </div>
 
         <div className={cn(pmActionScroller)}>
-          <Link
-            href={`/plan/${plan.id}`}
-            className={pmActionBtn}
-            onClick={() => onMarkRead()}
-          >
+          <Link href={`/plan/${plan.id}`} className={pmActionBtn} onClick={() => onMarkRead()}>
             Open
           </Link>
           {plan.status !== 'draft' ? (

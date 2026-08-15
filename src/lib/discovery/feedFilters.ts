@@ -4,7 +4,7 @@ import {
   hostPresenceMatchesFilter,
   resolveHostPresenceKind,
 } from '@/lib/presence/hostPresenceStatus';
-import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
+import { isPlanListingExpired, isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
 import { rankDiscoveryPlans, rankMoodTimelinePlans } from '@/lib/plans/feedRanking';
 import { moodReachVisibleToViewer } from '@/lib/plans/moodReachFilter';
 import { planMeetupCoords } from '@/lib/plans/planMeetupCoords';
@@ -211,7 +211,7 @@ export function applyDiscoverFilters(
   }
 
   out = out.filter((row) => {
-    if (row.is_mood_plan && isPlanMoodWindowClosed(row)) return false;
+    if (isPlanListingExpired(row)) return false;
 
     if (filter.verifiedHostsOnly && !passesVerifiedHostFilter(row, filter.verifiedHostsOnly)) {
       return false;
