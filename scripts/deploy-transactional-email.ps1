@@ -29,7 +29,11 @@ if (-not $resendFrom) {
   if ([string]::IsNullOrWhiteSpace($input)) {
     $resendFrom = 'LinkUp <noreply@flowdecklabs.com>'
   } else {
-    $resendFrom = $input
+    if ($input -match '@' -and $input -notmatch '[<>]') {
+      $resendFrom = "LinkUp <$input>"
+    } else {
+      $resendFrom = $input
+    }
   }
 }
 

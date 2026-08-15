@@ -18,11 +18,20 @@ export type ResendSendResult =
   | { ok: true; id: string }
   | { ok: false; status: number; error: string };
 
+/** Resend accepts `Name <email@domain.com>` or bare `email@domain.com`. */
+export function normalizeResendFrom(raw: string): string {
+  const from = raw.trim();
+  if (!from) return from;
+  if (from.includes('<') && from.includes('>')) return from;
+  if (from.includes('@')) return `LinkUp <${from}>`;
+  return from;
+}
+
 export function getResendConfig(): { apiKey: string; from: string } | null {
   const apiKey = Deno.env.get('RESEND_API_KEY')?.trim();
-  const from = Deno.env.get('RESEND_FROM')?.trim();
-  if (!apiKey || !from) return null;
-  return { apiKey, from };
+  const fromRaw = Deno.env.get('RESEND_FROM')?.trim();
+  if (!apiKey || !fromRaw) return null;
+  return { apiKey, from: normalizeResendFrom(fromRaw) };
 }
 
 /** Plain-text footer used by notification-email and meet-type mail. */

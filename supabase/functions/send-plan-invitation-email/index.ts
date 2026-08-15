@@ -76,6 +76,40 @@ function invitationExpiresAt(planScheduledAt: string | null): Date {
   return new Date(Math.min(defaultExpiry, beforeMeetup));
 }
 
+async function generateInvitationMagicLink(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  email: string,
+  redirectTo: string
+): Promise<{ magicLink: string } | { error: string }> {
+  const linkTypes = ['invite', 'magiclink', 'signup'] as const;
+
+  for (const type of linkTypes) {
+    const { data, error } = await supabase.auth.admin.generateLink({
+      type,
+      email,
+      options: { redirectTo },
+    });
+
+    const actionLink = data?.properties?.action_link;
+    if (!error && actionLink) {
+      console.log('[send-plan-invitation-email] magic link', { type, emailDomain: email.split('@')[1] ?? 'unknown' });
+      return { magicLink: actionLink };
+    }
+
+    const message = error?.message?.toLowerCase() ?? '';
+    console.warn('[send-plan-invitation-email] generateLink failed', { type, message: error?.message });
+    if (
+      message.includes('already') ||
+      message.includes('registered') ||
+      message.includes('exists')
+    ) {
+      continue;
+    }
+  }
+
+  return { error: 'magic_link_failed' };
+}
+
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
@@ -240,23 +274,15 @@ Deno.serve(async (req) => {
   }
 
   const redirectTo = `${APP_URL}/onboarding?invitation_token=${invitation.invitation_token}`;
-  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-    type: 'invite',
-    email: inviteeEmail,
-    options: { redirectTo },
-  });
+  const linkResult = await generateInvitationMagicLink(supabase, inviteeEmail, redirectTo);
 
-  if (linkError) {
+  if ('error' in linkResult) {
     await supabase.from('plan_invitations').delete().eq('id', invitation.id);
-    console.error('[send-plan-invitation-email] magic link', linkError.message);
+    console.error('[send-plan-invitation-email] magic link exhausted all strategies');
     return jsonError('magic_link_failed', 500);
   }
 
-  const magicLink = linkData.properties?.action_link;
-  if (!magicLink) {
-    await supabase.from('plan_invitations').delete().eq('id', invitation.id);
-    return jsonError('magic_link_failed', 500);
-  }
+  const magicLink = linkResult.magicLink;
 
   const details = body.planDetails ?? {};
   const emailParams: InvitationEmailParams = {
@@ -277,8 +303,12 @@ Deno.serve(async (req) => {
 
   if (!emailResult.ok) {
     console.error('[send-plan-invitation-email] Resend', emailResult.status, emailResult.error);
-    await supabase.from('plan_invitations').delete().eq('id', invitation.id);
-    return jsonError('email_failed', 502);
+    return jsonResponse({
+      invitationId: invitation.id,
+      delivery: 'email',
+      emailSent: false,
+      emailError: 'email_failed',
+    });
   }
 
   console.log('[send-plan-invitation-email] delivery=email', {

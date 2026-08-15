@@ -230,11 +230,16 @@ export function InviteGuestsModal({
     try {
       const result = await sendInvitationByEmail(planId, email, planDetails);
       setEmailInput('');
-      await refreshInvitations();
+      try {
+        await refreshInvitations();
+      } catch (refreshErr) {
+        console.warn('[InviteGuestsModal] refresh after invite failed', refreshErr);
+      }
       setStatusDialog(
         inviteSuccessDialogContent(
           result.delivery === 'in_app' ? undefined : email,
-          result.delivery === 'in_app' ? 'in_app' : 'email'
+          result.delivery === 'in_app' ? 'in_app' : 'email',
+          result.emailSent !== false
         )
       );
     } catch (err: unknown) {

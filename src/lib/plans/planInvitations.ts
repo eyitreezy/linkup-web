@@ -129,7 +129,7 @@ export async function sendInvitationByEmail(
   planId: string,
   inviteeEmail: string,
   planDetails: PlanInviteDetails
-): Promise<{ invitationId: string; delivery?: 'email' | 'in_app' }> {
+): Promise<{ invitationId: string; delivery?: 'email' | 'in_app'; emailSent?: boolean }> {
   const normalizedEmail = inviteeEmail.trim().toLowerCase();
 
   const shareLabel = planDetails.shareAmountCents
@@ -155,25 +155,48 @@ export async function sendInvitationByEmail(
 
   type InviteEmailResponse = {
     invitationId?: string;
+    invitation_id?: string;
     error?: string;
     delivery?: 'email' | 'in_app';
+    emailSent?: boolean;
+    emailError?: string;
   };
 
   let payload: InviteEmailResponse | null = null;
   try {
     payload = (await res.json()) as InviteEmailResponse;
   } catch {
+    console.error('[sendInvitationByEmail] response not json', res.status);
     throw new Error('INVITE_FAILED');
   }
 
+  const invitationId = payload?.invitationId ?? payload?.invitation_id;
+
   if (!res.ok) {
     console.error('[sendInvitationByEmail]', res.status, payload);
+    if (invitationId) {
+      return {
+        invitationId,
+        delivery: payload?.delivery ?? 'email',
+        emailSent: payload?.emailSent ?? false,
+      };
+    }
     throw new Error(mapEmailInviteError(String(payload?.error ?? 'INVITE_FAILED')));
   }
 
-  if (payload?.error) throw new Error(mapEmailInviteError(payload.error));
-  if (!payload?.invitationId) throw new Error('INVITE_FAILED');
-  return { invitationId: payload.invitationId, delivery: payload.delivery ?? 'email' };
+  if (payload?.error && !invitationId) {
+    throw new Error(mapEmailInviteError(payload.error));
+  }
+  if (!invitationId) {
+    console.error('[sendInvitationByEmail] missing invitationId', payload);
+    throw new Error('INVITE_FAILED');
+  }
+
+  return {
+    invitationId,
+    delivery: payload?.delivery ?? 'email',
+    emailSent: payload?.emailSent ?? payload?.delivery !== 'in_app',
+  };
 }
 
 export async function respondToInvitation(

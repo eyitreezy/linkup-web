@@ -103,13 +103,20 @@ export function inviteErrorDialogContent(code: InviteClientErrorCode): {
 
 export function inviteSuccessDialogContent(
   email?: string,
-  delivery: 'email' | 'in_app' = email ? 'email' : 'in_app'
+  delivery: 'email' | 'in_app' = email ? 'email' : 'in_app',
+  emailSent = true
 ): { title: string; message: string } {
   if (delivery === 'in_app') {
     return {
       title: 'Invitation sent successfully',
       message:
         'This person already has a LinkUp account. They were notified in the app — no email was sent.',
+    };
+  }
+  if (email && emailSent === false) {
+    return {
+      title: 'Invitation saved',
+      message: `The invitation for ${email} was saved, but the email could not be sent. Check Resend configuration or try again later — they appear under Sent invitations.`,
     };
   }
   if (email) {
