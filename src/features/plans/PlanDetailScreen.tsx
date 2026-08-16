@@ -877,18 +877,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
               </span>
             </button>
           ) : null}
-          {ctx?.showManageRequests ? (
-            <Link href={`/plan/${planId}/requests`} className={actionPrimary}>
-              <span className="inline-flex items-center gap-2">
-                <IoPeople size={18} />
-                Manage requests
-              </span>
-            </Link>
-          ) : ctx?.showManageOffers ? (
-            <button type="button" className={actionPrimary} onClick={goNegotiate}>
-              Manage offers
-            </button>
-          ) : null}
         </div>
       ) : ctx && !isCreator ? (
         <ActionRail
@@ -998,7 +986,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
 
       <section className="linkup-card overflow-hidden">
         <div className="border-b border-border/60 px-5 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <h3 className="font-display text-lg font-extrabold text-foreground">
@@ -1026,20 +1014,16 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
               </p>
             </div>
             {isCreator && plan.is_negotiable !== false && ctx?.showManageOffers ? (
-              <button
-                type="button"
-                className="shrink-0 rounded-full border border-primary/25 bg-white px-4 py-2 text-[13px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/50"
-                onClick={goNegotiate}
-              >
+              <button type="button" className={cn(actionPrimary, 'w-auto shrink-0')} onClick={goNegotiate}>
                 Manage offers
               </button>
             ) : null}
             {isCreator && plan.is_negotiable === false && ctx?.showManageRequests ? (
-              <Link
-                href={`/plan/${planId}/requests`}
-                className="shrink-0 rounded-full border border-primary/25 bg-white px-4 py-2 text-[13px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/50"
-              >
-                Manage requests
+              <Link href={`/plan/${planId}/requests`} className={cn(actionPrimary, 'w-auto shrink-0')}>
+                <span className="inline-flex items-center gap-2">
+                  <IoPeople size={18} />
+                  Manage requests
+                </span>
               </Link>
             ) : null}
           </div>
