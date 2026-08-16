@@ -5,6 +5,26 @@ import { isPlanBoostActive } from '@/lib/plans/planBoost';
 const BOOST_HOURS_24 = 24;
 const BOOST_HOURS_72 = 72;
 
+function mapBoostRpcError(message: string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes('boost_already_active')) {
+    return 'This plan already has an active boost.';
+  }
+  if (lower.includes('plan_listing_expired') || lower.includes('plan_expired')) {
+    return 'This plan listing has expired and cannot be boosted.';
+  }
+  if (lower.includes('mood_plan_closed')) {
+    return 'This mood moment has ended. Boost is no longer available.';
+  }
+  if (lower.includes('not_plan_creator')) {
+    return 'Only the plan creator can boost this plan.';
+  }
+  if (lower.includes('not_authenticated')) {
+    return 'Please sign in to boost this plan.';
+  }
+  return message;
+}
+
 export async function activatePlanBoost(
   client: SupabaseClient,
   args: {
@@ -24,8 +44,6 @@ export async function activatePlanBoost(
   }
 
   const hours = args.hours ?? BOOST_HOURS_24;
-  const until = new Date();
-  until.setHours(until.getHours() + hours);
 
   if (args.useLegacyCredit) {
     const { data: uRow } = await client
@@ -41,19 +59,32 @@ export async function activatePlanBoost(
       .eq('id', args.creatorId)
       .eq('boost_credits', credits);
     if (e1) return { error: e1.message };
-  } else {
-    const kind = hours >= BOOST_HOURS_72 ? 'boosts_72hr' : 'boosts_24hr';
-    const { error: quotaErr } = await client.rpc('record_boost_usage', { p_kind: kind });
-    if (quotaErr) return { error: quotaErr.message };
+
+    const until = new Date();
+    until.setHours(until.getHours() + hours);
+    const { error: e2 } = await client
+      .from('plans')
+      .update({ boosted_until: until.toISOString(), spotlight_enabled: true })
+      .eq('id', args.planId)
+      .eq('creator_id', args.creatorId);
+    return { error: e2?.message ?? null };
   }
 
-  const { error: e2 } = await client
-    .from('plans')
-    .update({ boosted_until: until.toISOString(), spotlight_enabled: true })
-    .eq('id', args.planId)
-    .eq('creator_id', args.creatorId);
+  const { data, error } = await client.rpc('activate_plan_boost', {
+    p_plan_id: args.planId,
+    p_hours: hours,
+  });
 
-  return { error: e2?.message ?? null };
+  if (error) {
+    return { error: mapBoostRpcError(error.message) };
+  }
+
+  const row = data as { ok?: boolean; boostedUntil?: string } | null;
+  if (!row?.ok) {
+    return { error: 'Could not activate boost. Please try again.' };
+  }
+
+  return { error: null };
 }
 
 export function hasLegacyBoostCredit(

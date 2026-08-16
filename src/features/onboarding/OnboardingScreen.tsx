@@ -17,7 +17,7 @@ import {
   loadOnboardingSessionDraft,
   saveOnboardingSessionDraft,
 } from '@/lib/onboarding/sessionDraft';
-import { linkInvitationAfterSignup } from '@/lib/plans/planInvitations';
+import { linkInvitationAfterSignup, syncPendingPlanInvitations } from '@/lib/plans/planInvitations';
 import {
   onboardingFieldClass,
   onboardingTextareaClass,
@@ -278,6 +278,11 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
       invitationTokenRef.current = invitationToken.trim();
     }
   }, [invitationToken]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void syncPendingPlanInvitations(invitationTokenRef.current ?? invitationToken);
+  }, [user?.id, invitationToken]);
 
   async function routeAfterOnboarding() {
     const token = invitationTokenRef.current;

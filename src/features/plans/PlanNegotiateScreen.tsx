@@ -447,43 +447,45 @@ export function PlanNegotiateScreen({ planId, offerId, openAction }: Props) {
         }
       />
 
-      <div className="linkup-card space-y-3 p-4 text-[13px] font-semibold text-muted">
-        <p>
-          {isCreator
-            ? 'Accept, counter, or decline each offer. Up to 5 rounds per guest. Amounts update with each counter.'
-            : 'Propose amount, timing, and a note. When the host counters, you can accept, counter back, or decline.'}
-        </p>
-      </div>
+      <div className="space-y-5">
+        <div className="linkup-card space-y-3 p-4 text-[13px] font-semibold text-muted">
+          <p>
+            {isCreator
+              ? 'Accept, counter, or decline each offer. Up to 5 rounds per guest. Amounts update with each counter.'
+              : 'Propose amount, timing, and a note. When the host counters, you can accept, counter back, or decline.'}
+          </p>
+        </div>
 
-      <div className="space-y-4">
-        {!offersQuery.isLoading && sortedOffers.length === 0 ? (
-          <AppEmptyState
-            emoji="🤝"
-            title={isCreator ? 'Waiting for offers' : 'Start the conversation'}
-            description={
-              isCreator
-                ? 'When guests send suggestions they appear here with live negotiation controls.'
-                : 'Send your first suggestion below with amount, time, and a friendly note.'
-            }
-            className="border border-dashed border-primary/20"
-          />
-        ) : null}
-        {sortedOffers.map((offer) => {
-          const mine = offer.bidder_id === user?.id;
-          const liveSelectable =
-            isCreator && isOfferLive(offer) && offer.bidder_id !== plan.creator_id && !planListingExpired;
-          return (
-            <OfferBubble
-              key={offer.id}
-              offer={offer}
-              bidderName={profilesByBidder.get(offer.bidder_id) ?? 'Guest'}
-              isOwn={mine}
-              isHost={isCreator}
-              selected={liveSelectable && offer.id === focusOffer?.id}
-              onSelect={liveSelectable ? () => setSelectedOfferId(offer.id) : undefined}
+        <div className="space-y-4">
+          {!offersQuery.isLoading && sortedOffers.length === 0 ? (
+            <AppEmptyState
+              emoji="🤝"
+              title={isCreator ? 'Waiting for offers' : 'Start the conversation'}
+              description={
+                isCreator
+                  ? 'When guests send suggestions they appear here with live negotiation controls.'
+                  : 'Send your first suggestion below with amount, time, and a friendly note.'
+              }
+              className="border border-dashed border-primary/20"
             />
-          );
-        })}
+          ) : null}
+          {sortedOffers.map((offer) => {
+            const mine = offer.bidder_id === user?.id;
+            const liveSelectable =
+              isCreator && isOfferLive(offer) && offer.bidder_id !== plan.creator_id && !planListingExpired;
+            return (
+              <OfferBubble
+                key={offer.id}
+                offer={offer}
+                bidderName={profilesByBidder.get(offer.bidder_id) ?? 'Guest'}
+                isOwn={mine}
+                isHost={isCreator}
+                selected={liveSelectable && offer.id === focusOffer?.id}
+                onSelect={liveSelectable ? () => setSelectedOfferId(offer.id) : undefined}
+              />
+            );
+          })}
+        </div>
       </div>
 
       {guestAcceptedOffer && !(showActionPanel && panelOffer?.id === guestAcceptedOffer.id) ? (
@@ -510,6 +512,7 @@ export function PlanNegotiateScreen({ planId, offerId, openAction }: Props) {
       ) : null}
 
       {showActionPanel && panelOffer ? (
+        <div className="mt-1">
         <NegotiationOfferCard
           offer={panelOffer}
           plan={plan}
@@ -527,6 +530,7 @@ export function PlanNegotiateScreen({ planId, offerId, openAction }: Props) {
           onDecline={() => setConfirm({ kind: 'decline', offer: panelOffer })}
           onWithdraw={() => setConfirm({ kind: 'withdraw', offer: panelOffer })}
         />
+        </div>
       ) : null}
 
       {!isCreator && canNegotiate ? (

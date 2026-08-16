@@ -89,7 +89,7 @@ export function buildInvitationEmailHtml(p: InvitationEmailParams): string {
                 <strong style="color:#1A1D26;">${planName}</strong> on LinkUp.
               </p>
               <p style="margin:0 0 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:22px;color:#4B5563;">
-                Create your free account to view the plan and respond.
+                Set your password and log in to view and respond to this invitation.
               </p>
             </td>
           </tr>
@@ -145,7 +145,7 @@ export function buildInvitationEmailText(p: InvitationEmailParams): string {
   if (p.shareAmount) lines.push(`Your share: ${p.shareAmount}`);
   lines.push(
     '',
-    'Create your free LinkUp account to view the plan and respond.',
+    'Set your password and log in to view and respond to this invitation.',
     '',
     `Accept invitation: ${p.magicLink}`,
     '',

@@ -59,7 +59,7 @@ export function SoftKycPrompt({ open, onOpenChange, onVerify }: Props) {
           </button>
         </div>
         <p className="text-[14px] font-semibold leading-relaxed text-muted">
-          A quick check helps everyone trust who they&apos;re meeting — and unlocks paid features fairly.
+          A quick check helps everyone trust who they&apos;re meeting and unlocks paid features fairly.
         </p>
         <ul className="mt-4 space-y-2 text-[14px] font-semibold text-foreground">
           <li className="flex items-center gap-2">

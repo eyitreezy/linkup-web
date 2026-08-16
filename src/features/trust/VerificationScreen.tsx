@@ -87,7 +87,7 @@ export function VerificationScreen() {
       <SettingsPageHeader
         kicker="Trust & identity"
         title="Verification"
-        subtitle="Your status, what it unlocks, and a transparent audit trail — same as the mobile app."
+        subtitle="Your status, what it unlocks, and a transparent audit trail, same as the mobile app."
       />
 
       <div className="flex gap-4">
@@ -158,7 +158,7 @@ export function VerificationScreen() {
         <AppEmptyState
           emoji="🛡️"
           title="No verification events yet"
-          description="Submit identity verification to start your trust trail — required for offers and escrow on LinkUp."
+          description="Submit identity verification to start your trust trail. Required for offers and escrow on LinkUp."
           action={{ label: 'Begin verification', href: '/kyc' }}
           secondaryAction={{ label: 'Help & support', href: '/support', variant: 'secondary' }}
         />

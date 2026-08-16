@@ -9,7 +9,7 @@ export function friendlyStatus(v: VerificationUiStatus): { title: string; sub: s
     case 'pending':
       return {
         title: 'Review in progress',
-        sub: "We're checking your documents. You'll get an in-app update—usually soon.",
+        sub: "We're checking your documents. You'll get an in-app update, usually soon.",
       };
     case 'verified':
       return { title: 'Verified', sub: "You're cleared for trust-gated features across LinkUp." };

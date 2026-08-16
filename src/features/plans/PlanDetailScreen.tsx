@@ -26,10 +26,12 @@ import { PlanFlowHeader } from '@/features/plans/PlanFlowHeader';
 import {
   formatOfferAmount,
   formatProposalSnippet,
+  joinRequestStatusChip,
   offerStatusChip,
   planStatusChip,
   planningPartnerContext,
 } from '@/features/plans/planDetailUtils';
+import { resolveJoinRequestSlotCentsLabel } from '@/lib/plans/joinRequestSlotDisplay';
 import { resolvePlanAgreementHref } from '@/lib/plans/planAgreementRoute';
 import { downloadPlanCalendarIcs, planCanAddToCalendar } from '@/lib/plans/addPlanToCalendar';
 import { isPlanDetailActionReady } from '@/lib/plans/planDetailActionReady';
@@ -996,57 +998,161 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
 
       <section className="linkup-card overflow-hidden">
         <div className="border-b border-border/60 px-5 py-4">
-          <div className="flex items-center gap-2">
-            <h3 className="font-display text-lg font-extrabold text-foreground">Recent offers</h3>
-            {bundle && bundle.offers.length > 0 ? (
-              <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-extrabold text-primary">
-                {bundle.offers.length}
-              </span>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="font-display text-lg font-extrabold text-foreground">
+                  {plan.is_negotiable !== false ? 'Recent offers' : 'Recent requests'}
+                </h3>
+                {plan.is_negotiable !== false && bundle && bundle.offers.length > 0 ? (
+                  <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-extrabold text-primary">
+                    {bundle.offers.length}
+                  </span>
+                ) : null}
+                {plan.is_negotiable === false && bundle && bundle.joinRequests.length > 0 ? (
+                  <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-extrabold text-primary">
+                    {bundle.joinRequests.length}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-[13px] font-semibold text-muted">
+                {plan.is_negotiable !== false
+                  ? isCreator
+                    ? 'Everyone who has put forward an offer on this plan.'
+                    : 'Latest activity from people interested in this plan.'
+                  : isCreator
+                    ? 'Guests who asked to join this plan at the listed price.'
+                    : 'Latest join requests from people interested in this plan.'}
+              </p>
+            </div>
+            {isCreator && plan.is_negotiable !== false && ctx?.showManageOffers ? (
+              <button
+                type="button"
+                className="shrink-0 rounded-full border border-primary/25 bg-white px-4 py-2 text-[13px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/50"
+                onClick={goNegotiate}
+              >
+                Manage offers
+              </button>
+            ) : null}
+            {isCreator && plan.is_negotiable === false && ctx?.showManageRequests ? (
+              <Link
+                href={`/plan/${planId}/requests`}
+                className="shrink-0 rounded-full border border-primary/25 bg-white px-4 py-2 text-[13px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/50"
+              >
+                Manage requests
+              </Link>
             ) : null}
           </div>
-          <p className="mt-1 text-[13px] font-semibold text-muted">
-            {isCreator
-              ? 'Everyone who has put forward an offer on this plan.'
-              : 'Latest activity from people interested in this plan.'}
-          </p>
         </div>
         {!actionContextReady ? (
           <PlanOffersListSkeleton />
-        ) : !bundle?.offers.length ? (
-          <div className="px-4 py-6">
-            <AppEmptyState
-              variant="compact"
-              emoji="💡"
-              title="No offers yet"
-              description={
-                isCreator
-                  ? 'Share your plan. Interested guests send suggestions from Discover or negotiate.'
-                  : 'Be the first to say hello. Send an offer with your timing and budget.'
-              }
-              action={{
-                label: isCreator
-                  ? ctx?.showManageRequests
-                    ? 'Manage requests'
-                    : ctx?.showManageOffers
+        ) : plan.is_negotiable !== false ? (
+          !bundle?.offers.length ? (
+            <div className="px-4 py-6">
+              <AppEmptyState
+                variant="compact"
+                emoji="💡"
+                title="No offers yet"
+                description={
+                  isCreator
+                    ? 'Share your plan. Interested guests send suggestions from Discover or negotiate.'
+                    : 'Be the first to say hello. Send an offer with your timing and budget.'
+                }
+                action={{
+                  label: isCreator
+                    ? ctx?.showManageOffers
                       ? 'Manage offers'
                       : ctx?.showViewAgreement
                         ? 'View agreement'
                         : 'Manage offers'
-                  : ctx?.showViewAgreement
-                    ? 'View agreement'
+                    : ctx?.showViewAgreement
+                      ? 'View agreement'
+                      : ctx?.showViewOffer
+                        ? 'View offer'
+                        : ctx?.showRequestToJoin
+                          ? 'Request to join'
+                          : 'Make offer',
+                  onClick: () => {
+                    if (isCreator && ctx?.showManageOffers) {
+                      goNegotiate();
+                      return;
+                    }
+                    if (!isCreator && ctx?.showViewRequest) {
+                      router.push(`/plan/${planId}/requests/my`);
+                      return;
+                    }
+                    goNegotiate();
+                  },
+                }}
+                className="border-0 bg-[#FAFAFF]/80 shadow-none"
+              />
+            </div>
+          ) : (
+            <ul className="divide-y divide-border/50">
+              {bundle.offers.map((offer) => {
+                const chip = offerStatusChip(offer.status);
+                const bidder = bundle.profilesById[offer.bidder_id];
+                const whenSnippet = formatProposalSnippet(offer.proposed_scheduled_at);
+                const isAccepted = offer.id === plan.accepted_offer_id;
+                return (
+                  <li
+                    key={offer.id}
+                    className={cn('px-5 py-4', isAccepted && 'bg-emerald-500/[0.04]')}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-extrabold text-foreground">
+                          {bidder?.display_name?.trim() || 'Guest'}
+                        </p>
+                        <p className="text-[13px] font-semibold text-primary">
+                          {formatOfferAmount(offerLiveAmount(offer))}
+                        </p>
+                        {whenSnippet ? (
+                          <p className="text-[12px] font-semibold text-muted">Proposed · {whenSnippet}</p>
+                        ) : null}
+                        {offer.message ? (
+                          <p className="mt-1 line-clamp-2 text-[12px] font-semibold text-muted">{offer.message}</p>
+                        ) : null}
+                      </div>
+                      <span className={cn('rounded-full px-2.5 py-1 text-[10px] font-extrabold', chip.className)}>
+                        {chip.label}
+                      </span>
+                    </div>
+                    {isAccepted ? (
+                      <p className="mt-2 text-[11px] font-extrabold uppercase tracking-wide text-emerald-700">
+                        Matched offer
+                      </p>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        ) : !bundle?.joinRequests.length ? (
+          <div className="px-4 py-6">
+            <AppEmptyState
+              variant="compact"
+              emoji="👋"
+              title="No requests yet"
+              description={
+                isCreator
+                  ? 'When guests request to join at your listed price, they appear here.'
+                  : 'Be the first to request a spot on this plan.'
+              }
+              action={{
+                label: isCreator
+                  ? 'Manage requests'
+                  : ctx?.showRequestToJoin
+                    ? 'Request to join'
                     : ctx?.showViewRequest
                       ? 'View request'
-                      : ctx?.showRequestToJoin
-                        ? 'Request to join'
-                        : ctx?.showViewOffer
-                          ? 'View offer'
-                          : 'Make offer',
+                      : 'Request to join',
                 onClick: () => {
-                  if (isCreator && ctx?.showManageRequests) {
+                  if (isCreator) {
                     router.push(`/plan/${planId}/requests`);
                     return;
                   }
-                  if (!isCreator && ctx?.showViewRequest) {
+                  if (ctx?.showViewRequest) {
                     router.push(`/plan/${planId}/requests/my`);
                     return;
                   }
@@ -1058,40 +1164,28 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
           </div>
         ) : (
           <ul className="divide-y divide-border/50">
-            {bundle.offers.map((offer) => {
-              const chip = offerStatusChip(offer.status);
-              const bidder = bundle.profilesById[offer.bidder_id];
-              const whenSnippet = formatProposalSnippet(offer.proposed_scheduled_at);
-              const isAccepted = offer.id === plan.accepted_offer_id;
+            {bundle.joinRequests.map((request) => {
+              const chip = joinRequestStatusChip(request.status);
+              const requester = bundle.profilesById[request.requester_id] ?? request.requester;
+              const slotLabel = resolveJoinRequestSlotCentsLabel(plan);
               return (
-                <li
-                  key={offer.id}
-                  className={cn('px-5 py-4', isAccepted && 'bg-emerald-500/[0.04]')}
-                >
+                <li key={request.id} className="px-5 py-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="font-extrabold text-foreground">
-                        {bidder?.display_name?.trim() || 'Guest'}
+                        {requester?.display_name?.trim() || 'Guest'}
                       </p>
-                      <p className="text-[13px] font-semibold text-primary">
-                        {formatOfferAmount(offerLiveAmount(offer))}
-                      </p>
-                      {whenSnippet ? (
-                        <p className="text-[12px] font-semibold text-muted">Proposed · {whenSnippet}</p>
+                      {slotLabel ? (
+                        <p className="text-[13px] font-semibold text-primary">{slotLabel}</p>
                       ) : null}
-                      {offer.message ? (
-                        <p className="mt-1 line-clamp-2 text-[12px] font-semibold text-muted">{offer.message}</p>
+                      {request.message ? (
+                        <p className="mt-1 line-clamp-2 text-[12px] font-semibold text-muted">{request.message}</p>
                       ) : null}
                     </div>
                     <span className={cn('rounded-full px-2.5 py-1 text-[10px] font-extrabold', chip.className)}>
                       {chip.label}
                     </span>
                   </div>
-                  {isAccepted ? (
-                    <p className="mt-2 text-[11px] font-extrabold uppercase tracking-wide text-emerald-700">
-                      Matched offer
-                    </p>
-                  ) : null}
                 </li>
               );
             })}

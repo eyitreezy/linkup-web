@@ -1,5 +1,5 @@
 import type { ProfileMini } from '@/services/planDetail.service';
-import type { DbPlan, DbPlanOffer, OfferStatus, PlanStatus } from '@/types/database';
+import type { DbPlan, DbPlanOffer, JoinRequestStatus, OfferStatus, PlanStatus } from '@/types/database';
 
 export function planningPartnerContext(
   plan: DbPlan,
@@ -83,6 +83,18 @@ export function offerStatusChip(status: OfferStatus): { label: string; className
       return { label: 'Superseded', className: 'bg-muted/15 text-muted' };
     default:
       return { label: status, className: 'bg-muted/15 text-muted' };
+  }
+}
+
+export function joinRequestStatusChip(status: JoinRequestStatus): { label: string; className: string } {
+  switch (status) {
+    case 'approved':
+      return { label: 'Approved', className: 'bg-emerald-500/12 text-emerald-700' };
+    case 'declined':
+      return { label: 'Declined', className: 'bg-red-500/12 text-red-700' };
+    case 'pending':
+    default:
+      return { label: 'Pending', className: 'bg-amber-500/12 text-amber-800' };
   }
 }
 

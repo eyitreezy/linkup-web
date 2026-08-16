@@ -101,6 +101,12 @@ export async function GET(request: NextRequest) {
 
   let destination = next;
   if (user) {
+    const { error: syncErr } = await supabase.rpc('sync_pending_plan_invitations_for_user', {
+      p_token: null,
+    });
+    if (syncErr && process.env.NODE_ENV === 'development') {
+      console.warn('[auth/callback] sync_pending_plan_invitations_for_user:', syncErr.message);
+    }
     destination = await resolvePostAuthDestinationForUserId(supabase, user.id, next);
   }
 

@@ -9,11 +9,11 @@ import {
 } from '@/lib/plans/planSharePreview';
 import { resolveMeetTypeCoverUrl } from '@/lib/plans/resolveMeetTypeCoverUrl';
 import { env, isSupabaseConfigured } from '@/lib/env';
-import { createPublicClient } from '@/lib/supabase/public';
+import { createClient } from '@/lib/supabase/server';
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +25,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: `${APP_NAME} Verified Meetups` };
   }
 
-  const supabase = createPublicClient();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { title: `${APP_NAME} Verified Meetups` };
+  }
+
   const { data: plan } = await fetchPlanSharePreview(supabase, id);
 
   if (!plan) {
@@ -69,7 +77,16 @@ export default async function PlanPreviewPage({ params }: Props) {
     );
   }
 
-  const supabase = createPublicClient();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const previewPath = `/plan/${id}/preview`;
+  if (!user) {
+    redirect(`/login?next=${encodeURIComponent(previewPath)}`);
+  }
+
   const { data: plan } = await fetchPlanSharePreview(supabase, id);
 
   if (!plan) notFound();
@@ -94,8 +111,7 @@ export default async function PlanPreviewPage({ params }: Props) {
   const coverUrl =
     plan.meet_types != null ? resolveMeetTypeCoverUrl(plan.meet_types) : null;
   const displayTitle = plan.title?.trim() || `${meetTypeName} in ${city}`;
-  const signupHref = `/signup?next=${encodeURIComponent(`/plan/${plan.id}`)}`;
-  const loginHref = `/login?next=${encodeURIComponent(`/plan/${plan.id}`)}`;
+  const planDetailHref = `/plan/${plan.id}`;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary to-secondary p-4">
@@ -204,10 +220,6 @@ export default async function PlanPreviewPage({ params }: Props) {
                       ) : null}
                     </div>
                   ))}
-
-                  <p className="text-xs font-semibold text-muted text-center italic">
-                    Sign in to see all {hostRating.host_rating_count} reviews and full plan details
-                  </p>
                 </div>
               ) : null}
             </div>
@@ -215,23 +227,12 @@ export default async function PlanPreviewPage({ params }: Props) {
             <p className="text-sm font-semibold text-muted">New to LinkUp</p>
           ) : null}
 
-          <p className="text-xs italic text-muted">
-            Sign up to see full details, the exact location, and to join this meetup.
-          </p>
-
           <Link
-            href={signupHref}
+            href={planDetailHref}
             className="block w-full rounded-full py-4 text-center text-base font-extrabold text-white linkup-gradient-primary transition hover:opacity-95"
           >
-            Join this meetup on {APP_NAME}
+            View plan details
           </Link>
-
-          <p className="text-center text-sm text-muted">
-            Already on {APP_NAME}?{' '}
-            <Link href={loginHref} className="font-semibold text-primary hover:underline">
-              Log in
-            </Link>
-          </p>
         </div>
       </div>
     </div>

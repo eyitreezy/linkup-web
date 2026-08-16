@@ -5,6 +5,17 @@ export function safeAuthNextPath(raw: string | null | undefined, fallback = '/di
   return raw;
 }
 
+function onboardingDestinationWithPreservedQuery(nextPath?: string | null): string {
+  const safe = safeAuthNextPath(nextPath, '/onboarding');
+  if (!safe.startsWith('/onboarding')) return '/onboarding';
+
+  const queryIndex = safe.indexOf('?');
+  if (queryIndex === -1) return '/onboarding';
+
+  const query = safe.slice(queryIndex + 1);
+  return query ? `/onboarding?${query}` : '/onboarding';
+}
+
 export async function resolvePostAuthDestinationForUserId(
   supabase: SupabaseClient,
   userId: string,
@@ -17,7 +28,7 @@ export async function resolvePostAuthDestinationForUserId(
     .maybeSingle();
 
   if (profile?.onboarding_status === 'pending') {
-    return '/onboarding';
+    return onboardingDestinationWithPreservedQuery(nextPath);
   }
 
   return safeAuthNextPath(nextPath);

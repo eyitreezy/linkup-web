@@ -1,4 +1,5 @@
 import { isPlanSaved, recordPlanView } from '@/lib/plans/planEngagement';
+import type { JoinRequestWithRequester } from '@/lib/plans/joinRequests';
 import type { PlanFeedRow } from '@/services/plans.service';
 import type { DbPlanOffer, DbProfile, JoinRequestStatus } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -18,6 +19,7 @@ export type ProfileMini = Pick<
 export type PlanDetailBundle = {
   plan: PlanFeedRow;
   offers: DbPlanOffer[];
+  joinRequests: JoinRequestWithRequester[];
   profilesById: Record<string, ProfileMini>;
   saved: boolean;
   completionSelfAcked: boolean;
@@ -50,10 +52,44 @@ export async function fetchPlanDetailBundle(
     .limit(20);
   const offers = (offersRaw ?? []) as DbPlanOffer[];
 
+  let joinRequests: JoinRequestWithRequester[] = [];
+  if (viewerId && row.creator_id === viewerId && row.is_negotiable === false) {
+    const { data: joinRows } = await client
+      .from('plan_join_requests')
+      .select('*')
+      .eq('plan_id', planId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    const list = (joinRows ?? []) as JoinRequestWithRequester[];
+    if (list.length > 0) {
+      const requesterIds = [...new Set(list.map((r) => r.requester_id))];
+      const { data: requesterProfs } = await client
+        .from('profiles')
+        .select('user_id, display_name, avatar_url, primary_photo_url, photo_urls')
+        .in('user_id', requesterIds);
+      const requesterById = new Map(
+        (requesterProfs ?? []).map((p) => [
+          p.user_id,
+          {
+            display_name: p.display_name,
+            avatar_url: p.avatar_url,
+            primary_photo_url: p.primary_photo_url,
+            photo_urls: p.photo_urls,
+          },
+        ])
+      );
+      joinRequests = list.map((entry) => ({
+        ...entry,
+        requester: requesterById.get(entry.requester_id) ?? null,
+      }));
+    }
+  }
+
   const idSet = new Set<string>([row.creator_id]);
   const accepted = offers.find((x) => x.id === row.accepted_offer_id);
   if (accepted) idSet.add(accepted.bidder_id);
   for (const off of offers) idSet.add(off.bidder_id);
+  for (const req of joinRequests) idSet.add(req.requester_id);
 
   const { data: profs } = await client
     .from('profiles')
@@ -135,6 +171,7 @@ export async function fetchPlanDetailBundle(
     data: {
       plan: feedRow,
       offers,
+      joinRequests,
       profilesById,
       saved,
       completionSelfAcked,

@@ -345,6 +345,17 @@ export async function linkInvitationAfterSignup(token: string): Promise<{
   };
 }
 
+/** Link email-matched pending invitations and surface in-app notifications once. */
+export async function syncPendingPlanInvitations(token?: string | null): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.rpc('sync_pending_plan_invitations_for_user', {
+    p_token: token?.trim() || null,
+  });
+  if (error) {
+    console.warn('[syncPendingPlanInvitations]', error.message);
+  }
+}
+
 function formatInviteShare(cents: number, currency: string): string {
   const major = cents / 100;
   if (currency === 'NGN') {
