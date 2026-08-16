@@ -177,7 +177,7 @@ export function PlanGroupGuestsPanel({
           </h3>
           <Link
             href={`/plan/${plan.id}/negotiate`}
-            className="text-[12px] font-extrabold text-primary underline transition hover:text-primary/80"
+            className="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-full linkup-gradient-primary px-4 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95"
           >
             View all offers →
           </Link>

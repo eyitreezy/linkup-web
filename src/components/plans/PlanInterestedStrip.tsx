@@ -128,7 +128,7 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
         <h3 className="font-display text-[15px] font-extrabold text-foreground">Interested</h3>
         <Link
           href={`/plan/${planId}/interest`}
-          className="text-[12px] font-extrabold text-primary underline"
+          className="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-full linkup-gradient-primary px-4 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95"
         >
           Connect with all →
         </Link>

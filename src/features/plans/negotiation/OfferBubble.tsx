@@ -43,10 +43,10 @@ export function OfferBubble({ offer, bidderName, isOwn, isHost, selected, onSele
   );
 
   const className = cn(
-    'max-w-[min(100%,520px)] rounded-2xl border px-4 py-3 shadow-sm transition',
+    'w-full rounded-2xl border px-4 py-3 shadow-sm transition',
     isOwn
-      ? 'ml-auto border-primary/20 bg-gradient-to-br from-[#EDE8FF] to-white'
-      : 'mr-auto border-border/80 bg-white',
+      ? 'border-primary/20 bg-gradient-to-br from-[#EDE8FF] to-white sm:col-start-2'
+      : 'border-border/80 bg-white',
     selected && 'ring-2 ring-primary/40',
     onSelect && 'cursor-pointer hover:border-primary/30'
   );
