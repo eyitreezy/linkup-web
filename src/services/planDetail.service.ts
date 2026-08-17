@@ -1,5 +1,6 @@
 import { isPlanSaved, recordPlanView } from '@/lib/plans/planEngagement';
 import type { JoinRequestWithRequester } from '@/lib/plans/joinRequests';
+import { fetchViewerGuestEscrow, type PlanGuestEscrowSnapshot } from '@/lib/plans/planPayShare';
 import type { PlanFeedRow } from '@/services/plans.service';
 import type { DbPlanOffer, DbProfile, JoinRequestStatus } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -24,6 +25,7 @@ export type PlanDetailBundle = {
   saved: boolean;
   completionSelfAcked: boolean;
   myJoinRequest: { id: string; status: JoinRequestStatus } | null;
+  myGuestEscrow: PlanGuestEscrowSnapshot | null;
   availableSlots: number;
   pendingInvitationCount: number;
 };
@@ -125,6 +127,7 @@ export async function fetchPlanDetailBundle(
   let saved = false;
   let completionSelfAcked = false;
   let myJoinRequest: { id: string; status: JoinRequestStatus } | null = null;
+  let myGuestEscrow: PlanGuestEscrowSnapshot | null = null;
   let availableSlots = 0;
   let pendingInvitationCount = 0;
 
@@ -152,6 +155,10 @@ export async function fetchPlanDetailBundle(
       .limit(1)
       .maybeSingle();
     myJoinRequest = joinReq as { id: string; status: JoinRequestStatus } | null;
+
+    if (feedRow.creator_id !== viewerId && feedRow.is_paid) {
+      myGuestEscrow = await fetchViewerGuestEscrow(client, planId, viewerId);
+    }
   }
 
   if (viewerId && feedRow.creator_id === viewerId && feedRow.is_group_plan) {
@@ -176,6 +183,7 @@ export async function fetchPlanDetailBundle(
       saved,
       completionSelfAcked,
       myJoinRequest,
+      myGuestEscrow,
       availableSlots,
       pendingInvitationCount,
     },

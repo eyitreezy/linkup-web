@@ -1,4 +1,5 @@
 import { derivePlanViewerContext, type PlanViewerContext } from '@/lib/plans/planViewerContext';
+import type { PlanGuestEscrowSnapshot } from '@/lib/plans/planPayShare';
 import type { DbPlan, DbPlanOffer, JoinRequestStatus } from '@/types/database';
 import { useMemo } from 'react';
 
@@ -21,10 +22,11 @@ export function usePlanViewerContext(
     moodClosed?: boolean;
     completionSelfAcked?: boolean;
     myJoinRequest?: { id: string; status: JoinRequestStatus } | null;
+    myGuestEscrow?: PlanGuestEscrowSnapshot | null;
   }
 ): PlanViewerContext | null {
   return useMemo(() => {
     if (!plan) return null;
     return derivePlanViewerContext(plan, currentUserId, offers, opts);
-  }, [plan, currentUserId, offers, opts?.listingExpired, opts?.moodClosed, opts?.completionSelfAcked, opts?.myJoinRequest]);
+  }, [plan, currentUserId, offers, opts?.listingExpired, opts?.moodClosed, opts?.completionSelfAcked, opts?.myJoinRequest, opts?.myGuestEscrow]);
 }

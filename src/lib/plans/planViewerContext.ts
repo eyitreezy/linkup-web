@@ -3,6 +3,10 @@
  */
 import { planIsPastNegotiation } from '@/lib/plans/planAgreementRoute';
 import { isOfferLive } from '@/lib/plans/negotiationState';
+import {
+  resolvePlanPayShareState,
+  type PlanGuestEscrowSnapshot,
+} from '@/lib/plans/planPayShare';
 import type { DbPlan, DbPlanOffer, JoinRequestStatus } from '@/types/database';
 
 export type PlanLockState = 'open' | 'partial' | 'full';
@@ -38,6 +42,9 @@ export type PlanViewerContext = {
   showRequestToJoin: boolean;
   showViewRequest: boolean;
   showConfirmAttendance: boolean;
+  showPayShare: boolean;
+  payShareEscrowId: string | null;
+  payShareAmountLabel: string | null;
   acceptedGuests: AcceptedGuestRef[];
   isMatchParty: boolean;
   userAcceptedOffer: DbPlanOffer | null;
@@ -106,6 +113,7 @@ export function derivePlanViewerContext(
     moodClosed?: boolean;
     completionSelfAcked?: boolean;
     myJoinRequest?: { id: string; status: JoinRequestStatus } | null;
+    myGuestEscrow?: PlanGuestEscrowSnapshot | null;
   }
 ): PlanViewerContext {
   const listingExpired = opts?.listingExpired ?? opts?.moodClosed ?? false;
@@ -203,6 +211,8 @@ export function derivePlanViewerContext(
   const showConfirmAttendance =
     isMatchedGuest && plan.status === 'completed' && !completionSelfAcked && !!userId;
 
+  const payShare = resolvePlanPayShareState(plan, userId, opts?.myGuestEscrow, isHost);
+
   return {
     isHost,
     isMatchedGuest,
@@ -229,6 +239,9 @@ export function derivePlanViewerContext(
     showRequestToJoin,
     showViewRequest,
     showConfirmAttendance,
+    showPayShare: payShare.showPayShare,
+    payShareEscrowId: payShare.payShareEscrowId,
+    payShareAmountLabel: payShare.payShareAmountLabel,
     acceptedGuests,
     isMatchParty: isMatchedGuest || (isHost && lockState !== 'open'),
     userAcceptedOffer: isMatchedGuest ? myOffer : null,

@@ -21,7 +21,7 @@ export function SafetyCaveatInterstitial({ planId, onAcknowledged }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 p-4 sm:items-center">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/80 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
       <div className="linkup-card w-full max-w-md p-6 shadow-xl">
         <div className="mb-4 flex justify-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#EDE8FF]">

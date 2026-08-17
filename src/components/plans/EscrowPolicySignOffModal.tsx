@@ -81,19 +81,26 @@ export function EscrowPolicySignOffModal({ planId, escrowPattern, onSigned }: Pr
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
-      <div className="linkup-card flex max-h-[85vh] w-full max-w-lg flex-col p-5 shadow-xl">
-        <h2 className="font-display text-xl font-extrabold text-foreground">
-          Escrow and Cancellation Policy
-        </h2>
-        <p className="mt-1 text-[12px] font-extrabold uppercase tracking-wide text-primary">
-          Pattern {pattern}
-        </p>
+    <div
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="escrow-policy-title"
+    >
+      <div className="linkup-card flex max-h-[min(85vh,calc(100dvh-2rem))] w-full max-w-lg flex-col overflow-hidden p-5 shadow-xl sm:max-h-[min(85vh,calc(100dvh-3rem))]">
+        <div className="shrink-0">
+          <h2 id="escrow-policy-title" className="font-display text-xl font-extrabold text-foreground">
+            Escrow and Cancellation Policy
+          </h2>
+          <p className="mt-1 text-[12px] font-extrabold uppercase tracking-wide text-primary">
+            Pattern {pattern}
+          </p>
+        </div>
 
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="mt-4 min-h-0 flex-1 space-y-5 overflow-y-auto pr-1"
+          className="mt-4 min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain pr-1"
         >
           {sections.map((section) => (
             <section key={section.heading} className="space-y-2">
@@ -109,26 +116,28 @@ export function EscrowPolicySignOffModal({ planId, escrowPattern, onSigned }: Pr
           ))}
         </div>
 
-        <p className="mt-4 text-[13px] font-semibold text-muted">
-          By proceeding you confirm you have read and understood the escrow terms and cancellation
-          policy that apply to this plan.
-        </p>
-        {error ? <p className="mt-2 text-[13px] font-semibold text-[#EF4444]">{error}</p> : null}
-        {!hasScrolled ? (
-          <p className="mt-2 text-center text-[12px] font-extrabold text-secondary">
-            Scroll to read before agreeing
+        <div className="mt-4 shrink-0 border-t border-border/40 pt-4">
+          <p className="text-[13px] font-semibold text-muted">
+            By proceeding you confirm you have read and understood the escrow terms and cancellation
+            policy that apply to this plan.
           </p>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => void handleSign()}
-          disabled={busy || !hasScrolled}
-          className={cn(
-            'mt-3 flex min-h-[44px] w-full items-center justify-center rounded-full linkup-gradient-primary px-5 text-[14px] font-extrabold text-white transition hover:opacity-95 disabled:opacity-50'
-          )}
-        >
-          {busy ? 'Confirming…' : 'I have read and I agree'}
-        </button>
+          {error ? <p className="mt-2 text-[13px] font-semibold text-[#EF4444]">{error}</p> : null}
+          {!hasScrolled ? (
+            <p className="mt-2 text-center text-[12px] font-extrabold text-secondary">
+              Scroll to read before agreeing
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void handleSign()}
+            disabled={busy || !hasScrolled}
+            className={cn(
+              'mt-3 flex min-h-[44px] w-full items-center justify-center rounded-full linkup-gradient-primary px-5 text-[14px] font-extrabold text-white transition hover:opacity-95 disabled:opacity-50'
+            )}
+          >
+            {busy ? 'Confirming…' : 'I have read and I agree'}
+          </button>
+        </div>
       </div>
     </div>
   );

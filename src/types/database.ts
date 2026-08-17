@@ -398,7 +398,13 @@ export interface DbPlanEngagement {
   created_at: string;
 }
 
-export type PlanShareChannel = 'whatsapp' | 'copy_link' | 'native' | 'twitter' | 'instagram';
+export type PlanShareChannel =
+  | 'whatsapp'
+  | 'copy_link'
+  | 'native'
+  | 'twitter'
+  | 'instagram'
+  | 'facebook';
 
 export interface DbPlanShare {
   id: string;

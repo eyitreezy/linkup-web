@@ -209,6 +209,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     listingExpired: planListingExpired,
     completionSelfAcked: bundle?.completionSelfAcked ?? false,
     myJoinRequest: bundle?.myJoinRequest ?? null,
+    myGuestEscrow: bundle?.myGuestEscrow ?? null,
   });
   const actionContextReady = isPlanDetailActionReady(bundle);
   const actionContextRefreshing = detailQuery.isFetching && actionContextReady;
@@ -896,6 +897,11 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
           onAgreement={goAgreement}
           onChat={() => void openCounterpartyChat()}
           onCalendar={handleAddToCalendar}
+          onPayShare={() => {
+            if (ctx?.payShareEscrowId) {
+              router.push(`/escrow/${ctx.payShareEscrowId}`);
+            }
+          }}
           onJoinRequestSuccess={() => void detailQuery.refetch()}
           onJoinPlanExpired={() => showPlanExpired('join')}
         />
@@ -1233,6 +1239,7 @@ function ActionRail({
   onAgreement,
   onChat,
   onCalendar,
+  onPayShare,
   onJoinRequestSuccess,
   onJoinPlanExpired,
 }: {
@@ -1252,6 +1259,7 @@ function ActionRail({
   onAgreement: () => void;
   onChat: () => void;
   onCalendar: () => void;
+  onPayShare: () => void;
   onJoinRequestSuccess?: () => void;
   onJoinPlanExpired?: () => void;
 }) {
@@ -1334,6 +1342,18 @@ function ActionRail({
         <div className={planActionGrid}>
           <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
             {saved ? 'Saved' : 'Save plan'}
+          </button>
+        </div>
+      ) : null}
+
+      {ctx.showPayShare && ctx.payShareEscrowId ? (
+        <div className="space-y-2">
+          <p className="text-center text-[13px] font-semibold text-muted">
+            Payment required to confirm your place
+          </p>
+          <button type="button" className={actionPrimary} onClick={onPayShare}>
+            Pay your share
+            {ctx.payShareAmountLabel ? ` · ${ctx.payShareAmountLabel}` : ''}
           </button>
         </div>
       ) : null}
