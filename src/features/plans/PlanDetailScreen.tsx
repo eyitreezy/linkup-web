@@ -6,7 +6,7 @@ import { ActionButtonsSkeleton } from '@/components/plans/ActionButtonsSkeleton'
 import { PlanOffersListSkeleton } from '@/components/plans/PlanOffersListSkeleton';
 import { InviteGuestsModal } from '@/components/plans/InviteGuestsModal';
 import { PlanShareModal } from '@/components/plans/PlanShareModal';
-import { RequestToJoinButton } from '@/components/plans/RequestToJoinButton';
+import { GuestYourJoinRequestCard } from '@/components/plans/joinRequests/GuestYourJoinRequestCard';
 import { PlanGroupGuestsPanel } from '@/components/plans/PlanGroupGuestsPanel';
 import { GroupMeetupCompletionSection } from '@/components/plans/group/GroupMeetupCompletionSection';
 import { GroupPlanMemberCountBadge } from '@/components/plans/group/GroupPlanMemberCountBadge';
@@ -483,6 +483,41 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     }
   }
 
+  useEffect(() => {
+    if (!planId || !viewerUserId || plan?.is_negotiable !== false) return;
+    const client = createClient();
+    const channel = client
+      .channel(`plan-join-escrow-web-${planId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'plan_join_requests',
+          filter: `plan_id=eq.${planId}`,
+        },
+        () => {
+          void detailQuery.refetch();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'escrow_transactions',
+          filter: `plan_id=eq.${planId}`,
+        },
+        () => {
+          void detailQuery.refetch();
+        }
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [planId, viewerUserId, plan?.is_negotiable, detailQuery.refetch]);
+
   if (detailQuery.isLoading && !plan) {
     return (
       <div className="space-y-6 pb-12">
@@ -882,9 +917,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
       ) : ctx && !isCreator ? (
         <ActionRail
           ctx={ctx}
-          planId={planId}
-          suggestedAmountCents={plan.current_suggested_share_cents}
-          currency={plan.currency}
           listingExpired={planListingExpired}
           saved={!!bundle?.saved}
           saveBusy={toggleSaved.isPending}
@@ -897,13 +929,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
           onAgreement={goAgreement}
           onChat={() => void openCounterpartyChat()}
           onCalendar={handleAddToCalendar}
-          onPayShare={() => {
-            if (ctx?.payShareEscrowId) {
-              router.push(`/escrow/${ctx.payShareEscrowId}`);
-            }
-          }}
-          onJoinRequestSuccess={() => void detailQuery.refetch()}
-          onJoinPlanExpired={() => showPlanExpired('join')}
         />
       ) : null}
 
@@ -990,6 +1015,28 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         </div>
       )}
 
+      {plan.is_negotiable === false && !isCreator ? (
+        !actionContextReady || !ctx ? (
+          <section className="linkup-card overflow-hidden p-4">
+            <PlanOffersListSkeleton />
+          </section>
+        ) : (
+          <GuestYourJoinRequestCard
+            plan={plan}
+            planId={planId}
+            ctx={ctx}
+            myJoinRequest={bundle?.myJoinRequest ?? null}
+            listingExpired={planListingExpired}
+            onJoinSuccess={() => void detailQuery.refetch()}
+            onPlanExpired={() => showPlanExpired('join')}
+            onPayShare={() => {
+              if (ctx.payShareEscrowId) {
+                router.push(`/escrow/${ctx.payShareEscrowId}`);
+              }
+            }}
+          />
+        )
+      ) : (
       <section className="linkup-card overflow-hidden">
         <div className="border-b border-border/60 px-5 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1014,9 +1061,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
                   ? isCreator
                     ? 'Everyone who has put forward an offer on this plan.'
                     : 'Latest activity from people interested in this plan.'
-                  : isCreator
-                    ? 'Guests who asked to join this plan at the listed price.'
-                    : 'Latest join requests from people interested in this plan.'}
+                  : 'Guests who asked to join this plan at the listed price.'}
               </p>
             </div>
             {isCreator && plan.is_negotiable !== false && ctx?.showManageOffers ? (
@@ -1059,16 +1104,10 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
                       ? 'View agreement'
                       : ctx?.showViewOffer
                         ? 'View offer'
-                        : ctx?.showRequestToJoin
-                          ? 'Request to join'
-                          : 'Make offer',
+                        : 'Make offer',
                   onClick: () => {
                     if (isCreator && ctx?.showManageOffers) {
                       goNegotiate();
-                      return;
-                    }
-                    if (!isCreator && ctx?.showViewRequest) {
-                      router.push(`/plan/${planId}/requests/my`);
                       return;
                     }
                     goNegotiate();
@@ -1124,29 +1163,11 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
               variant="compact"
               emoji="👋"
               title="No requests yet"
-              description={
-                isCreator
-                  ? 'When guests request to join at your listed price, they appear here.'
-                  : 'Be the first to request a spot on this plan.'
-              }
+              description="When guests request to join at your listed price, they appear here."
               action={{
-                label: isCreator
-                  ? 'Manage requests'
-                  : ctx?.showRequestToJoin
-                    ? 'Request to join'
-                    : ctx?.showViewRequest
-                      ? 'View request'
-                      : 'Request to join',
+                label: 'Manage requests',
                 onClick: () => {
-                  if (isCreator) {
-                    router.push(`/plan/${planId}/requests`);
-                    return;
-                  }
-                  if (ctx?.showViewRequest) {
-                    router.push(`/plan/${planId}/requests/my`);
-                    return;
-                  }
-                  goNegotiate();
+                  router.push(`/plan/${planId}/requests`);
                 },
               }}
               className="border-0 bg-[#FAFAFF]/80 shadow-none"
@@ -1182,6 +1203,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
           </ul>
         )}
       </section>
+      )}
 
       <PlanLocationMap
         latitude={meetupPin?.lat ?? null}
@@ -1224,9 +1246,6 @@ function MetaItem({
 
 function ActionRail({
   ctx,
-  planId,
-  suggestedAmountCents,
-  currency,
   listingExpired,
   saved,
   saveBusy,
@@ -1239,14 +1258,8 @@ function ActionRail({
   onAgreement,
   onChat,
   onCalendar,
-  onPayShare,
-  onJoinRequestSuccess,
-  onJoinPlanExpired,
 }: {
   ctx: PlanViewerContext;
-  planId: string;
-  suggestedAmountCents?: number | null;
-  currency?: string;
   listingExpired: boolean;
   saved: boolean;
   saveBusy: boolean;
@@ -1259,11 +1272,10 @@ function ActionRail({
   onAgreement: () => void;
   onChat: () => void;
   onCalendar: () => void;
-  onPayShare: () => void;
-  onJoinRequestSuccess?: () => void;
-  onJoinPlanExpired?: () => void;
 }) {
   const guestCalendarSaveRow = !!(ctx.showCalendar && ctx.showSave);
+  const joinFlowGuestActionsInCard =
+    ctx.showRequestToJoin || ctx.showViewRequest || ctx.showPayShare;
 
   return (
     <>
@@ -1278,22 +1290,6 @@ function ActionRail({
         </div>
       ) : null}
 
-      {ctx.showSave && ctx.showRequestToJoin ? (
-        <div className={planActionGrid}>
-          <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
-            {saved ? 'Saved' : 'Save plan'}
-          </button>
-          <RequestToJoinButton
-            planId={planId}
-            suggestedAmountCents={suggestedAmountCents}
-            currency={currency ?? 'NGN'}
-            planListingExpired={listingExpired}
-            onPlanExpired={onJoinPlanExpired}
-            onSuccess={onJoinRequestSuccess}
-          />
-        </div>
-      ) : null}
-
       {ctx.showSave && ctx.showViewOffer ? (
         <div className={planActionGrid}>
           <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
@@ -1302,20 +1298,6 @@ function ActionRail({
           <button type="button" className={actionPrimary} onClick={onViewOffer}>
             View offer
           </button>
-        </div>
-      ) : null}
-
-      {ctx.showSave && ctx.showViewRequest ? (
-        <div className={planActionGrid}>
-          <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
-            {saved ? 'Saved' : 'Save plan'}
-          </button>
-          <Link href={`/plan/${planId}/requests/my`} className={actionSecondary}>
-            <span className="inline-flex items-center gap-2">
-              <IoTimeOutline size={18} />
-              View request
-            </span>
-          </Link>
         </div>
       ) : null}
 
@@ -1338,22 +1320,14 @@ function ActionRail({
         </div>
       ) : null}
 
-      {ctx.showSave && !ctx.showMakeOffer && !ctx.showViewOffer && !ctx.showRequestToJoin && !ctx.showViewRequest && !guestCalendarSaveRow ? (
+      {ctx.showSave &&
+      !ctx.showMakeOffer &&
+      !ctx.showViewOffer &&
+      !joinFlowGuestActionsInCard &&
+      !guestCalendarSaveRow ? (
         <div className={planActionGrid}>
           <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
             {saved ? 'Saved' : 'Save plan'}
-          </button>
-        </div>
-      ) : null}
-
-      {ctx.showPayShare && ctx.payShareEscrowId ? (
-        <div className="space-y-2">
-          <p className="text-center text-[13px] font-semibold text-muted">
-            Payment required to confirm your place
-          </p>
-          <button type="button" className={actionPrimary} onClick={onPayShare}>
-            Pay your share
-            {ctx.payShareAmountLabel ? ` · ${ctx.payShareAmountLabel}` : ''}
           </button>
         </div>
       ) : null}
