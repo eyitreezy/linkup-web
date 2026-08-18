@@ -93,9 +93,9 @@ import {
 const planActionGrid =
   'grid grid-cols-[repeat(auto-fit,minmax(min(100%,10.5rem),1fr))] gap-3';
 const actionPrimary =
-  'flex min-h-[44px] w-full items-center justify-center rounded-full linkup-gradient-primary px-5 py-2.5 text-[14px] font-extrabold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50';
+  'flex min-h-[44px] w-full items-center justify-center rounded-full linkup-gradient-primary px-5 py-2.5 text-[14px] font-extrabold text-white shadow-sm disabled:opacity-50';
 const actionSecondary =
-  'flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-primary/25 bg-white px-5 py-2.5 text-[14px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/50 active:scale-[0.98] disabled:opacity-50';
+  'flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-primary/25 bg-white px-5 py-2.5 text-[14px] font-extrabold text-primary hover:bg-[#EDE8FF]/50 disabled:opacity-50';
 /** Compact pills — matches PlanGroupGuestsPanel escrow button sizing. */
 const actionCompactPrimary =
   'inline-flex h-9 w-[8.5rem] items-center justify-center gap-1 rounded-full linkup-gradient-primary px-2.5 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95 active:scale-[0.98] disabled:opacity-50';
@@ -173,6 +173,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     },
     initialData: initialBundle,
     staleTime: 15_000,
+    refetchOnWindowFocus: false,
     refetchInterval: (query) => {
       const p = query.state.data?.plan;
       if (!p || isPlanListingExpired(p)) return false;
@@ -213,7 +214,17 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     myGuestEscrow: bundle?.myGuestEscrow ?? null,
   });
   const actionContextReady = isPlanDetailActionReady(bundle);
-  const actionContextRefreshing = detailQuery.isFetching && actionContextReady;
+  const [actionButtonsReady, setActionButtonsReady] = useState(() =>
+    isPlanDetailActionReady(initialBundle)
+  );
+
+  useEffect(() => {
+    setActionButtonsReady(false);
+  }, [planId]);
+
+  useEffect(() => {
+    if (actionContextReady) setActionButtonsReady(true);
+  }, [actionContextReady]);
 
   const acceptedGuestOffers = useMemo(
     () => (bundle?.offers ?? []).filter((o) => o.status === 'accepted'),
@@ -855,16 +866,10 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         </div>
       ) : null}
 
-      {!actionContextReady ? (
+      {!actionButtonsReady ? (
         <ActionButtonsSkeleton />
       ) : (
-        <div
-          className={cn(
-            'space-y-3 transition-opacity duration-200',
-            actionContextRefreshing && 'opacity-70'
-          )}
-          aria-busy={actionContextRefreshing}
-        >
+        <div className="space-y-3">
       {isCreator && viewerUserId ? (
         <div className={planActionGrid}>
           {ctx?.showBoost ? (
