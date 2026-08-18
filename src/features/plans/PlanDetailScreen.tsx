@@ -18,6 +18,7 @@ import { PlanInterestedStrip } from '@/components/plans/PlanInterestedStrip';
 import { TierBadge } from '@/components/subscription/TierBadge';
 import { BoostPill } from '@/components/plans/BoostPill';
 import { PlanBoostControls } from '@/components/plans/PlanBoostControls';
+import { OfferStatusBadge } from '@/components/plans/OfferStatusBadge';
 import { PlanCardHero } from '@/components/plans/PlanCardHero';
 import { PlanningTogetherHostCard } from '@/components/plans/PlanningTogetherHostCard';
 import { VerificationGateDialog } from '@/components/plans/VerificationGateDialog';
@@ -27,7 +28,6 @@ import {
   formatOfferAmount,
   formatProposalSnippet,
   joinRequestStatusChip,
-  offerStatusChip,
   planStatusChip,
   planningPartnerContext,
 } from '@/features/plans/planDetailUtils';
@@ -44,6 +44,7 @@ import { createGroupChat } from '@/lib/messaging/createGroupChat';
 import { openPlanMeetupChatPath } from '@/lib/messaging/openPlanMeetupChat';
 import { planDistanceFromViewer } from '@/lib/discovery/feedFilters';
 import { offerLiveAmount } from '@/lib/plans/negotiationState';
+import { isOfferExpired } from '@/lib/plans/offerRules';
 import { resolveDiscoverViewerCoords } from '@/lib/discovery/viewerLocation';
 import { planMeetupCoords } from '@/lib/plans/planMeetupCoords';
 import { daysUntilIso, isPlanActiveWindowExpiringSoon } from '@/lib/plans/planActiveWindow';
@@ -92,9 +93,9 @@ import {
 const planActionGrid =
   'grid grid-cols-[repeat(auto-fit,minmax(min(100%,10.5rem),1fr))] gap-3';
 const actionPrimary =
-  'flex min-h-[44px] w-full items-center justify-center rounded-full linkup-gradient-primary px-5 py-2.5 text-[14px] font-extrabold text-white shadow-sm transition hover:opacity-95 disabled:opacity-50';
+  'flex min-h-[44px] w-full items-center justify-center rounded-full linkup-gradient-primary px-5 py-2.5 text-[14px] font-extrabold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50';
 const actionSecondary =
-  'flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-primary/25 bg-white px-5 py-2.5 text-[14px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/50 disabled:opacity-50';
+  'flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-primary/25 bg-white px-5 py-2.5 text-[14px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/50 active:scale-[0.98] disabled:opacity-50';
 /** Compact pills — matches PlanGroupGuestsPanel escrow button sizing. */
 const actionCompactPrimary =
   'inline-flex h-9 w-[8.5rem] items-center justify-center gap-1 rounded-full linkup-gradient-primary px-2.5 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95 active:scale-[0.98] disabled:opacity-50';
@@ -1119,7 +1120,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
           ) : (
             <ul className="divide-y divide-border/50">
               {bundle.offers.map((offer) => {
-                const chip = offerStatusChip(offer.status);
+                const offerExpired = isOfferExpired(offer);
                 const bidder = bundle.profilesById[offer.bidder_id];
                 const whenSnippet = formatProposalSnippet(offer.proposed_scheduled_at);
                 const isAccepted = offer.id === plan.accepted_offer_id;
@@ -1143,9 +1144,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
                           <p className="mt-1 line-clamp-2 text-[12px] font-semibold text-muted">{offer.message}</p>
                         ) : null}
                       </div>
-                      <span className={cn('rounded-full px-2.5 py-1 text-[10px] font-extrabold', chip.className)}>
-                        {chip.label}
-                      </span>
+                      <OfferStatusBadge status={offer.status} expired={offerExpired} />
                     </div>
                     {isAccepted ? (
                       <p className="mt-2 text-[11px] font-extrabold uppercase tracking-wide text-emerald-700">
