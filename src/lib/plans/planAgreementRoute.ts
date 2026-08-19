@@ -74,18 +74,24 @@ export function resolveAgreementEscrowId(
 /** Escrow detail URL with optional agreement context for back navigation. */
 export function resolveEscrowHref(
   escrowId: string,
-  opts?: { planId?: string; offerId?: string | null }
+  opts?: { planId?: string; offerId?: string | null; source?: 'plan' | 'agreement' }
 ): string {
   const params = new URLSearchParams();
   if (opts?.planId) params.set('planId', opts.planId);
   if (opts?.offerId) params.set('offerId', opts.offerId);
+  if (opts?.source) params.set('source', opts.source);
   const q = params.toString();
   return q ? `/escrow/${escrowId}?${q}` : `/escrow/${escrowId}`;
 }
 
 /** Back link from escrow when opened from a plan agreement. */
-export function resolveEscrowBackHref(opts?: { planId?: string; offerId?: string | null }): string {
+export function resolveEscrowBackHref(opts?: {
+  planId?: string;
+  offerId?: string | null;
+  source?: string | null;
+}): string {
   if (opts?.planId) {
+    if (opts.source === 'plan') return `/plan/${opts.planId}`;
     const params = new URLSearchParams();
     if (opts.offerId) params.set('offerId', opts.offerId);
     const q = params.toString();

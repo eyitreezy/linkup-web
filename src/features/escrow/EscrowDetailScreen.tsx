@@ -121,10 +121,12 @@ function EscrowDetailContent({
   escrowId,
   agreementPlanId,
   agreementOfferId,
+  escrowSource,
 }: {
   escrowId: string;
   agreementPlanId?: string;
   agreementOfferId?: string;
+  escrowSource?: string | null;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -482,8 +484,14 @@ function EscrowDetailContent({
     const backHref = resolveEscrowBackHref({
       planId: agreementPlanId,
       offerId: agreementOfferId,
+      source: escrowSource,
     });
-    const backLabel = agreementPlanId ? 'Back to agreement' : 'Back to offers';
+    const backLabel =
+      escrowSource === 'plan' && agreementPlanId
+        ? 'Back to meetup'
+        : agreementPlanId
+          ? 'Back to agreement'
+          : 'Back to offers';
     return (
       <div className="mx-auto max-w-3xl">
       <div className="linkup-card px-6 py-10 text-center">
@@ -508,6 +516,7 @@ function EscrowDetailContent({
   const backHref = resolveEscrowBackHref({
     planId: agreementPlanId ?? escrow.plan_id,
     offerId: agreementOfferId,
+    source: escrowSource,
   });
   const isHost = user.id === escrow.host_id;
   const isGroupSplit = isGroupSplitPlan({
@@ -699,7 +708,7 @@ function EscrowDetailContent({
   const goodwillApplied = escrow.goodwill_applied_cents ?? 0;
   const netRelease = escrow.amount_cents - platformFee;
   const footerActive = showFund || paymentPendingConfirmation || showPaymentConfirmedFooter;
-  const hostGuestPaymentEntries = useMemo(() => {
+  const hostGuestPaymentEntries = (() => {
     const byBidder = new Map<string, { bidderId: string; key: string }>();
     for (const offer of acceptedOffers) {
       if (offer.bidder_id) {
@@ -712,7 +721,7 @@ function EscrowDetailContent({
       }
     }
     return [...byBidder.values()];
-  }, [acceptedOffers, guestEscrowRows]);
+  })();
   const groupSplitTotalOpts = { acceptedOffers, hostEscrowRow };
   const planTotalCents = groupSplitPlanInput
     ? resolveGroupPlanTotalCents(groupSplitPlanInput, guestEscrowRows, groupSplitTotalOpts)
@@ -1377,10 +1386,12 @@ export function EscrowDetailScreen({
   escrowId,
   agreementPlanId,
   agreementOfferId,
+  escrowSource,
 }: {
   escrowId: string;
   agreementPlanId?: string;
   agreementOfferId?: string;
+  escrowSource?: string | null;
 }) {
   return (
     <Suspense fallback={<EscrowDetailSkeleton />}>
@@ -1388,6 +1399,7 @@ export function EscrowDetailScreen({
         escrowId={escrowId}
         agreementPlanId={agreementPlanId}
         agreementOfferId={agreementOfferId}
+        escrowSource={escrowSource}
       />
     </Suspense>
   );

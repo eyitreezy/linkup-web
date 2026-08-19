@@ -816,8 +816,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         seedAcceptedOffers={acceptedGuestOffers}
         offersReady={!!bundle}
         refreshKey={guestsPanelRefreshKey}
-        onMessageGroup={isCreator ? () => void openHostMessage() : undefined}
-        messageGroupBusy={groupChatBusy}
       />
 
       {isAcceptedGuest && plan.is_group_plan ? (
@@ -979,7 +977,20 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
 
       {showHostGuestAgreements ? (
         <section className="linkup-card space-y-3 p-4">
-          <h3 className="font-display text-base font-extrabold text-foreground">Accepted guests</h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="font-display text-base font-extrabold text-foreground">Accepted guests</h3>
+            {plan.is_group_plan ? (
+              <button
+                type="button"
+                onClick={() => void openHostMessage()}
+                disabled={groupChatBusy}
+                className="inline-flex min-h-[36px] shrink-0 items-center justify-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-[12px] font-extrabold text-foreground shadow-sm transition hover:bg-[#F8F7FF] disabled:opacity-50"
+              >
+                <IoChatbubbleEllipsesOutline size={16} aria-hidden />
+                {groupChatBusy ? 'Opening…' : 'Message group'}
+              </button>
+            ) : null}
+          </div>
           <ul className="space-y-2">
             {plan.is_negotiable !== false
               ? ctx!.acceptedGuests.map((guest) => {

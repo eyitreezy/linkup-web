@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ planId?: string; offerId?: string }>;
+  searchParams: Promise<{ planId?: string; offerId?: string; source?: string }>;
 };
 
 export async function generateMetadata() {
@@ -14,7 +14,7 @@ export async function generateMetadata() {
 
 export default async function EscrowPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { planId, offerId } = await searchParams;
+  const { planId, offerId, source } = await searchParams;
 
   if (!isSupabaseConfigured) {
     return (
@@ -23,6 +23,11 @@ export default async function EscrowPage({ params, searchParams }: Props) {
   }
 
   return (
-    <EscrowDetailScreen escrowId={id} agreementPlanId={planId} agreementOfferId={offerId} />
+    <EscrowDetailScreen
+      escrowId={id}
+      agreementPlanId={planId}
+      agreementOfferId={offerId}
+      escrowSource={source ?? null}
+    />
   );
 }

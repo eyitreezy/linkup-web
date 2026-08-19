@@ -16,7 +16,6 @@ import type { DbPlan, DbPlanOffer, DbProfile, SubscriptionTierDb } from '@/types
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  IoChatbubbleEllipsesOutline,
   IoCheckmarkCircle,
   IoShieldCheckmarkOutline,
   IoTimeOutline,
@@ -40,8 +39,6 @@ type Props = {
   offersReady?: boolean;
   /** Bumps when parent realtime refreshes offers / plan (escrow, accepts). */
   refreshKey?: string;
-  onMessageGroup?: () => void;
-  messageGroupBusy?: boolean;
 };
 
 function joinRequestSlotCents(plan: DbPlan): number {
@@ -58,8 +55,6 @@ export function PlanGroupGuestsPanel({
   seedAcceptedOffers,
   offersReady = false,
   refreshKey,
-  onMessageGroup,
-  messageGroupBusy = false,
 }: Props) {
   const [rows, setRows] = useState<GuestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -239,17 +234,6 @@ export function PlanGroupGuestsPanel({
           <h3 className="font-display text-lg font-extrabold text-foreground">
             Guests ({acceptedCount} / {maxGuests} accepted)
           </h3>
-          {onMessageGroup ? (
-            <button
-              type="button"
-              onClick={onMessageGroup}
-              disabled={messageGroupBusy}
-              className="inline-flex min-h-[36px] shrink-0 items-center justify-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-[12px] font-extrabold text-foreground shadow-sm transition hover:bg-[#F8F7FF] disabled:opacity-50"
-            >
-              <IoChatbubbleEllipsesOutline size={16} aria-hidden />
-              {messageGroupBusy ? 'Opening…' : 'Message group'}
-            </button>
-          ) : null}
         </div>
         <p className="mt-1 text-[12px] font-semibold text-muted">
           {acceptedCount} of {maxGuests} guest slots used
@@ -306,6 +290,7 @@ export function PlanGroupGuestsPanel({
                     href={resolveEscrowHref(guest.escrow_id, {
                       planId: plan.id,
                       offerId: guest.offer.id,
+                      source: 'plan',
                     })}
                     className="inline-flex min-w-[4.75rem] items-center justify-center gap-1 rounded-full linkup-gradient-primary px-2.5 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95 active:scale-[0.98]"
                     aria-label={`Open ${guest.profile?.display_name ?? 'guest'} escrow`}
