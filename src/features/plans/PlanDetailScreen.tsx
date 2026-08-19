@@ -412,7 +412,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
   function toggleSave() {
     if (!viewerUserId || !plan) return;
     void runGated('plans.bookmark', () => {
-      const next = !bundle?.saved;
+    const next = !bundle?.saved;
       toggleSaved.mutate(
         { planId: plan.id, userId: viewerUserId, saved: next, plan },
         {
@@ -458,21 +458,17 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     try {
       if (groupChatConvId) {
         router.push(`/chat/group/${groupChatConvId}`);
-        return;
-      }
+      return;
+    }
       if (plan.creator_id !== viewerUserId) {
         window.alert('The host has not opened the group chat yet.');
         return;
       }
       const guestIds =
         plan.is_negotiable === false
-          ? [
-              ...new Set(
-                (bundle?.joinRequests ?? [])
-                  .filter((r) => r.status === 'approved')
-                  .map((r) => r.requester_id)
-              ),
-            ]
+          ? (bundle?.joinRequests ?? [])
+              .filter((r) => r.status === 'approved')
+              .map((r) => r.requester_id)
           : (bundle?.offers ?? [])
               .filter((o) => o.status === 'accepted')
               .map((o) => o.bidder_id);
@@ -691,7 +687,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         <div className="space-y-4 p-5 md:p-6">
           <div className="space-y-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <h2 className="font-display text-xl font-extrabold text-foreground md:text-2xl">{plan.title}</h2>
+            <h2 className="font-display text-xl font-extrabold text-foreground md:text-2xl">{plan.title}</h2>
               <div className="flex flex-wrap items-center gap-1.5">
                 {plan.is_group_plan ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-[#5E52FF] px-2.5 py-1 text-[11px] font-extrabold text-white shadow-sm">
@@ -704,7 +700,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
                     Mood
                   </span>
                 ) : null}
-                {boosted ? <BoostPill /> : null}
+              {boosted ? <BoostPill /> : null}
                 {(() => {
                   const chip = planStatusChip(plan.status);
                   return (
@@ -715,10 +711,10 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
                       )}
                     >
                       {chip.label}
-                    </span>
+              </span>
                   );
                 })()}
-              </div>
+            </div>
             </div>
 
             {plan.is_group_plan ? (
@@ -809,9 +805,9 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
           )}
           {extendMsg ? (
             <p className="mt-2 text-center text-[12px] font-semibold text-muted">{extendMsg}</p>
-          ) : null}
-        </div>
-      ) : null}
+                ) : null}
+              </div>
+              ) : null}
 
       <PlanGroupGuestsPanel
         plan={plan}
@@ -820,7 +816,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         seedAcceptedOffers={acceptedGuestOffers}
         offersReady={!!bundle}
         refreshKey={guestsPanelRefreshKey}
-        onMessageGroup={() => void handleOpenGroupChat()}
+        onMessageGroup={isCreator ? () => void openHostMessage() : undefined}
         messageGroupBusy={groupChatBusy}
       />
 
@@ -895,8 +891,8 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
                   year: 'numeric',
                 })}`}
           </span>
-        </div>
-      ) : null}
+          </div>
+        ) : null}
 
       {!actionButtonsReady ? (
         <ActionButtonsSkeleton />
@@ -911,7 +907,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
             dbUser={dbUser}
             boosted={boosted}
             boostedUntil={plan.boosted_until}
-            moodClosed={moodClosed}
+        moodClosed={moodClosed}
             canBoost24={canBoost24}
             canBoost72={canBoost72}
             boost24Meta={boost24Meta as BoostQuotaMeta | undefined}
@@ -956,16 +952,16 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         <ActionRail
           ctx={ctx}
           listingExpired={planListingExpired}
-          saved={!!bundle?.saved}
+        saved={!!bundle?.saved}
           saveBusy={toggleSaved.isPending}
-          chatBusy={chatBusy}
+        chatBusy={chatBusy}
           calendarBusy={calendarBusy}
           canCalendar={planCanAddToCalendar(plan)}
-          onSave={() => void toggleSave()}
-          onNegotiate={goNegotiate}
+        onSave={() => void toggleSave()}
+        onNegotiate={goNegotiate}
           onViewOffer={goViewOffer}
           onAgreement={goAgreement}
-          onChat={() => void openCounterpartyChat()}
+        onChat={() => void openCounterpartyChat()}
           onCalendar={handleAddToCalendar}
         />
       ) : null}
@@ -1075,17 +1071,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         </div>
       ) : null}
 
-      {isCreator && ctx?.showMessage && ctx.showGroupGuestAgreements ? (
-        <button
-          type="button"
-          onClick={() => void openHostMessage()}
-          disabled={groupChatBusy}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-[14px] font-extrabold text-foreground transition hover:bg-[#F8F7FF] disabled:opacity-50 sm:w-auto"
-        >
-          <IoChatbubbleEllipsesOutline size={18} />
-          {groupChatBusy ? 'Opening…' : 'Message group'}
-        </button>
-      ) : null}
         </div>
       )}
 
@@ -1115,29 +1100,29 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         <div className="border-b border-border/60 px-5 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
                 <h3 className="font-display text-lg font-extrabold text-foreground">
                   {plan.is_negotiable !== false ? 'Recent offers' : 'Recent requests'}
                 </h3>
                 {plan.is_negotiable !== false && bundle && bundle.offers.length > 0 ? (
-                  <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-extrabold text-primary">
-                    {bundle.offers.length}
-                  </span>
-                ) : null}
+              <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-extrabold text-primary">
+                {bundle.offers.length}
+              </span>
+            ) : null}
                 {plan.is_negotiable === false && bundle && bundle.joinRequests.length > 0 ? (
                   <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-extrabold text-primary">
                     {bundle.joinRequests.length}
                   </span>
                 ) : null}
-              </div>
-              <p className="mt-1 text-[13px] font-semibold text-muted">
+          </div>
+          <p className="mt-1 text-[13px] font-semibold text-muted">
                 {plan.is_negotiable !== false
                   ? isCreator
-                    ? 'Everyone who has put forward an offer on this plan.'
+              ? 'Everyone who has put forward an offer on this plan.'
                     : 'Latest activity from people interested in this plan.'
                   : 'Guests who asked to join this plan at the listed price.'}
-              </p>
-            </div>
+          </p>
+        </div>
             {isCreator && plan.is_negotiable !== false && ctx?.showManageOffers ? (
               <button type="button" className={cn(actionPrimary, 'w-auto shrink-0')} onClick={goNegotiate}>
                 Manage offers
@@ -1157,17 +1142,17 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
           <PlanOffersListSkeleton />
         ) : plan.is_negotiable !== false ? (
           !bundle?.offers.length ? (
-            <div className="px-4 py-6">
-              <AppEmptyState
-                variant="compact"
-                emoji="💡"
-                title="No offers yet"
-                description={
-                  isCreator
+          <div className="px-4 py-6">
+            <AppEmptyState
+              variant="compact"
+              emoji="💡"
+              title="No offers yet"
+              description={
+                isCreator
                     ? 'Share your plan. Interested guests send suggestions from Discover or negotiate.'
                     : 'Be the first to say hello. Send an offer with your timing and budget.'
-                }
-                action={{
+              }
+              action={{
                   label: isCreator
                     ? ctx?.showManageOffers
                       ? 'Manage offers'
@@ -1186,44 +1171,44 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
                     }
                     goNegotiate();
                   },
-                }}
-                className="border-0 bg-[#FAFAFF]/80 shadow-none"
-              />
-            </div>
-          ) : (
-            <ul className="divide-y divide-border/50">
-              {bundle.offers.map((offer) => {
+              }}
+              className="border-0 bg-[#FAFAFF]/80 shadow-none"
+            />
+          </div>
+        ) : (
+          <ul className="divide-y divide-border/50">
+            {bundle.offers.map((offer) => {
                 const offerExpired = isOfferExpired(offer);
-                const bidder = bundle.profilesById[offer.bidder_id];
-                const whenSnippet = formatProposalSnippet(offer.proposed_scheduled_at);
-                const isAccepted = offer.id === plan.accepted_offer_id;
-                return (
-                  <li
-                    key={offer.id}
-                    className={cn('px-5 py-4', isAccepted && 'bg-emerald-500/[0.04]')}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-extrabold text-foreground">
-                          {bidder?.display_name?.trim() || 'Guest'}
-                        </p>
-                        <p className="text-[13px] font-semibold text-primary">
-                          {formatOfferAmount(offerLiveAmount(offer))}
-                        </p>
-                        {whenSnippet ? (
-                          <p className="text-[12px] font-semibold text-muted">Proposed · {whenSnippet}</p>
-                        ) : null}
-                        {offer.message ? (
-                          <p className="mt-1 line-clamp-2 text-[12px] font-semibold text-muted">{offer.message}</p>
-                        ) : null}
-                      </div>
-                      <OfferStatusBadge status={offer.status} expired={offerExpired} />
-                    </div>
-                    {isAccepted ? (
-                      <p className="mt-2 text-[11px] font-extrabold uppercase tracking-wide text-emerald-700">
-                        Matched offer
+              const bidder = bundle.profilesById[offer.bidder_id];
+              const whenSnippet = formatProposalSnippet(offer.proposed_scheduled_at);
+              const isAccepted = offer.id === plan.accepted_offer_id;
+              return (
+                <li
+                  key={offer.id}
+                  className={cn('px-5 py-4', isAccepted && 'bg-emerald-500/[0.04]')}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-extrabold text-foreground">
+                        {bidder?.display_name?.trim() || 'Guest'}
                       </p>
-                    ) : null}
+                      <p className="text-[13px] font-semibold text-primary">
+                          {formatOfferAmount(offerLiveAmount(offer))}
+                      </p>
+                      {whenSnippet ? (
+                        <p className="text-[12px] font-semibold text-muted">Proposed · {whenSnippet}</p>
+                      ) : null}
+                      {offer.message ? (
+                        <p className="mt-1 line-clamp-2 text-[12px] font-semibold text-muted">{offer.message}</p>
+                      ) : null}
+                    </div>
+                      <OfferStatusBadge status={offer.status} expired={offerExpired} />
+                  </div>
+                  {isAccepted ? (
+                    <p className="mt-2 text-[11px] font-extrabold uppercase tracking-wide text-emerald-700">
+                      Matched offer
+                    </p>
+                  ) : null}
                   </li>
                 );
               })}
@@ -1351,7 +1336,7 @@ function ActionRail({
     ctx.showViewRequest ||
     ctx.showPayShare;
 
-  return (
+    return (
     <>
       {ctx.showSave && ctx.showMakeOffer ? (
         <div className={planActionGrid}>
@@ -1383,15 +1368,15 @@ function ActionRail({
             onClick={onCalendar}
             disabled={calendarBusy || !canCalendar}
           >
-            <span className="inline-flex items-center gap-2">
+          <span className="inline-flex items-center gap-2">
               <IoCalendarOutline size={18} />
               {calendarBusy ? 'Adding…' : canCalendar ? 'Add to calendar' : 'Set a time first'}
-            </span>
-          </button>
+          </span>
+        </button>
           <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
             {saved ? 'Saved' : 'Save plan'}
-          </button>
-        </div>
+        </button>
+      </div>
       ) : null}
 
       {ctx.showSave &&
@@ -1401,19 +1386,19 @@ function ActionRail({
       !guestCalendarSaveRow ? (
         <div className={planActionGrid}>
           <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
-            {saved ? 'Saved' : 'Save plan'}
-          </button>
+          {saved ? 'Saved' : 'Save plan'}
+        </button>
         </div>
       ) : null}
 
       {ctx.showViewAgreement && !ctx.showMessage ? (
         <div className={planActionGrid}>
           <button type="button" className={actionSecondary} onClick={onAgreement}>
-            <span className="inline-flex items-center gap-2">
-              <IoDocumentTextOutline size={18} />
-              View agreement
-            </span>
-          </button>
+          <span className="inline-flex items-center gap-2">
+            <IoDocumentTextOutline size={18} />
+            View agreement
+          </span>
+        </button>
         </div>
       ) : null}
 
@@ -1426,12 +1411,12 @@ function ActionRail({
             </span>
           </button>
           <button type="button" className={actionPrimary} onClick={onChat} disabled={chatBusy}>
-            <span className="inline-flex items-center gap-2">
-              <IoChatbubbleEllipsesOutline size={18} />
-              Message
-            </span>
-          </button>
-        </div>
+          <span className="inline-flex items-center gap-2">
+            <IoChatbubbleEllipsesOutline size={18} />
+            Message
+          </span>
+        </button>
+      </div>
       ) : null}
     </>
   );

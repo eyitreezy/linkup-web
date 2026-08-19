@@ -11,6 +11,7 @@ export type GuestEscrowRowFields = Pick<
   | 'escrow_pattern'
   | 'host_funded_at'
   | 'guest_funded_at'
+  | 'metadata'
 >;
 
 export function findGuestEscrowForBidder(
@@ -21,6 +22,20 @@ export function findGuestEscrowForBidder(
     escrows.find((e) => e.guest_id === bidderId) ??
     escrows.find((e) => e.payer_id === bidderId && e.guest_id != null)
   );
+}
+
+/** Match guest-slot escrow for join-request guests (synthetic offer id = join request id). */
+export function findGuestEscrowForJoinRequestOffer(
+  escrows: GuestEscrowRowFields[],
+  bidderId: string,
+  joinRequestId: string
+): GuestEscrowRowFields | undefined {
+  const byBidder = findGuestEscrowForBidder(escrows, bidderId);
+  if (byBidder) return byBidder;
+  return escrows.find((e) => {
+    const meta = e.metadata as { request_id?: string } | null | undefined;
+    return meta?.request_id === joinRequestId;
+  });
 }
 
 export function isGuestEscrowFunded(

@@ -74,26 +74,20 @@ export function resolveAgreementEscrowId(
 /** Escrow detail URL with optional agreement context for back navigation. */
 export function resolveEscrowHref(
   escrowId: string,
-  opts?: { planId?: string; offerId?: string | null; joinRequestId?: string | null }
+  opts?: { planId?: string; offerId?: string | null }
 ): string {
   const params = new URLSearchParams();
   if (opts?.planId) params.set('planId', opts.planId);
-  if (opts?.joinRequestId) params.set('joinRequestId', opts.joinRequestId);
-  else if (opts?.offerId) params.set('offerId', opts.offerId);
+  if (opts?.offerId) params.set('offerId', opts.offerId);
   const q = params.toString();
   return q ? `/escrow/${escrowId}?${q}` : `/escrow/${escrowId}`;
 }
 
 /** Back link from escrow when opened from a plan agreement. */
-export function resolveEscrowBackHref(opts?: {
-  planId?: string;
-  offerId?: string | null;
-  joinRequestId?: string | null;
-}): string {
+export function resolveEscrowBackHref(opts?: { planId?: string; offerId?: string | null }): string {
   if (opts?.planId) {
     const params = new URLSearchParams();
-    if (opts?.joinRequestId) params.set('joinRequestId', opts.joinRequestId);
-    else if (opts?.offerId) params.set('offerId', opts.offerId);
+    if (opts.offerId) params.set('offerId', opts.offerId);
     const q = params.toString();
     return q ? `/plan/${opts.planId}/agreement?${q}` : `/plan/${opts.planId}/agreement`;
   }

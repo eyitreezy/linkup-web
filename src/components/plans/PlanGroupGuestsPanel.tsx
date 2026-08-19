@@ -5,7 +5,7 @@ import { TierBadge } from '@/components/subscription/TierBadge';
 import { subscribeEscrowRealtime } from '@/lib/escrow/subscribeEscrowRealtime';
 import { subscribePostgresRealtime } from '@/lib/realtime/subscribePostgresRealtime';
 import {
-  findGuestEscrowForBidder,
+  findGuestEscrowForJoinRequestOffer,
   guestEscrowStatusLabel,
   isGuestEscrowFunded,
 } from '@/lib/plans/groupGuestEscrowDisplay';
@@ -15,7 +15,12 @@ import { createClient } from '@/lib/supabase/client';
 import type { DbPlan, DbPlanOffer, DbProfile, SubscriptionTierDb } from '@/types/database';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { IoCheckmarkCircle, IoChatbubbleEllipsesOutline, IoShieldCheckmarkOutline, IoTimeOutline } from 'react-icons/io5';
+import {
+  IoChatbubbleEllipsesOutline,
+  IoCheckmarkCircle,
+  IoShieldCheckmarkOutline,
+  IoTimeOutline,
+} from 'react-icons/io5';
 
 type GuestRow = {
   offer: DbPlanOffer;
@@ -38,6 +43,13 @@ type Props = {
   onMessageGroup?: () => void;
   messageGroupBusy?: boolean;
 };
+
+function joinRequestSlotCents(plan: DbPlan): number {
+  if (plan.is_group_plan) {
+    return plan.current_suggested_share_cents ?? plan.agreed_price_cents ?? plan.starting_price_cents ?? 0;
+  }
+  return plan.agreed_price_cents ?? plan.starting_price_cents ?? 0;
+}
 
 export function PlanGroupGuestsPanel({
   plan,
@@ -65,7 +77,6 @@ export function PlanGroupGuestsPanel({
     let accepted: DbPlanOffer[];
 
     if (plan.is_negotiable === false) {
-      // Non-negotiable plans use join requests instead of offers
       const client = createClient();
       const { data: joinRows } = await client
         .from('plan_join_requests')
@@ -73,7 +84,7 @@ export function PlanGroupGuestsPanel({
         .eq('plan_id', plan.id)
         .eq('status', 'approved');
       const joinRequests = joinRows ?? [];
-      const cents = plan.agreed_price_cents ?? plan.starting_price_cents ?? 0;
+      const cents = joinRequestSlotCents(plan);
       accepted = joinRequests.map((row) => ({
         id: row.id as string,
         plan_id: plan.id,
@@ -117,7 +128,9 @@ export function PlanGroupGuestsPanel({
       client.from('users').select('id, subscription_tier').in('id', bidderIds),
       client
         .from('escrow_transactions')
-        .select('id, plan_id, host_id, payer_id, guest_id, status, escrow_pattern, host_funded_at, guest_funded_at')
+        .select(
+          'id, plan_id, host_id, payer_id, guest_id, status, escrow_pattern, host_funded_at, guest_funded_at, metadata'
+        )
         .eq('plan_id', plan.id)
         .not('guest_id', 'is', null),
     ]);
@@ -130,7 +143,7 @@ export function PlanGroupGuestsPanel({
       accepted.map((offer) => {
         const prof = profMap.get(offer.bidder_id);
         const u = userMap.get(offer.bidder_id);
-        const esc = findGuestEscrowForBidder(escrowList, offer.bidder_id);
+        const esc = findGuestEscrowForJoinRequestOffer(escrowList, offer.bidder_id, offer.id);
         const funded = isGuestEscrowFunded(esc ?? null, offer.bidder_id);
         return {
           offer,
@@ -158,6 +171,10 @@ export function PlanGroupGuestsPanel({
     plan.accepted_guest_count,
     plan.max_guests,
     plan.max_free_guests,
+    plan.current_suggested_share_cents,
+    plan.agreed_price_cents,
+    plan.starting_price_cents,
+    plan.scheduled_at,
     offersReady,
     refreshKey,
     seedAcceptedOffers?.length,
@@ -187,11 +204,19 @@ export function PlanGroupGuestsPanel({
       () => {
         void loadRef.current();
       },
-      {
-        table: plan.is_negotiable === false ? 'plan_join_requests' : 'plan_offers',
-        filter: `plan_id=eq.${plan.id}`,
-      },
+      { table: 'plan_offers', filter: `plan_id=eq.${plan.id}` },
       { channelPrefix: 'plan-guests-rt' }
+    );
+  }, [plan.id, plan.is_group_plan]);
+
+  useEffect(() => {
+    if (!plan.is_group_plan || plan.is_negotiable !== false) return;
+    return subscribePostgresRealtime(
+      () => {
+        void loadRef.current();
+      },
+      { table: 'plan_join_requests', filter: `plan_id=eq.${plan.id}` },
+      { channelPrefix: 'plan-guests-join-rt' }
     );
   }, [plan.id, plan.is_group_plan, plan.is_negotiable]);
 
@@ -203,6 +228,10 @@ export function PlanGroupGuestsPanel({
     seedAcceptedOffers?.length ?? 0
   );
 
+  const footerHref =
+    plan.is_negotiable === false ? `/plan/${plan.id}/requests` : `/plan/${plan.id}/negotiate`;
+  const footerLabel = plan.is_negotiable === false ? 'Manage requests →' : 'View all offers →';
+
   return (
     <section className="linkup-card overflow-hidden">
       <div className="border-b border-border/60 px-5 py-4">
@@ -210,34 +239,17 @@ export function PlanGroupGuestsPanel({
           <h3 className="font-display text-lg font-extrabold text-foreground">
             Guests ({acceptedCount} / {maxGuests} accepted)
           </h3>
-          <div className="flex shrink-0 items-center gap-2">
-            {plan.is_negotiable !== false ? (
-              <Link
-                href={`/plan/${plan.id}/negotiate`}
-                className="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-full linkup-gradient-primary px-4 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95"
-              >
-                View all offers →
-              </Link>
-            ) : (
-              <Link
-                href={`/plan/${plan.id}/requests`}
-                className="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-full linkup-gradient-primary px-4 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95"
-              >
-                Manage requests →
-              </Link>
-            )}
-            {onMessageGroup && rows.length > 0 ? (
-              <button
-                type="button"
-                onClick={onMessageGroup}
-                disabled={messageGroupBusy}
-                className="inline-flex min-h-[36px] shrink-0 items-center justify-center gap-1.5 rounded-full border border-border bg-white px-4 py-2 text-[12px] font-extrabold text-foreground shadow-sm transition hover:bg-[#F8F7FF] disabled:opacity-50"
-              >
-                <IoChatbubbleEllipsesOutline size={14} aria-hidden />
-                {messageGroupBusy ? 'Opening…' : 'Message group'}
-              </button>
-            ) : null}
-          </div>
+          {onMessageGroup ? (
+            <button
+              type="button"
+              onClick={onMessageGroup}
+              disabled={messageGroupBusy}
+              className="inline-flex min-h-[36px] shrink-0 items-center justify-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-[12px] font-extrabold text-foreground shadow-sm transition hover:bg-[#F8F7FF] disabled:opacity-50"
+            >
+              <IoChatbubbleEllipsesOutline size={16} aria-hidden />
+              {messageGroupBusy ? 'Opening…' : 'Message group'}
+            </button>
+          ) : null}
         </div>
         <p className="mt-1 text-[12px] font-semibold text-muted">
           {acceptedCount} of {maxGuests} guest slots used
@@ -289,13 +301,11 @@ export function PlanGroupGuestsPanel({
                   )}
                   <span className="truncate">{guest.statusLabel}</span>
                 </span>
-                {guest.escrow_id || (plan.is_negotiable === false && guest.offer.id) ? (
+                {guest.escrow_id ? (
                   <Link
-                    href={resolveEscrowHref(guest.escrow_id ?? guest.offer.id, {
+                    href={resolveEscrowHref(guest.escrow_id, {
                       planId: plan.id,
-                      ...(plan.is_negotiable === false
-                        ? { joinRequestId: guest.offer.id }
-                        : { offerId: guest.offer.id }),
+                      offerId: guest.offer.id,
                     })}
                     className="inline-flex min-w-[4.75rem] items-center justify-center gap-1 rounded-full linkup-gradient-primary px-2.5 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95 active:scale-[0.98]"
                     aria-label={`Open ${guest.profile?.display_name ?? 'guest'} escrow`}
@@ -309,6 +319,11 @@ export function PlanGroupGuestsPanel({
           ))}
         </ul>
       )}
+      <div className="border-t border-border/50 px-5 py-3">
+        <Link href={footerHref} className="text-[13px] font-extrabold text-primary hover:underline">
+          {footerLabel}
+        </Link>
+      </div>
     </section>
   );
 }

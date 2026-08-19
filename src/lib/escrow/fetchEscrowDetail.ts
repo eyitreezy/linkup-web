@@ -73,36 +73,44 @@ async function fetchPlanForEscrow(
   return core.data as EscrowDetailPlan;
 }
 
-async function resolveGuestEscrowForJoinRequest(
+function joinRequestIdFromEscrowMetadata(metadata: unknown): string | null {
+  const meta = metadata as { request_id?: string } | null | undefined;
+  return meta?.request_id ?? null;
+}
+
+async function resolveEscrowRowByIdOrJoinRequest(
   client: SupabaseClient,
-  planId: string,
-  joinRequestId: string
+  escrowId: string,
+  opts?: { planId?: string | null; joinRequestId?: string | null }
 ): Promise<DbEscrowTransaction | null> {
-  const { data: joinReq } = await client
-    .from('plan_join_requests')
-    .select('requester_id, status, plan_id')
-    .eq('id', joinRequestId)
+  const { data: direct, error: directError } = await client
+    .from('escrow_transactions')
+    .select('*')
+    .eq('id', escrowId)
     .maybeSingle();
 
-  if (
-    !joinReq ||
-    joinReq.status !== 'approved' ||
-    joinReq.plan_id !== planId ||
-    !joinReq.requester_id
-  ) {
-    return null;
-  }
+  if (directError) throw new Error(directError.message);
+  if (direct) return direct as DbEscrowTransaction;
 
-  const { data: guestRow } = await client
+  const planId = opts?.planId;
+  if (!planId) return null;
+
+  const { data: planEscrows, error: planError } = await client
     .from('escrow_transactions')
     .select('*')
     .eq('plan_id', planId)
-    .eq('guest_id', joinReq.requester_id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .not('guest_id', 'is', null);
 
-  return (guestRow as DbEscrowTransaction | null) ?? null;
+  if (planError) throw new Error(planError.message);
+
+  const rows = (planEscrows ?? []) as DbEscrowTransaction[];
+  const joinRequestId = opts?.joinRequestId ?? escrowId;
+
+  return (
+    rows.find((row) => row.id === escrowId) ??
+    rows.find((row) => joinRequestIdFromEscrowMetadata(row.metadata) === joinRequestId) ??
+    null
+  );
 }
 
 /** Load escrow + plan for the secure payment screen (tolerates missing group-split plan columns). */
@@ -112,28 +120,11 @@ export async function fetchEscrowDetail(
   viewerUserId?: string,
   opts?: { planId?: string | null; joinRequestId?: string | null }
 ): Promise<EscrowDetailResult> {
-  let { data: row, error } = await client
-    .from('escrow_transactions')
-    .select('*')
-    .eq('id', escrowId)
-    .maybeSingle();
-
-  if (error) throw new Error(error.message);
-
-  const planId = opts?.planId ?? null;
-  const joinRequestId = opts?.joinRequestId ?? null;
-
-  if (!row && planId && joinRequestId) {
-    row = await resolveGuestEscrowForJoinRequest(client, planId, joinRequestId);
-  }
-
-  // Meetup guest list may pass a join request id in the escrow route segment.
-  if (!row && planId) {
-    row = await resolveGuestEscrowForJoinRequest(client, planId, escrowId);
-  }
+  const row = await resolveEscrowRowByIdOrJoinRequest(client, escrowId, opts);
 
   if (!row) throw new Error('Escrow not found');
 
+  const resolvedEscrowId = row.id;
   const plan = row.plan_id ? await fetchPlanForEscrow(client, row.plan_id) : null;
   const esc = { ...(row as DbEscrowTransaction), plans: plan };
 
@@ -178,7 +169,7 @@ export async function fetchEscrowDetail(
     client
       .from('escrow_disputes')
       .select('*')
-      .eq('escrow_id', esc.id)
+      .eq('escrow_id', resolvedEscrowId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
