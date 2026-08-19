@@ -58,7 +58,33 @@ export function PlanGroupGuestsPanel({
     if (rowsRef.current.length === 0) setLoading(true);
 
     let accepted: DbPlanOffer[];
-    if (seedAcceptedOffers && offersReady) {
+
+    if (plan.is_negotiable === false) {
+      // Non-negotiable plans use join requests instead of offers
+      const client = createClient();
+      const { data: joinRows } = await client
+        .from('plan_join_requests')
+        .select('*')
+        .eq('plan_id', plan.id)
+        .eq('status', 'approved');
+      const joinRequests = joinRows ?? [];
+      const cents = plan.agreed_price_cents ?? plan.starting_price_cents ?? 0;
+      accepted = joinRequests.map((row) => ({
+        id: row.id as string,
+        plan_id: plan.id,
+        bidder_id: row.requester_id as string,
+        amount_cents: cents,
+        current_amount_cents: cents,
+        message: (row.message as string | null) ?? null,
+        status: 'accepted' as const,
+        round: 1,
+        expires_at: null,
+        proposed_scheduled_at: plan.scheduled_at ?? null,
+        proposed_location: null,
+        created_at: row.created_at as string,
+        updated_at: row.updated_at as string,
+      }));
+    } else if (seedAcceptedOffers && offersReady) {
       accepted = seedAcceptedOffers;
     } else {
       const client = createClient();
@@ -122,6 +148,7 @@ export function PlanGroupGuestsPanel({
   }, [
     plan.id,
     plan.is_group_plan,
+    plan.is_negotiable,
     plan.is_paid,
     plan.accepted_guest_count,
     plan.max_guests,
