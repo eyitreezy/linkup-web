@@ -136,7 +136,7 @@ export async function fetchEscrowDetail(
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
-    plan?.is_paid && esc.plan_id
+    esc.plan_id && (plan?.is_paid || plan?.is_group_plan || esc.escrow_pattern === 'C')
       ? client
           .from('escrow_transactions')
           .select('*')
@@ -150,7 +150,7 @@ export async function fetchEscrowDetail(
           .eq('id', plan.host_escrow_id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
-    plan?.is_paid && esc.plan_id
+    esc.plan_id && (plan?.is_paid || plan?.is_group_plan || esc.escrow_pattern === 'C')
       ? client
           .from('plan_offers')
           .select('id, bidder_id, current_amount_cents, amount_cents')

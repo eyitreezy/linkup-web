@@ -46,8 +46,6 @@ export type PlanViewerContext = {
   showPayShare: boolean;
   payShareEscrowId: string | null;
   payShareAmountLabel: string | null;
-  showViewPaymentStatus: boolean;
-  viewPaymentEscrowId: string | null;
   acceptedGuests: AcceptedGuestRef[];
   isMatchParty: boolean;
   userAcceptedOffer: DbPlanOffer | null;
@@ -136,8 +134,15 @@ export function derivePlanViewerContext(
   const myOffer = findMyLatestOffer(offers, userId);
   const myOfferIsActive = !!myOffer && isOfferLive(myOffer);
   const isJoinApprovedGuest = !isHost && myJoinRequest?.status === 'approved';
+  const guestEscrowFunded =
+    !!opts?.myGuestEscrow &&
+    !!userId &&
+    (opts.myGuestEscrow.guest_funded_at != null ||
+      opts.myGuestEscrow.status === 'funded' ||
+      opts.myGuestEscrow.status === 'active' ||
+      userEscrowLegFunded(opts.myGuestEscrow, userId));
   const isMatchedGuest =
-    !isHost && (myOffer?.status === 'accepted' || isJoinApprovedGuest);
+    !isHost && (myOffer?.status === 'accepted' || (isJoinApprovedGuest && guestEscrowFunded));
   const isNegotiatingGuest = !isHost && myOfferIsActive && isNegotiable;
   const isBrowsingGuest = !isHost && !isMatchedGuest && !isNegotiatingGuest;
 
@@ -170,7 +175,13 @@ export function derivePlanViewerContext(
       if (myJoinRequest?.status === 'pending') {
         showViewRequest = true;
       } else if (myJoinRequest?.status === 'approved') {
-        showViewAgreement = true;
+        if (guestEscrowFunded) {
+          showViewAgreement = true;
+          showMessage = true;
+          showCalendar = true;
+        } else {
+          showViewAgreement = true;
+        }
       } else if (myJoinRequest?.status === 'declined') {
         // Save only
       } else {
@@ -216,17 +227,6 @@ export function derivePlanViewerContext(
 
   const payShare = resolvePlanPayShareState(plan, userId, opts?.myGuestEscrow, isHost);
 
-  const guestEscrowFunded =
-    !!opts?.myGuestEscrow &&
-    !!userId &&
-    (userEscrowLegFunded(opts.myGuestEscrow, userId) ||
-      opts.myGuestEscrow.status === 'funded' ||
-      opts.myGuestEscrow.status === 'active' ||
-      opts.myGuestEscrow.status === 'released');
-  const showViewPaymentStatus =
-    !isHost && joinRequestFlow && myJoinRequest?.status === 'approved' && guestEscrowFunded;
-  const viewPaymentEscrowId = showViewPaymentStatus ? (opts?.myGuestEscrow?.id ?? null) : null;
-
   return {
     isHost,
     isMatchedGuest,
@@ -256,8 +256,6 @@ export function derivePlanViewerContext(
     showPayShare: payShare.showPayShare,
     payShareEscrowId: payShare.payShareEscrowId,
     payShareAmountLabel: payShare.payShareAmountLabel,
-    showViewPaymentStatus,
-    viewPaymentEscrowId,
     acceptedGuests,
     isMatchParty: isMatchedGuest || (isHost && lockState !== 'open'),
     userAcceptedOffer: isMatchedGuest ? myOffer : null,

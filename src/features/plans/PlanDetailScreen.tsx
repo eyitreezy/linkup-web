@@ -1281,8 +1281,7 @@ function ActionRail({
   const joinFlowGuestActionsInCard =
     ctx.showRequestToJoin ||
     ctx.showViewRequest ||
-    ctx.showPayShare ||
-    ctx.showViewPaymentStatus;
+    ctx.showPayShare;
 
   return (
     <>
@@ -1339,14 +1338,14 @@ function ActionRail({
         </div>
       ) : null}
 
-      {ctx.showViewPaymentStatus && ctx.viewPaymentEscrowId ? (
+      {ctx.showViewAgreement && !ctx.showMessage ? (
         <div className={planActionGrid}>
-          <Link
-            href={`/escrow/${ctx.viewPaymentEscrowId}`}
-            className={actionSecondary}
-          >
-            View payment status
-          </Link>
+          <button type="button" className={actionSecondary} onClick={onAgreement}>
+            <span className="inline-flex items-center gap-2">
+              <IoDocumentTextOutline size={18} />
+              View agreement
+            </span>
+          </button>
         </div>
       ) : null}
 
