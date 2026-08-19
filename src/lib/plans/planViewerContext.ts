@@ -142,7 +142,7 @@ export function derivePlanViewerContext(
       opts.myGuestEscrow.status === 'active' ||
       userEscrowLegFunded(opts.myGuestEscrow, userId));
   const isMatchedGuest =
-    !isHost && (myOffer?.status === 'accepted' || (isJoinApprovedGuest && guestEscrowFunded));
+    !isHost && (myOffer?.status === 'accepted' || isJoinApprovedGuest);
   const isNegotiatingGuest = !isHost && myOfferIsActive && isNegotiable;
   const isBrowsingGuest = !isHost && !isMatchedGuest && !isNegotiatingGuest;
 

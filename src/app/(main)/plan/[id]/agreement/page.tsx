@@ -4,11 +4,11 @@ export const metadata = { title: 'Confirm plan' };
 
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ offerId?: string }>;
+  searchParams: Promise<{ offerId?: string; joinRequestId?: string }>;
 };
 
 export default async function PlanAgreementPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { offerId } = await searchParams;
-  return <PlanAgreementScreen planId={id} offerId={offerId} />;
+  const { offerId, joinRequestId } = await searchParams;
+  return <PlanAgreementScreen planId={id} offerId={offerId} joinRequestId={joinRequestId} />;
 }

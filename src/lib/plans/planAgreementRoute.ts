@@ -35,9 +35,17 @@ export function resolveAgreementOfferId(
 
 export function resolvePlanAgreementHref(
   plan: PlanSlice,
-  opts?: { offerId?: string | null; userId?: string | null; offers?: DbPlanOffer[] }
+  opts?: {
+    offerId?: string | null;
+    joinRequestId?: string | null;
+    userId?: string | null;
+    offers?: DbPlanOffer[];
+  }
 ): string {
   const planId = plan.id;
+  if (opts?.joinRequestId) {
+    return `/plan/${planId}/agreement?joinRequestId=${opts.joinRequestId}`;
+  }
   const slotId = resolveAgreementOfferId(plan, opts?.userId ?? undefined, opts?.offers ?? [], opts?.offerId);
   if (slotId) return `/plan/${planId}/agreement?offerId=${slotId}`;
   return `/plan/${planId}/agreement`;

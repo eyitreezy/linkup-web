@@ -230,6 +230,14 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     () => (bundle?.offers ?? []).filter((o) => o.status === 'accepted'),
     [bundle?.offers]
   );
+  const approvedJoinRequests = useMemo(
+    () => (bundle?.joinRequests ?? []).filter((r) => r.status === 'approved'),
+    [bundle?.joinRequests]
+  );
+  const showHostGuestAgreements =
+    isCreator &&
+    (ctx?.showGroupGuestAgreements ||
+      (plan?.is_negotiable === false && approvedJoinRequests.length > 0));
   const isAcceptedGuest =
     !!viewerUserId &&
     isGroupPlan &&
@@ -362,8 +370,21 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     router.push(`/plan/${planId}/negotiate`);
   }
 
-  function goAgreement(offerId?: string) {
+  function goAgreement(offerId?: string, joinRequestId?: string) {
     if (!plan) return;
+
+    if (plan.is_negotiable === false) {
+      const resolvedJoinRequestId =
+        joinRequestId ?? bundle?.myJoinRequest?.id ?? null;
+      router.push(
+        resolvePlanAgreementHref(plan, {
+          joinRequestId: resolvedJoinRequestId,
+          userId: viewerUserId,
+        })
+      );
+      return;
+    }
+
     const resolvedOfferId =
       offerId ??
       ctx?.userAcceptedOffer?.id ??
@@ -949,43 +970,79 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         </button>
       ) : null}
 
-      {isCreator && ctx?.showGroupGuestAgreements ? (
+      {showHostGuestAgreements ? (
         <section className="linkup-card space-y-3 p-4">
           <h3 className="font-display text-base font-extrabold text-foreground">Accepted guests</h3>
           <ul className="space-y-2">
-            {ctx.acceptedGuests.map((guest) => {
-              const prof = bundle?.profilesById[guest.userId];
-              const name = prof?.display_name?.trim() || 'Guest';
-              return (
-                <li
-                  key={guest.offerId}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-[#FAFAFF]/80 px-3 py-2.5"
-                >
-                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                    <ProfileAvatar profile={prof} displayName={name} size={36} />
-                    <span className="min-w-0 truncate font-extrabold text-foreground">{name}</span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <button
-                      type="button"
-                      className={actionCompactPrimary}
-                      onClick={() => goAgreement(guest.offerId)}
+            {plan.is_negotiable !== false
+              ? ctx!.acceptedGuests.map((guest) => {
+                  const prof = bundle?.profilesById[guest.userId];
+                  const name = prof?.display_name?.trim() || 'Guest';
+                  return (
+                    <li
+                      key={guest.offerId}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-[#FAFAFF]/80 px-3 py-2.5"
                     >
-                      <IoDocumentTextOutline size={14} aria-hidden />
-                      View agreement
-                    </button>
-                    <button
-                      type="button"
-                      className={actionCompactSecondary}
-                      onClick={() => void openDirectGuestChat(guest.userId)}
+                      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                        <ProfileAvatar profile={prof} displayName={name} size={36} />
+                        <span className="min-w-0 truncate font-extrabold text-foreground">{name}</span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          type="button"
+                          className={actionCompactPrimary}
+                          onClick={() => goAgreement(guest.offerId)}
+                        >
+                          <IoDocumentTextOutline size={14} aria-hidden />
+                          View agreement
+                        </button>
+                        <button
+                          type="button"
+                          className={actionCompactSecondary}
+                          onClick={() => void openDirectGuestChat(guest.userId)}
+                        >
+                          <IoChatbubbleEllipsesOutline size={14} aria-hidden />
+                          Message
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })
+              : approvedJoinRequests.map((request) => {
+                  const prof =
+                    request.requester ??
+                    bundle?.profilesById[request.requester_id];
+                  const name = prof?.display_name?.trim() || 'Guest';
+                  return (
+                    <li
+                      key={request.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-[#FAFAFF]/80 px-3 py-2.5"
                     >
-                      <IoChatbubbleEllipsesOutline size={14} aria-hidden />
-                      Message
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
+                      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                        <ProfileAvatar profile={prof} displayName={name} size={36} />
+                        <span className="min-w-0 truncate font-extrabold text-foreground">{name}</span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          type="button"
+                          className={actionCompactPrimary}
+                          onClick={() => goAgreement(undefined, request.id)}
+                        >
+                          <IoDocumentTextOutline size={14} aria-hidden />
+                          View agreement
+                        </button>
+                        <button
+                          type="button"
+                          className={actionCompactSecondary}
+                          onClick={() => void openDirectGuestChat(request.requester_id)}
+                        >
+                          <IoChatbubbleEllipsesOutline size={14} aria-hidden />
+                          Message
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
           </ul>
         </section>
       ) : null}

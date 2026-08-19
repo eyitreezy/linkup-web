@@ -75,7 +75,7 @@ interface CancellationOutcome {
   band: string | null;
 }
 
-type Props = { planId: string; offerId?: string };
+type Props = { planId: string; offerId?: string; joinRequestId?: string };
 
 function agreedPriceLabel(plan: DbPlan, offer: DbPlanOffer | null): string {
   const cents = plan.agreed_price_cents ?? offer?.amount_cents ?? plan.starting_price_cents;
@@ -83,7 +83,7 @@ function agreedPriceLabel(plan: DbPlan, offer: DbPlanOffer | null): string {
   return formatOfferAmount(cents);
 }
 
-export function PlanAgreementScreen({ planId, offerId }: Props) {
+export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
@@ -135,11 +135,12 @@ export function PlanAgreementScreen({ planId, offerId }: Props) {
   });
 
   const agreementQuery = useQuery({
-    queryKey: ['plan-agreement', planId, offerId ?? '', user?.id ?? ''],
+    queryKey: ['plan-agreement', planId, offerId ?? '', joinRequestId ?? '', user?.id ?? ''],
     queryFn: async () => {
       const client = createClient();
       const res = await fetchPlanAgreementBundle(client, planId, {
         offerId: offerId ?? null,
+        joinRequestId: joinRequestId ?? null,
         userId: user?.id ?? null,
       });
       if (res.error) throw new Error(res.error);
