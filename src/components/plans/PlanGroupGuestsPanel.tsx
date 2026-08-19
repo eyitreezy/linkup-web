@@ -10,11 +10,12 @@ import {
   isGuestEscrowFunded,
 } from '@/lib/plans/groupGuestEscrowDisplay';
 import { resolveGroupGuestSlotCounts } from '@/lib/plans/groupGuestSlotCounts';
+import { resolveEscrowHref } from '@/lib/plans/planAgreementRoute';
 import { createClient } from '@/lib/supabase/client';
 import type { DbPlan, DbPlanOffer, DbProfile, SubscriptionTierDb } from '@/types/database';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { IoCheckmarkCircle, IoShieldCheckmarkOutline, IoTimeOutline } from 'react-icons/io5';
+import { IoCheckmarkCircle, IoChatbubbleEllipsesOutline, IoShieldCheckmarkOutline, IoTimeOutline } from 'react-icons/io5';
 
 type GuestRow = {
   offer: DbPlanOffer;
@@ -34,6 +35,8 @@ type Props = {
   offersReady?: boolean;
   /** Bumps when parent realtime refreshes offers / plan (escrow, accepts). */
   refreshKey?: string;
+  onMessageGroup?: () => void;
+  messageGroupBusy?: boolean;
 };
 
 export function PlanGroupGuestsPanel({
@@ -43,6 +46,8 @@ export function PlanGroupGuestsPanel({
   seedAcceptedOffers,
   offersReady = false,
   refreshKey,
+  onMessageGroup,
+  messageGroupBusy = false,
 }: Props) {
   const [rows, setRows] = useState<GuestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -182,10 +187,13 @@ export function PlanGroupGuestsPanel({
       () => {
         void loadRef.current();
       },
-      { table: 'plan_offers', filter: `plan_id=eq.${plan.id}` },
+      {
+        table: plan.is_negotiable === false ? 'plan_join_requests' : 'plan_offers',
+        filter: `plan_id=eq.${plan.id}`,
+      },
       { channelPrefix: 'plan-guests-rt' }
     );
-  }, [plan.id, plan.is_group_plan]);
+  }, [plan.id, plan.is_group_plan, plan.is_negotiable]);
 
   if (!plan.is_group_plan || currentUserId !== hostUserId) return null;
 
@@ -202,12 +210,34 @@ export function PlanGroupGuestsPanel({
           <h3 className="font-display text-lg font-extrabold text-foreground">
             Guests ({acceptedCount} / {maxGuests} accepted)
           </h3>
-          <Link
-            href={`/plan/${plan.id}/negotiate`}
-            className="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-full linkup-gradient-primary px-4 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95"
-          >
-            View all offers →
-          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            {plan.is_negotiable !== false ? (
+              <Link
+                href={`/plan/${plan.id}/negotiate`}
+                className="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-full linkup-gradient-primary px-4 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95"
+              >
+                View all offers →
+              </Link>
+            ) : (
+              <Link
+                href={`/plan/${plan.id}/requests`}
+                className="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-full linkup-gradient-primary px-4 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95"
+              >
+                Manage requests →
+              </Link>
+            )}
+            {onMessageGroup && rows.length > 0 ? (
+              <button
+                type="button"
+                onClick={onMessageGroup}
+                disabled={messageGroupBusy}
+                className="inline-flex min-h-[36px] shrink-0 items-center justify-center gap-1.5 rounded-full border border-border bg-white px-4 py-2 text-[12px] font-extrabold text-foreground shadow-sm transition hover:bg-[#F8F7FF] disabled:opacity-50"
+              >
+                <IoChatbubbleEllipsesOutline size={14} aria-hidden />
+                {messageGroupBusy ? 'Opening…' : 'Message group'}
+              </button>
+            ) : null}
+          </div>
         </div>
         <p className="mt-1 text-[12px] font-semibold text-muted">
           {acceptedCount} of {maxGuests} guest slots used
@@ -259,9 +289,14 @@ export function PlanGroupGuestsPanel({
                   )}
                   <span className="truncate">{guest.statusLabel}</span>
                 </span>
-                {guest.escrow_id ? (
+                {guest.escrow_id || (plan.is_negotiable === false && guest.offer.id) ? (
                   <Link
-                    href={`/escrow/${guest.escrow_id}?planId=${plan.id}`}
+                    href={resolveEscrowHref(guest.escrow_id ?? guest.offer.id, {
+                      planId: plan.id,
+                      ...(plan.is_negotiable === false
+                        ? { joinRequestId: guest.offer.id }
+                        : { offerId: guest.offer.id }),
+                    })}
                     className="inline-flex min-w-[4.75rem] items-center justify-center gap-1 rounded-full linkup-gradient-primary px-2.5 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95 active:scale-[0.98]"
                     aria-label={`Open ${guest.profile?.display_name ?? 'guest'} escrow`}
                   >

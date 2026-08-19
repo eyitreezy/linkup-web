@@ -82,7 +82,7 @@ import {
   guestEscrowStatusLabel,
   isGuestEscrowFunded,
 } from '@/lib/plans/groupGuestEscrowDisplay';
-import { resolveEscrowBackHref, resolvePlanAgreementHref } from '@/lib/plans/planAgreementRoute';
+import { resolveEscrowBackHref, resolveEscrowHref, resolvePlanAgreementHref } from '@/lib/plans/planAgreementRoute';
 import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import { requiresVerificationGate } from '@/lib/verification/access';
 import { createClient } from '@/lib/supabase/client';
@@ -121,10 +121,12 @@ function EscrowDetailContent({
   escrowId,
   agreementPlanId,
   agreementOfferId,
+  agreementJoinRequestId,
 }: {
   escrowId: string;
   agreementPlanId?: string;
   agreementOfferId?: string;
+  agreementJoinRequestId?: string;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -152,10 +154,16 @@ function EscrowDetailContent({
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['escrow', escrowId],
+    queryKey: ['escrow', escrowId, agreementPlanId ?? '', agreementJoinRequestId ?? ''],
     enabled: !!escrowId && !authLoading && !!user?.id,
-    queryFn: () => fetchEscrowDetail(client, escrowId, user!.id),
+    queryFn: () =>
+      fetchEscrowDetail(client, escrowId, user!.id, {
+        planId: agreementPlanId ?? null,
+        joinRequestId: agreementJoinRequestId ?? null,
+      }),
   });
+
+  const resolvedEscrowId = data?.escrow?.id ?? escrowId;
 
   const escrow = data?.escrow ?? null;
   const names = data?.names ?? { hostName: 'Host', guestName: 'Guest' };
@@ -172,7 +180,7 @@ function EscrowDetailContent({
   }, []);
 
   useEscrowRealtime(
-    escrowId,
+    resolvedEscrowId,
     useCallback(
       (next, prev) => {
         queryClient.setQueryData(['escrow', escrowId], (old: typeof data) => {
@@ -248,6 +256,25 @@ function EscrowDetailContent({
   }
 
   useEffect(() => {
+    if (!data?.escrow?.id || data.escrow.id === escrowId) return;
+    router.replace(
+      resolveEscrowHref(data.escrow.id, {
+        planId: agreementPlanId ?? data.escrow.plan_id ?? undefined,
+        joinRequestId: agreementJoinRequestId,
+        offerId: agreementJoinRequestId ? undefined : agreementOfferId,
+      })
+    );
+  }, [
+    agreementJoinRequestId,
+    agreementOfferId,
+    agreementPlanId,
+    data?.escrow?.id,
+    data?.escrow?.plan_id,
+    escrowId,
+    router,
+  ]);
+
+  useEffect(() => {
     if (!escrow || !user?.id) return;
     const planMeta = escrow.plans;
     if (
@@ -264,9 +291,20 @@ function EscrowDetailContent({
     const hostEscrowId = planMeta?.host_escrow_id;
     if (!hostEscrowId || escrow.id === hostEscrowId || escrow.payer_id === user.id) return;
     router.replace(
-      `/escrow/${hostEscrowId}${agreementPlanId ? `?planId=${agreementPlanId}${agreementOfferId ? `&offerId=${agreementOfferId}` : ''}` : ''}`
+      resolveEscrowHref(hostEscrowId, {
+        planId: agreementPlanId,
+        joinRequestId: agreementJoinRequestId,
+        offerId: agreementJoinRequestId ? undefined : agreementOfferId,
+      })
     );
-  }, [escrow, user?.id, agreementPlanId, agreementOfferId, router]);
+  }, [
+    escrow,
+    user?.id,
+    agreementPlanId,
+    agreementOfferId,
+    agreementJoinRequestId,
+    router,
+  ]);
 
   const checkoutRef = escrow ? escrowCheckoutReference(escrow) : null;
 
@@ -465,7 +503,9 @@ function EscrowDetailContent({
           is_group_plan: planRow.is_group_plan ?? false,
           accepted_offer_id: agreementOfferId ?? null,
         },
-        { offerId: agreementOfferId }
+        agreementJoinRequestId
+          ? { joinRequestId: agreementJoinRequestId }
+          : { offerId: agreementOfferId }
       )
     );
   }
@@ -478,6 +518,7 @@ function EscrowDetailContent({
     const backHref = resolveEscrowBackHref({
       planId: agreementPlanId,
       offerId: agreementOfferId,
+      joinRequestId: agreementJoinRequestId,
     });
     const backLabel = agreementPlanId ? 'Back to agreement' : 'Back to offers';
     return (
@@ -504,6 +545,7 @@ function EscrowDetailContent({
   const backHref = resolveEscrowBackHref({
     planId: agreementPlanId ?? escrow.plan_id,
     offerId: agreementOfferId,
+    joinRequestId: agreementJoinRequestId,
   });
   const isHost = user.id === escrow.host_id;
   const isGroupSplit = isGroupSplitPlan({
@@ -1373,10 +1415,12 @@ export function EscrowDetailScreen({
   escrowId,
   agreementPlanId,
   agreementOfferId,
+  agreementJoinRequestId,
 }: {
   escrowId: string;
   agreementPlanId?: string;
   agreementOfferId?: string;
+  agreementJoinRequestId?: string;
 }) {
   return (
     <Suspense fallback={<EscrowDetailSkeleton />}>
@@ -1384,6 +1428,7 @@ export function EscrowDetailScreen({
         escrowId={escrowId}
         agreementPlanId={agreementPlanId}
         agreementOfferId={agreementOfferId}
+        agreementJoinRequestId={agreementJoinRequestId}
       />
     </Suspense>
   );

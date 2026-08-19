@@ -73,19 +73,65 @@ async function fetchPlanForEscrow(
   return core.data as EscrowDetailPlan;
 }
 
+async function resolveGuestEscrowForJoinRequest(
+  client: SupabaseClient,
+  planId: string,
+  joinRequestId: string
+): Promise<DbEscrowTransaction | null> {
+  const { data: joinReq } = await client
+    .from('plan_join_requests')
+    .select('requester_id, status, plan_id')
+    .eq('id', joinRequestId)
+    .maybeSingle();
+
+  if (
+    !joinReq ||
+    joinReq.status !== 'approved' ||
+    joinReq.plan_id !== planId ||
+    !joinReq.requester_id
+  ) {
+    return null;
+  }
+
+  const { data: guestRow } = await client
+    .from('escrow_transactions')
+    .select('*')
+    .eq('plan_id', planId)
+    .eq('guest_id', joinReq.requester_id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return (guestRow as DbEscrowTransaction | null) ?? null;
+}
+
 /** Load escrow + plan for the secure payment screen (tolerates missing group-split plan columns). */
 export async function fetchEscrowDetail(
   client: SupabaseClient,
   escrowId: string,
-  viewerUserId?: string
+  viewerUserId?: string,
+  opts?: { planId?: string | null; joinRequestId?: string | null }
 ): Promise<EscrowDetailResult> {
-  const { data: row, error } = await client
+  let { data: row, error } = await client
     .from('escrow_transactions')
     .select('*')
     .eq('id', escrowId)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
+
+  const planId = opts?.planId ?? null;
+  const joinRequestId = opts?.joinRequestId ?? null;
+
+  if (!row && planId && joinRequestId) {
+    row = await resolveGuestEscrowForJoinRequest(client, planId, joinRequestId);
+  }
+
+  // Meetup guest list may pass a join request id in the escrow route segment.
+  if (!row && planId) {
+    row = await resolveGuestEscrowForJoinRequest(client, planId, escrowId);
+  }
+
   if (!row) throw new Error('Escrow not found');
 
   const plan = row.plan_id ? await fetchPlanForEscrow(client, row.plan_id) : null;
@@ -132,7 +178,7 @@ export async function fetchEscrowDetail(
     client
       .from('escrow_disputes')
       .select('*')
-      .eq('escrow_id', escrowId)
+      .eq('escrow_id', esc.id)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),

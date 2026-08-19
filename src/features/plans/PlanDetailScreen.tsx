@@ -464,9 +464,18 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         window.alert('The host has not opened the group chat yet.');
         return;
       }
-      const guestIds = (bundle?.offers ?? [])
-        .filter((o) => o.status === 'accepted')
-        .map((o) => o.bidder_id);
+      const guestIds =
+        plan.is_negotiable === false
+          ? [
+              ...new Set(
+                (bundle?.joinRequests ?? [])
+                  .filter((r) => r.status === 'approved')
+                  .map((r) => r.requester_id)
+              ),
+            ]
+          : (bundle?.offers ?? [])
+              .filter((o) => o.status === 'accepted')
+              .map((o) => o.bidder_id);
       const client = createClient();
       const convId = await createGroupChat(client, {
         planId: plan.id,
@@ -811,6 +820,8 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         seedAcceptedOffers={acceptedGuestOffers}
         offersReady={!!bundle}
         refreshKey={guestsPanelRefreshKey}
+        onMessageGroup={() => void handleOpenGroupChat()}
+        messageGroupBusy={groupChatBusy}
       />
 
       {isAcceptedGuest && plan.is_group_plan ? (
