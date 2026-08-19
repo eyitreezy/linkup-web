@@ -1,5 +1,6 @@
 'use client';
 
+import { EscrowPaymentSuccessModal } from '@/components/escrow/EscrowPaymentSuccessModal';
 import { EscrowScreenHeader } from '@/components/escrow/EscrowScreenHeader';
 import { RefundAccountForm, type RefundAccountResult } from '@/components/escrow/RefundAccountForm';
 import { formatNGN } from '@/lib/escrow/escrowFormatters';
@@ -51,6 +52,7 @@ export function BankTransferClient({
   const [copied, setCopied] = useState(false);
   const [countdownMs, setCountdownMs] = useState(0);
   const [isExpired, setIsExpired] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const backHref = agreementPlanId ? `/escrow/${escrow.id}?planId=${agreementPlanId}` : `/escrow/${escrow.id}`;
   const successHref = agreementPlanId
@@ -58,8 +60,12 @@ export function BankTransferClient({
     : `/plan/${escrow.plan_id}/agreement`;
 
   const handleFunded = useCallback(() => {
+    setShowSuccess(true);
+  }, []);
+
+  function handleSuccessContinue() {
     router.replace(successHref);
-  }, [router, successHref]);
+  }
 
   useEffect(() => {
     if (step !== 'virtual_account' || !va) return;
@@ -280,6 +286,13 @@ export function BankTransferClient({
             </button>
           ) : null}
         </>
+      ) : null}
+
+      {showSuccess ? (
+        <EscrowPaymentSuccessModal
+          message="Your bank transfer has been received and your escrow has been funded."
+          onContinue={handleSuccessContinue}
+        />
       ) : null}
     </div>
   );

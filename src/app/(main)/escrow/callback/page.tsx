@@ -1,5 +1,6 @@
 'use client';
 
+import { EscrowPaymentSuccessModal } from '@/components/escrow/EscrowPaymentSuccessModal';
 import { useEscrowConfirmation } from '@/hooks/useEscrowConfirmation';
 import { invokeVerifyEscrowPayment } from '@/lib/escrow/verifyEscrowPayment';
 import { createClient } from '@/lib/supabase/client';
@@ -28,16 +29,15 @@ function EscrowCallbackContent() {
   const escrowId = parseEscrowId(searchParams);
   const [checkBusy, setCheckBusy] = useState(false);
   const [planId, setPlanId] = useState<string | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const client = useMemo(() => createClient(), []);
 
   const confirmEnabled = status === 'successful' && !!escrowId;
 
   const onVerified = useCallback(() => {
-    if (escrowId) {
-      router.replace(`/escrow/${escrowId}`);
-    }
-  }, [escrowId, router]);
+    setShowSuccess(true);
+  }, []);
 
   const { status: confirmationStatus, secondsElapsed, retryVerify } = useEscrowConfirmation(
     client,
@@ -83,19 +83,35 @@ function EscrowCallbackContent() {
     setCheckBusy(true);
     try {
       const funded = await retryVerify();
-      if (!funded) {
-        const result = await invokeVerifyEscrowPayment(client, escrowId, txRef ?? undefined);
-        if (result.funded) {
-          router.replace(`/escrow/${escrowId}`);
-        } else if (planId) {
-          router.replace(`/plan/${planId}`);
-        } else {
-          router.replace(`/support?ref=payment_delayed&escrow=${escrowId}`);
-        }
+      if (funded) {
+        setShowSuccess(true);
+        return;
+      }
+      const result = await invokeVerifyEscrowPayment(client, escrowId, txRef ?? undefined);
+      if (result.funded) {
+        setShowSuccess(true);
+      } else if (planId) {
+        router.replace(`/plan/${planId}`);
+      } else {
+        router.replace(`/support?ref=payment_delayed&escrow=${escrowId}`);
       }
     } finally {
       setCheckBusy(false);
     }
+  }
+
+  function handleSuccessContinue() {
+    if (escrowId) router.replace(`/escrow/${escrowId}`);
+  }
+
+  if (showSuccess) {
+    return (
+      <EscrowPaymentSuccessModal
+        message="Your payment has been verified and your escrow is now funded."
+        continueLabel="View agreement"
+        onContinue={handleSuccessContinue}
+      />
+    );
   }
 
   if (status === 'cancelled' || status === 'failed') {
@@ -121,7 +137,13 @@ function EscrowCallbackContent() {
   }
 
   if (confirmationStatus === 'verified') {
-    return null;
+    return (
+      <EscrowPaymentSuccessModal
+        message="Your payment has been verified and your escrow is now funded."
+        continueLabel="View agreement"
+        onContinue={handleSuccessContinue}
+      />
+    );
   }
 
   if (confirmationStatus === 'timeout') {

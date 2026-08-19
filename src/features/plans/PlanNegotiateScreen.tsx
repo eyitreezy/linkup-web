@@ -219,6 +219,14 @@ export function PlanNegotiateScreen({ planId, offerId, openAction }: Props) {
     setStatusAlert({ title: 'Could not continue', message: formatNegotiationRpcError(message) });
   }
 
+  useEffect(() => {
+    if (!plan?.scheduled_at || proposedAt) return;
+    const d = new Date(plan.scheduled_at);
+    if (Number.isNaN(d.getTime())) return;
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    setProposedAt(local);
+  }, [plan?.scheduled_at, proposedAt]);
+
   const sendMutation = useMutation({
     mutationFn: async () => {
       if (!user?.id || !plan) throw new Error('Sign in to send an offer.');

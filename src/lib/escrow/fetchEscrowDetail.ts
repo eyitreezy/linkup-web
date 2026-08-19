@@ -55,7 +55,8 @@ export type EscrowDetailResult = {
     DbEscrowTransaction,
     'id' | 'status' | 'host_funded_at' | 'host_share_cents' | 'amount_cents' | 'guest_id'
   > | null;
-  acceptedOffers: Array<Pick<DbPlanOffer, 'current_amount_cents' | 'amount_cents'>>;
+  acceptedOffers: Array<Pick<DbPlanOffer, 'id' | 'bidder_id' | 'current_amount_cents' | 'amount_cents'>>;
+  guestProfilesById: Record<string, { display_name: string | null; avatar_url: string | null }>;
 };
 
 async function fetchPlanForEscrow(
@@ -135,7 +136,7 @@ export async function fetchEscrowDetail(
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
-    plan?.is_group_plan && plan.escrow_pattern === 'B' && esc.plan_id
+    plan?.is_paid && esc.plan_id
       ? client
           .from('escrow_transactions')
           .select('*')
@@ -149,22 +150,49 @@ export async function fetchEscrowDetail(
           .eq('id', plan.host_escrow_id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
-    plan?.is_group_plan && plan.escrow_pattern === 'B' && esc.plan_id
+    plan?.is_paid && esc.plan_id
       ? client
           .from('plan_offers')
-          .select('current_amount_cents, amount_cents')
+          .select('id, bidder_id, current_amount_cents, amount_cents')
           .eq('plan_id', esc.plan_id)
           .eq('status', 'accepted')
       : Promise.resolve({ data: [] }),
   ]);
+
+  const guestEscrowRows = (guestEscRes.data ?? []) as DbEscrowTransaction[];
+  const acceptedOffers = (offersRes.data ?? []) as EscrowDetailResult['acceptedOffers'];
+  const profileIds = new Set<string>();
+  for (const row of guestEscrowRows) {
+    if (row.guest_id) profileIds.add(row.guest_id);
+  }
+  for (const offer of acceptedOffers) {
+    if (offer.bidder_id) profileIds.add(offer.bidder_id);
+  }
+  let guestProfilesById: EscrowDetailResult['guestProfilesById'] = {};
+  if (profileIds.size > 0) {
+    const { data: guestProfs } = await client
+      .from('profiles')
+      .select('user_id, display_name, avatar_url')
+      .in('user_id', [...profileIds]);
+    guestProfilesById = Object.fromEntries(
+      (guestProfs ?? []).map((p) => [
+        p.user_id as string,
+        {
+          display_name: (p.display_name as string | null) ?? null,
+          avatar_url: (p.avatar_url as string | null) ?? null,
+        },
+      ])
+    );
+  }
 
   return {
     escrow: esc,
     names,
     counterparty,
     dispute: (dRow as DbEscrowDispute | null) ?? null,
-    guestEscrowRows: (guestEscRes.data ?? []) as DbEscrowTransaction[],
+    guestEscrowRows,
     hostEscrowRow: (hostEscRes.data as EscrowDetailResult['hostEscrowRow']) ?? null,
-    acceptedOffers: (offersRes.data ?? []) as EscrowDetailResult['acceptedOffers'],
+    acceptedOffers,
+    guestProfilesById,
   };
 }

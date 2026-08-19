@@ -3,6 +3,7 @@
  */
 import { planIsPastNegotiation } from '@/lib/plans/planAgreementRoute';
 import { isOfferLive } from '@/lib/plans/negotiationState';
+import { userEscrowLegFunded } from '@/lib/escrow/splitEscrowFunding';
 import {
   resolvePlanPayShareState,
   type PlanGuestEscrowSnapshot,
@@ -45,6 +46,8 @@ export type PlanViewerContext = {
   showPayShare: boolean;
   payShareEscrowId: string | null;
   payShareAmountLabel: string | null;
+  showViewPaymentStatus: boolean;
+  viewPaymentEscrowId: string | null;
   acceptedGuests: AcceptedGuestRef[];
   isMatchParty: boolean;
   userAcceptedOffer: DbPlanOffer | null;
@@ -213,6 +216,17 @@ export function derivePlanViewerContext(
 
   const payShare = resolvePlanPayShareState(plan, userId, opts?.myGuestEscrow, isHost);
 
+  const guestEscrowFunded =
+    !!opts?.myGuestEscrow &&
+    !!userId &&
+    (userEscrowLegFunded(opts.myGuestEscrow, userId) ||
+      opts.myGuestEscrow.status === 'funded' ||
+      opts.myGuestEscrow.status === 'active' ||
+      opts.myGuestEscrow.status === 'released');
+  const showViewPaymentStatus =
+    !isHost && joinRequestFlow && myJoinRequest?.status === 'approved' && guestEscrowFunded;
+  const viewPaymentEscrowId = showViewPaymentStatus ? (opts?.myGuestEscrow?.id ?? null) : null;
+
   return {
     isHost,
     isMatchedGuest,
@@ -242,6 +256,8 @@ export function derivePlanViewerContext(
     showPayShare: payShare.showPayShare,
     payShareEscrowId: payShare.payShareEscrowId,
     payShareAmountLabel: payShare.payShareAmountLabel,
+    showViewPaymentStatus,
+    viewPaymentEscrowId,
     acceptedGuests,
     isMatchParty: isMatchedGuest || (isHost && lockState !== 'open'),
     userAcceptedOffer: isMatchedGuest ? myOffer : null,

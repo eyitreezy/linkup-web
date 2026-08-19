@@ -43,7 +43,8 @@ import {
 } from '@/lib/groupPlan/policySignOffContent';
 import { signEscrowPolicy } from '@/lib/groupPlan/annexureB';
 import { cn } from '@/utils/cn';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 type Props = {
   planId: string;
@@ -55,9 +56,14 @@ export function EscrowPolicySignOffModal({ planId, escrowPattern, onSigned }: Pr
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasScrolled, setHasScrolled] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pattern = normalizeEscrowPattern(escrowPattern);
   const sections = ESCROW_POLICY_BY_PATTERN[pattern];
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   function onScroll() {
     const el = scrollRef.current;
@@ -80,15 +86,22 @@ export function EscrowPolicySignOffModal({ planId, escrowPattern, onSigned }: Pr
     onSigned();
   }
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center"
+      className="fixed inset-0 z-[9999] flex items-end justify-center sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="escrow-policy-title"
     >
-      <div className="linkup-card flex max-h-[min(85vh,calc(100dvh-2rem))] w-full max-w-lg flex-col overflow-hidden p-5 shadow-xl sm:max-h-[min(85vh,calc(100dvh-3rem))]">
-        <div className="shrink-0">
+      <div className="fixed inset-0 bg-black/60" aria-hidden />
+
+      <div
+        className="relative z-[1] flex w-full max-w-lg flex-col rounded-t-3xl border border-border bg-white shadow-2xl sm:rounded-3xl"
+        style={{ maxHeight: 'calc(100dvh - 48px)' }}
+      >
+        <div className="shrink-0 border-b border-border/40 px-5 py-4">
           <h2 id="escrow-policy-title" className="font-display text-xl font-extrabold text-foreground">
             Escrow and Cancellation Policy
           </h2>
@@ -100,7 +113,7 @@ export function EscrowPolicySignOffModal({ planId, escrowPattern, onSigned }: Pr
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="mt-4 min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain pr-1"
+          className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-4"
         >
           {sections.map((section) => (
             <section key={section.heading} className="space-y-2">
@@ -116,7 +129,7 @@ export function EscrowPolicySignOffModal({ planId, escrowPattern, onSigned }: Pr
           ))}
         </div>
 
-        <div className="mt-4 shrink-0 border-t border-border/40 pt-4">
+        <div className="shrink-0 border-t border-border/40 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <p className="text-[13px] font-semibold text-muted">
             By proceeding you confirm you have read and understood the escrow terms and cancellation
             policy that apply to this plan.
@@ -132,13 +145,14 @@ export function EscrowPolicySignOffModal({ planId, escrowPattern, onSigned }: Pr
             onClick={() => void handleSign()}
             disabled={busy || !hasScrolled}
             className={cn(
-              'mt-3 flex min-h-[44px] w-full items-center justify-center rounded-full linkup-gradient-primary px-5 text-[14px] font-extrabold text-white transition hover:opacity-95 disabled:opacity-50'
+              'mt-3 flex min-h-[44px] w-full items-center justify-center rounded-full linkup-gradient-primary px-5 text-[14px] font-extrabold text-white disabled:opacity-50'
             )}
           >
             {busy ? 'Confirming…' : 'I have read and I agree'}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { EscrowPaymentSuccessModal } from '@/components/escrow/EscrowPaymentSuccessModal';
 import { EscrowConfirmModal } from '@/components/escrow/EscrowConfirmModal';
 import { PaymentMethodDialog } from '@/components/escrow/PaymentMethodDialog';
 import { EscrowCounterpartyHeader } from '@/components/escrow/EscrowCounterpartyHeader';
@@ -76,7 +77,12 @@ import {
   patternBLegGrossCents,
 } from '@/lib/plans/planFinancialConfig';
 import { formatIsoDateTime } from '@/lib/plans/formatPlanMeta';
-import { resolveEscrowBackHref } from '@/lib/plans/planAgreementRoute';
+import {
+  findGuestEscrowForBidder,
+  guestEscrowStatusLabel,
+  isGuestEscrowFunded,
+} from '@/lib/plans/groupGuestEscrowDisplay';
+import { resolveEscrowBackHref, resolvePlanAgreementHref } from '@/lib/plans/planAgreementRoute';
 import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import { requiresVerificationGate } from '@/lib/verification/access';
 import { createClient } from '@/lib/supabase/client';
@@ -143,6 +149,7 @@ function EscrowDetailContent({
   const [safetyCaveatOpen, setSafetyCaveatOpen] = useState(false);
   const [escrowPolicyOpen, setEscrowPolicyOpen] = useState(false);
   const [pendingFundAfterPolicy, setPendingFundAfterPolicy] = useState(false);
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['escrow', escrowId],
@@ -157,6 +164,7 @@ function EscrowDetailContent({
   const guestEscrowRows = data?.guestEscrowRows ?? [];
   const hostEscrowRow = data?.hostEscrowRow ?? null;
   const acceptedOffers = data?.acceptedOffers ?? [];
+  const guestProfilesById = data?.guestProfilesById ?? {};
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -296,6 +304,7 @@ function EscrowDetailContent({
 
   const onVerified = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['escrow', escrowId] });
+    setShowPaymentSuccess(true);
   }, [escrowId, queryClient]);
 
   const {
@@ -438,10 +447,27 @@ function EscrowDetailContent({
       const funded = await retryVerify();
       if (funded) {
         void queryClient.invalidateQueries({ queryKey: ['escrow', escrowId] });
+        setShowPaymentSuccess(true);
       }
     } finally {
       setActionBusy(false);
     }
+  }
+
+  function handlePaymentSuccessContinue() {
+    setShowPaymentSuccess(false);
+    const planRow = escrow?.plans;
+    if (!escrow?.plan_id || !planRow) return;
+    router.push(
+      resolvePlanAgreementHref(
+        {
+          id: escrow.plan_id,
+          is_group_plan: planRow.is_group_plan ?? false,
+          accepted_offer_id: agreementOfferId ?? null,
+        },
+        { offerId: agreementOfferId }
+      )
+    );
   }
 
   if (authLoading || isLoading) {
@@ -669,6 +695,20 @@ function EscrowDetailContent({
   const goodwillApplied = escrow.goodwill_applied_cents ?? 0;
   const netRelease = escrow.amount_cents - platformFee;
   const footerActive = showFund || paymentPendingConfirmation || showPaymentConfirmedFooter;
+  const hostGuestPaymentEntries = useMemo(() => {
+    const byBidder = new Map<string, { bidderId: string; key: string }>();
+    for (const offer of acceptedOffers) {
+      if (offer.bidder_id) {
+        byBidder.set(offer.bidder_id, { bidderId: offer.bidder_id, key: offer.id });
+      }
+    }
+    for (const row of guestEscrowRows) {
+      if (row.guest_id && !byBidder.has(row.guest_id)) {
+        byBidder.set(row.guest_id, { bidderId: row.guest_id, key: row.id });
+      }
+    }
+    return [...byBidder.values()];
+  }, [acceptedOffers, guestEscrowRows]);
   const groupSplitTotalOpts = { acceptedOffers, hostEscrowRow };
   const planTotalCents = groupSplitPlanInput
     ? resolveGroupPlanTotalCents(groupSplitPlanInput, guestEscrowRows, groupSplitTotalOpts)
@@ -1050,7 +1090,25 @@ function EscrowDetailContent({
             hostShareFunded={hostShareFunded}
             hostEscrowHref={hostEscrowHref}
           />
+
+          {isHost && hostGuestPaymentEntries.length > 0 ? (
+            <HostGuestPaymentsList
+              entries={hostGuestPaymentEntries}
+              guestEscrowRows={guestEscrowRows}
+              guestProfilesById={guestProfilesById}
+              planPaid={!!plan?.is_paid}
+            />
+          ) : null}
         </div>
+      ) : null}
+
+      {isHost && !hostViewingGuestLeg && hostGuestPaymentEntries.length > 0 ? (
+        <HostGuestPaymentsList
+          entries={hostGuestPaymentEntries}
+          guestEscrowRows={guestEscrowRows}
+          guestProfilesById={guestProfilesById}
+          planPaid={!!plan?.is_paid}
+        />
       ) : null}
 
       {screenContent.showPatternCard &&
@@ -1243,6 +1301,70 @@ function EscrowDetailContent({
         onCheckAgain={() => void onCheckPaymentAgain()}
         planId={escrow.plan_id}
       />
+
+      {showPaymentSuccess ? (
+        <EscrowPaymentSuccessModal
+          message="Your payment has been verified and your escrow is now funded."
+          continueLabel="View agreement"
+          onContinue={handlePaymentSuccessContinue}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function HostGuestPaymentsList({
+  entries,
+  guestEscrowRows,
+  guestProfilesById,
+  planPaid,
+}: {
+  entries: Array<{ bidderId: string; key: string }>;
+  guestEscrowRows: DbEscrowTransaction[];
+  guestProfilesById: Record<string, { display_name: string | null; avatar_url: string | null }>;
+  planPaid: boolean;
+}) {
+  return (
+    <div className="mt-4 space-y-3">
+      <p className="text-[12px] font-extrabold uppercase tracking-wide text-muted">Guest payments</p>
+      <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white">
+        {entries.map((entry) => {
+          const escrowRow = findGuestEscrowForBidder(guestEscrowRows, entry.bidderId);
+          const funded = isGuestEscrowFunded(escrowRow, entry.bidderId);
+          const statusLabel = guestEscrowStatusLabel(escrowRow, entry.bidderId, planPaid);
+          const profile = guestProfilesById[entry.bidderId];
+          const displayName = profile?.display_name?.trim() || null;
+          const avatarUrl = profile?.avatar_url ?? null;
+
+          return (
+            <div key={entry.key} className="flex items-center gap-3 px-4 py-3">
+              <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-[#EDE8FF]/50">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[13px] font-extrabold text-primary">
+                    {displayName?.[0]?.toUpperCase() ?? '?'}
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[14px] font-extrabold text-foreground">
+                  {displayName ?? 'Guest'}
+                </p>
+                <p className="text-[12px] font-semibold text-muted">{statusLabel}</p>
+              </div>
+              <span
+                className={[
+                  'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-extrabold',
+                  funded ? 'bg-emerald-50 text-emerald-700' : 'bg-[#EDE8FF]/60 text-primary',
+                ].join(' ')}
+              >
+                {funded ? 'Funded' : 'Pending'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

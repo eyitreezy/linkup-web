@@ -1279,7 +1279,10 @@ function ActionRail({
 }) {
   const guestCalendarSaveRow = !!(ctx.showCalendar && ctx.showSave);
   const joinFlowGuestActionsInCard =
-    ctx.showRequestToJoin || ctx.showViewRequest || ctx.showPayShare;
+    ctx.showRequestToJoin ||
+    ctx.showViewRequest ||
+    ctx.showPayShare ||
+    ctx.showViewPaymentStatus;
 
   return (
     <>
@@ -1333,6 +1336,17 @@ function ActionRail({
           <button type="button" className={actionSecondary} onClick={onSave} disabled={saveBusy}>
             {saved ? 'Saved' : 'Save plan'}
           </button>
+        </div>
+      ) : null}
+
+      {ctx.showViewPaymentStatus && ctx.viewPaymentEscrowId ? (
+        <div className={planActionGrid}>
+          <Link
+            href={`/escrow/${ctx.viewPaymentEscrowId}`}
+            className={actionSecondary}
+          >
+            View payment status
+          </Link>
         </div>
       ) : null}
 

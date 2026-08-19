@@ -40,7 +40,8 @@ export function bidderHasActiveGroupSlotOffer(
         o.status === 'countered' ||
         o.status === 'countered_by_host' ||
         o.status === 'countered_by_guest' ||
-        o.status === 'accepted')
+        o.status === 'accepted') &&
+      !isOfferExpired(o)
   );
 }
 
