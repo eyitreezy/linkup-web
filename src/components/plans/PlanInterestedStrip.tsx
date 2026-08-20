@@ -4,13 +4,17 @@ import { ProfileAvatar } from '@/components/profile/ProfileAvatar';
 import { TierBadge } from '@/components/subscription/TierBadge';
 import { useGatedAction } from '@/contexts/UpgradeGateContext';
 import { usePermission } from '@/hooks/usePermission';
-import type { DbProfile } from '@/types/database';
 import {
   fetchHiddenEngagementUserIds,
   filterEngagementsByIncognito,
 } from '@/lib/plans/incognitoEngagement';
+import {
+  planInterestPagePath,
+  PREMIUM_INSIGHTS_PERMISSION,
+} from '@/lib/plans/premiumInsights';
 import { createClient } from '@/lib/supabase/client';
-import Link from 'next/link';
+import type { DbProfile } from '@/types/database';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { IoLockClosed } from 'react-icons/io5';
 
@@ -26,15 +30,37 @@ type Props = {
 };
 
 export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props) {
-  const { allowed, loading: permLoading } = usePermission('plans.see_all_likes', {
+  const router = useRouter();
+  const runGated = useGatedAction();
+  const { allowed, loading: permLoading } = usePermission(PREMIUM_INSIGHTS_PERMISSION, {
     skip: currentUserId !== hostUserId,
   });
   const [rows, setRows] = useState<EngRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [interestCount, setInterestCount] = useState(0);
-  const runGated = useGatedAction();
+
+  const openPremiumInsights = useCallback(() => {
+    void runGated(PREMIUM_INSIGHTS_PERMISSION, () => {
+      router.push(planInterestPagePath(planId));
+    });
+  }, [planId, router, runGated]);
+
+  const openInterestedProfile = useCallback(
+    (userId: string) => {
+      void runGated(PREMIUM_INSIGHTS_PERMISSION, () => {
+        router.push(`/user/${userId}`);
+      });
+    },
+    [runGated, router]
+  );
 
   const load = useCallback(async () => {
+    if (currentUserId !== hostUserId) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     const client = createClient();
     const { data: eng } = await client
       .from('plan_engagements')
@@ -51,7 +77,8 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
     const visibleUserIds = [...new Set(visible.map((e) => e.user_id as string))];
     setInterestCount(visibleUserIds.length);
 
-    if (!allowed) {
+    if (permLoading || !allowed) {
+      setRows([]);
       setLoading(false);
       return;
     }
@@ -74,7 +101,7 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
     );
     setRows(filteredProfiles as EngRow[]);
     setLoading(false);
-  }, [allowed, planId]);
+  }, [allowed, currentUserId, hostUserId, permLoading, planId]);
 
   useEffect(() => {
     void load();
@@ -95,7 +122,7 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
       <section className="rounded-2xl border border-border bg-white px-5 py-4">
         <button
           type="button"
-          onClick={() => void runGated('plans.see_all_likes', () => {})}
+          onClick={openPremiumInsights}
           className="flex w-full items-center gap-3 text-left"
         >
           <div className="flex -space-x-2">
@@ -126,31 +153,38 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
     <section className="rounded-2xl border border-border bg-white px-5 py-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-display text-[15px] font-extrabold text-foreground">Interested</h3>
-        <Link
-          href={`/plan/${planId}/interest`}
+        <button
+          type="button"
+          onClick={openPremiumInsights}
           className="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-full linkup-gradient-primary px-4 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95"
         >
           Connect with all →
-        </Link>
+        </button>
       </div>
       {rows.length === 0 ? (
         <p className="mt-2 text-[13px] font-semibold text-muted">No interest yet.</p>
       ) : (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {shown.map((r) => (
-            <Link
+            <button
               key={r.user_id}
-              href={`/user/${r.user_id}`}
+              type="button"
+              onClick={() => openInterestedProfile(r.user_id)}
               className="rounded-full ring-2 ring-white transition hover:ring-primary/30"
               title={r.display_name ?? 'User'}
+              aria-label={`Open ${r.display_name ?? 'member'} profile`}
             >
               <ProfileAvatar profile={r} displayName={r.display_name} size={40} />
-            </Link>
+            </button>
           ))}
           {overflow > 0 ? (
-            <span className="rounded-full bg-[#EDE8FF] px-2.5 py-1 text-[12px] font-extrabold text-primary">
+            <button
+              type="button"
+              onClick={openPremiumInsights}
+              className="rounded-full bg-[#EDE8FF] px-2.5 py-1 text-[12px] font-extrabold text-primary"
+            >
               +{overflow} more
-            </span>
+            </button>
           ) : null}
         </div>
       )}

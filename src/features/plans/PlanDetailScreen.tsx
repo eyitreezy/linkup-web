@@ -79,7 +79,6 @@ import {
   IoCalendarOutline,
   IoChatbubbleEllipsesOutline,
   IoDocumentTextOutline,
-  IoEyeOutline,
   IoLocationOutline,
   IoPricetagOutline,
   IoShieldCheckmarkOutline,
@@ -123,7 +122,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
   const [groupChatConvId, setGroupChatConvId] = useState<string | null>(null);
   const [extendBusy, setExtendBusy] = useState(false);
   const [extendMsg, setExtendMsg] = useState<string | null>(null);
-  const [interestCount, setInterestCount] = useState(0);
   const [calendarBusy, setCalendarBusy] = useState(false);
   const [attendanceBusy, setAttendanceBusy] = useState(false);
   const [statusDialog, setStatusDialog] = useState<{
@@ -270,20 +268,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     void countPendingInvitations(plan.id).then(setPendingInvitationCount);
   }
 
-  useEffect(() => {
-    if (!plan?.id || !isCreator) {
-      setInterestCount(0);
-      return;
-    }
-    const client = createClient();
-    void client
-      .from('plan_engagements')
-      .select('*', { count: 'exact', head: true })
-      .eq('plan_id', plan.id)
-      .in('kind', ['view', 'save'])
-      .then(({ count }) => setInterestCount(count ?? 0));
-  }, [plan?.id, isCreator, bundle?.offers.length]);
-
   function handleAddToCalendar() {
     if (!plan) return;
     if (!planCanAddToCalendar(plan)) {
@@ -324,18 +308,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
       message:
         'When both people confirm, contact sharing outside LinkUp is allowed for this plan.',
       variant: 'success',
-    });
-  }
-
-  function handleViewInterest() {
-    const count = interestCount;
-    setStatusDialog({
-      title: 'Interest',
-      message:
-        count > 0
-          ? `${count} ${count === 1 ? 'person has' : 'people have'} viewed or saved this plan. Upgrade to Gold to see who.`
-          : 'No one has viewed or saved this plan yet. Share it to grow interest.',
-      variant: 'info',
     });
   }
 
@@ -943,14 +915,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
               void refreshBoost72();
             }}
           />
-          ) : null}
-          {ctx?.showInterest ? (
-            <button type="button" className={actionSecondary} onClick={handleViewInterest}>
-              <span className="inline-flex items-center gap-2">
-                <IoEyeOutline size={18} />
-                {interestCount > 0 ? interestCount : 'Interest'}
-              </span>
-            </button>
           ) : null}
           {showInvite ? (
             <button

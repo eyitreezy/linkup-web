@@ -10,7 +10,6 @@ import {
 } from '@/lib/plans/incognitoEngagement';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -20,6 +19,9 @@ import {
   IoHeartOutline,
   IoLockClosed,
 } from 'react-icons/io5';
+import {
+  PREMIUM_INSIGHTS_PERMISSION,
+} from '@/lib/plans/premiumInsights';
 
 type EngagementRow = {
   user_id: string;
@@ -38,7 +40,9 @@ export default function PlanInterestPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const runGated = useGatedAction();
-  const { allowed: canSeeInterest, loading: permLoading } = usePermission('plans.see_all_likes');
+  const { allowed: canSeeInterest, loading: permLoading } = usePermission(
+    PREMIUM_INSIGHTS_PERMISSION
+  );
 
   const [plan, setPlan] = useState<PlanMeta | null>(null);
   const [rows, setRows] = useState<EngagementRow[]>([]);
@@ -160,7 +164,11 @@ export default function PlanInterestPage() {
           </p>
           <button
             type="button"
-            onClick={() => void runGated('plans.see_all_likes', () => {})}
+            onClick={() =>
+              void runGated(PREMIUM_INSIGHTS_PERMISSION, () => {
+                void load();
+              })
+            }
             className="mt-6 inline-flex min-h-[48px] items-center justify-center rounded-full linkup-gradient-primary px-8 text-[15px] font-extrabold text-white shadow-md"
           >
             Upgrade to Gold
@@ -229,10 +237,15 @@ export default function PlanInterestPage() {
       {!loading && !permLoading && rows.length > 0 ? (
         <div className="space-y-2">
           {rows.map((row, i) => (
-            <Link
+            <button
               key={`${row.user_id}-${row.kind}-${i}`}
-              href={`/user/${row.user_id}`}
-              className="flex items-center gap-3 rounded-2xl border border-border bg-white p-4 transition hover:border-primary/25 hover:shadow-sm"
+              type="button"
+              onClick={() =>
+                void runGated(PREMIUM_INSIGHTS_PERMISSION, () => {
+                  router.push(`/user/${row.user_id}`);
+                })
+              }
+              className="flex w-full items-center gap-3 rounded-2xl border border-border bg-white p-4 text-left transition hover:border-primary/25 hover:shadow-sm"
             >
               <ProfileAvatar
                 profile={{
@@ -266,7 +279,7 @@ export default function PlanInterestPage() {
               >
                 {row.kind === 'save' ? 'Saved' : 'Viewed'}
               </span>
-            </Link>
+            </button>
           ))}
         </div>
       ) : null}
