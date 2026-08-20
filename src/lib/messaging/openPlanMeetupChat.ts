@@ -1,6 +1,6 @@
-import { createGroupChat } from '@/lib/messaging/createGroupChat';
+import { openOrCreateGroupChat } from '@/lib/messaging/openOrCreateGroupChat';
 import { openDirectChatPath } from '@/lib/messaging/openDirectChat';
-import type { DbPlan, DbPlanOffer } from '@/types/database';
+import type { DbPlan, DbPlanJoinRequest, DbPlanOffer } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export class PlanMeetupChatError extends Error {
@@ -17,15 +17,17 @@ export async function openPlanMeetupChatPath(
     userId,
     isCreator,
     offers,
+    joinRequests,
   }: {
     plan: DbPlan;
     userId: string;
     isCreator: boolean;
     offers: DbPlanOffer[];
+    joinRequests?: DbPlanJoinRequest[];
   }
 ): Promise<string> {
   if (plan.is_group_plan) {
-    return openGroupPlanMeetupChatPath(client, plan, userId, offers);
+    return openGroupPlanMeetupChatPath(client, plan, userId, offers, joinRequests);
   }
 
   const sorted = [...offers].sort(
@@ -45,33 +47,20 @@ async function openGroupPlanMeetupChatPath(
   client: SupabaseClient,
   plan: DbPlan,
   userId: string,
-  offers: DbPlanOffer[]
+  offers: DbPlanOffer[],
+  joinRequests?: DbPlanJoinRequest[]
 ): Promise<string> {
-  const { data: existing } = await client
-    .from('conversations')
-    .select('id')
-    .eq('plan_id', plan.id)
-    .eq('is_group_chat', true)
-    .maybeSingle();
-
-  if (existing?.id) return `/chat/group/${existing.id as string}`;
-
-  if (plan.creator_id !== userId) {
-    throw new PlanMeetupChatError('The host has not opened the group chat yet.');
+  let resolvedJoinRequests = joinRequests;
+  if (plan.is_negotiable === false && !resolvedJoinRequests) {
+    const { data } = await client.from('plan_join_requests').select('*').eq('plan_id', plan.id);
+    resolvedJoinRequests = (data ?? []) as DbPlanJoinRequest[];
   }
 
-  const bidderIds = [
-    ...new Set(
-      offers
-        .map((o) => o.bidder_id)
-        .filter((id): id is string => !!id && id !== plan.creator_id)
-    ),
-  ];
-  const convId = await createGroupChat(client, {
-    planId: plan.id,
-    hostId: userId,
-    groupName: plan.title,
-    initialMemberIds: bidderIds,
+  const convId = await openOrCreateGroupChat(client, {
+    plan,
+    userId,
+    offers,
+    joinRequests: resolvedJoinRequests,
   });
   return `/chat/group/${convId}`;
 }
@@ -96,10 +85,17 @@ export async function openPlanMeetupChatPathForPlanId(
     .eq('plan_id', planId)
     .order('created_at', { ascending: true });
 
+  let joinRequests: DbPlanJoinRequest[] | undefined;
+  if (plan.is_negotiable === false) {
+    const { data: rows } = await client.from('plan_join_requests').select('*').eq('plan_id', planId);
+    joinRequests = (rows ?? []) as DbPlanJoinRequest[];
+  }
+
   return openPlanMeetupChatPath(client, {
     plan: plan as DbPlan,
     userId,
     isCreator: plan.creator_id === userId,
     offers: (offers ?? []) as DbPlanOffer[],
+    joinRequests,
   });
 }

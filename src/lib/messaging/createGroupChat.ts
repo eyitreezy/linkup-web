@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { findGroupChatIdForPlan } from '@/lib/messaging/groupChatLookup';
 
 export type CreateGroupChatParams = {
   planId: string;
@@ -21,31 +22,25 @@ export async function createGroupChat(
     throw new Error('Only group plan hosts can create group chats');
   }
 
-  const { data: existing } = await client
-    .from('conversations')
-    .select('id')
-    .eq('plan_id', planId)
-    .eq('is_group_chat', true)
-    .maybeSingle();
+  const existing = await findGroupChatIdForPlan(client, planId);
+  if (existing) return existing;
 
-  if (existing?.id) return existing.id as string;
+  const conversationId = crypto.randomUUID();
+  const { error: convErr } = await client.from('conversations').insert({
+    id: conversationId,
+    is_group_chat: true,
+    plan_id: planId,
+    group_name: groupName ?? plan.title,
+    created_by: hostId,
+  });
 
-  const { data: conv, error: convErr } = await client
-    .from('conversations')
-    .insert({
-      is_group_chat: true,
-      plan_id: planId,
-      group_name: groupName ?? plan.title,
-      created_by: hostId,
-    })
-    .select('id')
-    .single();
-
-  if (convErr || !conv?.id) {
-    throw new Error(convErr?.message ?? 'Could not create group chat');
+  if (convErr) {
+    if (convErr.code === '23505') {
+      const raced = await findGroupChatIdForPlan(client, planId);
+      if (raced) return raced;
+    }
+    throw new Error(convErr.message);
   }
-
-  const conversationId = conv.id as string;
 
   const { error: hostErr } = await client.from('group_chat_members').insert({
     conversation_id: conversationId,

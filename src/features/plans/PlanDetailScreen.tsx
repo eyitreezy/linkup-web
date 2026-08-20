@@ -40,7 +40,8 @@ import { usePlanViewerContext, type PlanViewerContext } from '@/lib/plans/usePla
 import { planNegotiateHref } from '@/lib/plans/negotiateRoute';
 import { usePlanOffersRealtime } from '@/hooks/useOffersRealtime';
 import { openDirectChatPath } from '@/lib/messaging/openDirectChat';
-import { createGroupChat } from '@/lib/messaging/createGroupChat';
+import { findGroupChatIdForPlan } from '@/lib/messaging/groupChatLookup';
+import { groupChatErrorDialog, openOrCreateGroupChat } from '@/lib/messaging/openOrCreateGroupChat';
 import { openPlanMeetupChatPath } from '@/lib/messaging/openPlanMeetupChat';
 import { planDistanceFromViewer } from '@/lib/discovery/feedFilters';
 import { offerLiveAmount } from '@/lib/plans/negotiationState';
@@ -129,6 +130,8 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     title: string;
     message: string;
     variant?: 'success' | 'error' | 'info';
+    buttonLabel?: string;
+    onDismiss?: () => void;
   } | null>(null);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -417,7 +420,11 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         { planId: plan.id, userId: viewerUserId, saved: next, plan },
         {
           onError: (err) => {
-            window.alert(err instanceof Error ? err.message : 'Could not update save');
+            setStatusDialog({
+              title: 'Could not save',
+              message: err instanceof Error ? err.message : 'Could not update save',
+              variant: 'error',
+            });
           },
         }
       );
@@ -441,15 +448,9 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
   useEffect(() => {
     if (!plan?.is_group_plan || !plan.id) return;
     const client = createClient();
-    void client
-      .from('conversations')
-      .select('id')
-      .eq('plan_id', plan.id)
-      .eq('is_group_chat', true)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.id) setGroupChatConvId(data.id as string);
-      });
+    void findGroupChatIdForPlan(client, plan.id).then((id) => {
+      if (id) setGroupChatConvId(id);
+    });
   }, [plan?.id, plan?.is_group_plan]);
 
   async function handleOpenGroupChat() {
@@ -458,31 +459,26 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     try {
       if (groupChatConvId) {
         router.push(`/chat/group/${groupChatConvId}`);
-      return;
-    }
-      if (plan.creator_id !== viewerUserId) {
-        window.alert('The host has not opened the group chat yet.');
         return;
       }
-      const guestIds =
-        plan.is_negotiable === false
-          ? (bundle?.joinRequests ?? [])
-              .filter((r) => r.status === 'approved')
-              .map((r) => r.requester_id)
-          : (bundle?.offers ?? [])
-              .filter((o) => o.status === 'accepted')
-              .map((o) => o.bidder_id);
       const client = createClient();
-      const convId = await createGroupChat(client, {
-        planId: plan.id,
-        hostId: viewerUserId,
-        groupName: plan.title,
-        initialMemberIds: guestIds,
+      const convId = await openOrCreateGroupChat(client, {
+        plan,
+        userId: viewerUserId,
+        offers: bundle?.offers,
+        joinRequests: bundle?.joinRequests,
       });
       setGroupChatConvId(convId);
       router.push(`/chat/group/${convId}`);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Could not open group chat');
+      const dialog = groupChatErrorDialog(e);
+      setStatusDialog({
+        title: dialog.title,
+        message: dialog.message,
+        variant: dialog.variant,
+        buttonLabel: dialog.buttonLabel,
+        onDismiss: dialog.retry ? () => void handleOpenGroupChat() : undefined,
+      });
     } finally {
       setGroupChatBusy(false);
     }
@@ -498,10 +494,29 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         userId: viewerUserId,
         isCreator,
         offers: bundle?.offers ?? [],
+        joinRequests: bundle?.joinRequests,
       });
       router.push(path);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Could not open chat');
+      const dialog = plan.is_group_plan
+        ? groupChatErrorDialog(e)
+        : {
+            title: 'Unable to open chat',
+            message:
+              e instanceof Error && e.message
+                ? e.message
+                : 'We could not open this chat right now. Please try again.',
+            variant: 'error' as const,
+            buttonLabel: 'Got it',
+            retry: false,
+          };
+      setStatusDialog({
+        title: dialog.title,
+        message: dialog.message,
+        variant: dialog.variant,
+        buttonLabel: dialog.buttonLabel,
+        onDismiss: dialog.retry ? () => void openCounterpartyChat() : undefined,
+      });
     } finally {
       setChatBusy(false);
     }
@@ -514,8 +529,13 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
       const client = createClient();
       const path = await openDirectChatPath(client, viewerUserId, guestUserId);
       router.push(path);
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Could not open chat');
+    } catch {
+      setStatusDialog({
+        title: 'Unable to open chat',
+        message: 'We could not open this chat right now. Please try again.',
+        variant: 'error',
+        buttonLabel: 'Got it',
+      });
     } finally {
       setChatBusy(false);
     }
@@ -603,7 +623,12 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         title={statusDialog?.title ?? ''}
         message={statusDialog?.message ?? ''}
         variant={statusDialog?.variant ?? 'success'}
-        onClose={() => setStatusDialog(null)}
+        buttonLabel={statusDialog?.buttonLabel ?? 'Got it'}
+        onClose={() => {
+          const action = statusDialog?.onDismiss;
+          setStatusDialog(null);
+          action?.();
+        }}
       />
       {plan && showInvite ? (
         <InviteGuestsModal
