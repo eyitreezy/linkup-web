@@ -1,4 +1,10 @@
 import { isGroupSplitPlan } from '@/lib/plans/groupDynamicSplit';
+import {
+  fetchApprovedJoinRequestOffers,
+  isSyntheticJoinRequestOffer,
+  joinRequestSlotCents,
+  syntheticOfferFromJoinRequest,
+} from '@/lib/plans/joinRequestOffers';
 import { fetchPlanById } from '@/services/plans.service';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DbEscrowTransaction, DbPlan, DbPlanJoinRequest, DbPlanOffer } from '@/types/database';
@@ -85,35 +91,6 @@ async function resolveAgreementOffer(
   return null;
 }
 
-function joinRequestSlotCents(plan: DbPlan): number {
-  if (plan.is_group_plan) {
-    return plan.current_suggested_share_cents ?? plan.starting_price_cents ?? 0;
-  }
-  return plan.agreed_price_cents ?? plan.starting_price_cents ?? 0;
-}
-
-function syntheticOfferFromJoinRequest(
-  plan: DbPlan,
-  joinRequest: DbPlanJoinRequest
-): DbPlanOffer {
-  const slotCents = joinRequestSlotCents(plan);
-  return {
-    id: joinRequest.id,
-    plan_id: plan.id,
-    bidder_id: joinRequest.requester_id,
-    amount_cents: slotCents,
-    current_amount_cents: slotCents,
-    message: joinRequest.message,
-    status: 'accepted',
-    round: 0,
-    expires_at: null,
-    proposed_scheduled_at: plan.agreed_scheduled_at ?? plan.scheduled_at,
-    proposed_location: plan.agreed_location ?? plan.location_label,
-    created_at: joinRequest.created_at,
-    updated_at: joinRequest.updated_at,
-  };
-}
-
 async function resolveJoinRequestAgreementOffer(
   client: SupabaseClient,
   plan: DbPlan,
@@ -128,6 +105,16 @@ async function resolveJoinRequestAgreementOffer(
       .from('plan_join_requests')
       .select('*')
       .eq('id', opts.joinRequestId)
+      .maybeSingle();
+    joinRequest = (data as DbPlanJoinRequest | null) ?? null;
+  } else if (opts?.userId === plan.creator_id && plan.is_group_plan) {
+    const { data } = await client
+      .from('plan_join_requests')
+      .select('*')
+      .eq('plan_id', plan.id)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: true })
+      .limit(1)
       .maybeSingle();
     joinRequest = (data as DbPlanJoinRequest | null) ?? null;
   } else if (opts?.userId === plan.creator_id && !plan.is_group_plan) {
@@ -170,17 +157,27 @@ export async function fetchPlanAgreementBundle(
   if (!plan) return { data: null, error: 'Plan not found' };
   const planRow = plan;
 
+  const fromNegotiatedOffer = await resolveAgreementOffer(client, planRow, opts);
+  const joinRequestLookupId =
+    opts?.joinRequestId ??
+    (planRow.is_negotiable === false && opts?.offerId ? opts.offerId : null);
   const offer =
-    (await resolveAgreementOffer(client, planRow, opts)) ??
-    (await resolveJoinRequestAgreementOffer(client, planRow, {
-      joinRequestId: opts?.joinRequestId,
-      userId: opts?.userId,
-    }));
+    fromNegotiatedOffer?.status === 'accepted'
+      ? fromNegotiatedOffer
+      : await resolveJoinRequestAgreementOffer(client, planRow, {
+          joinRequestId: joinRequestLookupId,
+          userId: opts?.userId,
+        });
   if (!offer || offer.status !== 'accepted') {
     return { data: null, error: 'No accepted offer for this plan' };
   }
 
-  const isParty = opts?.userId === planRow.creator_id || opts?.userId === offer.bidder_id;
+  const isParty =
+    opts?.userId === planRow.creator_id ||
+    opts?.userId === offer.bidder_id ||
+    (opts?.userId === planRow.creator_id &&
+      isGroupSplitPlan(planRow) &&
+      isSyntheticJoinRequestOffer(planRow));
   if (opts?.userId && !isParty) {
     return { data: null, error: 'No access to this agreement' };
   }
@@ -238,13 +235,29 @@ export async function fetchPlanAgreementBundle(
   }
 
   const groupSplitQueries = groupSplit
-    ? Promise.all([
-        client.from('plan_offers').select('*').eq('plan_id', planId).eq('status', 'accepted'),
-        client.from('escrow_transactions').select(escrowSelect).eq('plan_id', planId),
-        planRow.host_escrow_id
-          ? client.from('escrow_transactions').select(escrowSelect).eq('id', planRow.host_escrow_id).maybeSingle()
-          : Promise.resolve({ data: null }),
-      ])
+    ? (async () => {
+        const [guestEscrowsRes, hostEscrowRes] = await Promise.all([
+          client.from('escrow_transactions').select(escrowSelect).eq('plan_id', planId),
+          planRow.host_escrow_id
+            ? client
+                .from('escrow_transactions')
+                .select(escrowSelect)
+                .eq('id', planRow.host_escrow_id)
+                .maybeSingle()
+            : Promise.resolve({ data: null }),
+        ]);
+        const acceptedOffersData =
+          planRow.is_negotiable === false
+            ? await fetchApprovedJoinRequestOffers(client, planRow)
+            : ((
+                await client
+                  .from('plan_offers')
+                  .select('*')
+                  .eq('plan_id', planId)
+                  .eq('status', 'accepted')
+              ).data ?? []);
+        return [{ data: acceptedOffersData }, guestEscrowsRes, hostEscrowRes] as const;
+      })()
     : Promise.resolve([{ data: [] }, { data: [] }, { data: null }] as const);
 
   const [

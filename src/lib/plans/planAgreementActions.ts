@@ -1,4 +1,5 @@
 import { resolveEscrowParties } from '@/lib/plans/escrowParties';
+import { isSyntheticJoinRequestOffer } from '@/lib/plans/joinRequestOffers';
 import { MAX_ESCROW_TIER1_CENTS, MIN_ESCROW_CENTS } from '@/lib/plans/planFinancialConfig';
 import { checkPermission } from '@/lib/subscription/checkPermission';
 import type { DbPlan, DbPlanOffer } from '@/types/database';
@@ -87,6 +88,35 @@ export async function proceedToSecurePayment(
 
   const hostId = plan.creator_id;
   const guestId = offer.bidder_id;
+
+  if (isSyntheticJoinRequestOffer(plan)) {
+    if (actorId === hostId) {
+      if (plan.host_escrow_id) {
+        return { error: null, escrowId: plan.host_escrow_id };
+      }
+      const { data: existingHostEscrow } = await client
+        .from('escrow_transactions')
+        .select('id')
+        .eq('plan_id', plan.id)
+        .eq('payer_id', hostId)
+        .maybeSingle();
+      if (existingHostEscrow?.id) {
+        return { error: null, escrowId: existingHostEscrow.id as string };
+      }
+      return { error: 'close_group_first' };
+    }
+
+    const { data: existingGuestEscrow } = await client
+      .from('escrow_transactions')
+      .select('id')
+      .eq('plan_id', plan.id)
+      .eq('guest_id', actorId)
+      .maybeSingle();
+    if (existingGuestEscrow?.id) {
+      return { error: null, escrowId: existingGuestEscrow.id as string };
+    }
+    return { error: 'You are not eligible to start payment for this plan.' };
+  }
 
   // Group split host must use/create host escrow leg, never guest slot escrow.
   if (plan.is_group_plan && pattern === 'B' && actorId === hostId) {

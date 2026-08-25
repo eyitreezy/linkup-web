@@ -87,6 +87,7 @@ import {
   IoPersonAddOutline,
   IoShareOutline,
   IoTimeOutline,
+  IoWalletOutline,
 } from 'react-icons/io5';
 
 /** Auto-fit grid: buttons share a row until min cell width forces the next row. */
@@ -208,11 +209,25 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
   const planListingExpired = plan ? isPlanListingExpired(plan) : false;
   const boosted = plan ? isPlanBoostActive(plan.boosted_until) : false;
 
+  const acceptedGuestOffers = useMemo(
+    () => (bundle?.offers ?? []).filter((o) => o.status === 'accepted'),
+    [bundle?.offers]
+  );
+  const approvedJoinRequests = useMemo(
+    () => (bundle?.joinRequests ?? []).filter((r) => r.status === 'approved'),
+    [bundle?.joinRequests]
+  );
+
   const ctx = usePlanViewerContext(plan ?? null, viewerUserId, bundle?.offers ?? [], {
     listingExpired: planListingExpired,
     completionSelfAcked: bundle?.completionSelfAcked ?? false,
     myJoinRequest: bundle?.myJoinRequest ?? null,
     myGuestEscrow: bundle?.myGuestEscrow ?? null,
+    myHostEscrow: bundle?.myHostEscrow ?? null,
+    approvedJoinRequestCount:
+      plan?.is_negotiable === false
+        ? (bundle?.approvedJoinRequestCount ?? approvedJoinRequests.length)
+        : acceptedGuestOffers.length,
   });
   const actionContextReady = isPlanDetailActionReady(bundle);
   const [actionButtonsReady, setActionButtonsReady] = useState(() =>
@@ -227,14 +242,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     if (actionContextReady) setActionButtonsReady(true);
   }, [actionContextReady]);
 
-  const acceptedGuestOffers = useMemo(
-    () => (bundle?.offers ?? []).filter((o) => o.status === 'accepted'),
-    [bundle?.offers]
-  );
-  const approvedJoinRequests = useMemo(
-    () => (bundle?.joinRequests ?? []).filter((r) => r.status === 'approved'),
-    [bundle?.joinRequests]
-  );
   const showHostGuestAgreements =
     isCreator &&
     (ctx?.showGroupGuestAgreements ||
@@ -349,6 +356,10 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     if (!plan) return;
 
     if (plan.is_negotiable === false) {
+      if (isCreator && !joinRequestId) {
+        router.push(`/plan/${planId}/agreement`);
+        return;
+      }
       const resolvedJoinRequestId =
         joinRequestId ?? bundle?.myJoinRequest?.id ?? null;
       router.push(
@@ -951,6 +962,35 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         onChat={() => void openCounterpartyChat()}
           onCalendar={handleAddToCalendar}
         />
+      ) : null}
+
+      {isCreator && ctx?.showHostPayShare ? (
+        <button
+          type="button"
+          className={actionPrimary}
+          onClick={() => {
+            if (ctx.hostPayShareEscrowId) {
+              router.push(`/escrow/${ctx.hostPayShareEscrowId}?planId=${planId}&source=plan`);
+              return;
+            }
+            router.push(`/plan/${planId}/agreement`);
+          }}
+        >
+          <span className="inline-flex items-center justify-center gap-2">
+            <IoWalletOutline size={18} aria-hidden />
+            Pay your share
+            {ctx.hostPayShareAmountLabel ? ` · ${ctx.hostPayShareAmountLabel}` : ''}
+          </span>
+        </button>
+      ) : null}
+
+      {isCreator && ctx?.showViewAgreement && !ctx.showHostPayShare ? (
+        <button type="button" className={actionPrimary} onClick={() => goAgreement()}>
+          <span className="inline-flex items-center justify-center gap-2">
+            <IoDocumentTextOutline size={18} aria-hidden />
+            Confirm plan
+          </span>
+        </button>
       ) : null}
 
       {ctx?.showConfirmAttendance ? (

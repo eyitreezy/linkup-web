@@ -42,6 +42,7 @@ import { bothAgreementPartiesConfirmed } from '@/lib/plans/agreementConfirmation
 import { closeGroupAndCreateHostEscrow } from '@/lib/plans/closeGroupEscrow';
 import { hasEscrowPolicySignoff } from '@/lib/groupPlan/annexureB';
 import { isGroupSplitPlan } from '@/lib/plans/groupDynamicSplit';
+import { isSyntheticJoinRequestOffer } from '@/lib/plans/joinRequestOffers';
 import {
   deriveEscrowPhase,
   derivePlanKind,
@@ -290,9 +291,10 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
     if (!user?.id || !plan || !offer) return;
     setBusy(true);
     const client = createClient();
+    const syntheticJoinOffer = isSyntheticJoinRequestOffer(plan);
     const { error } = await client.rpc('record_agreement_confirmation', {
       p_plan_id: plan.id,
-      ...(plan.is_group_plan && offer.id ? { p_offer_id: offer.id } : {}),
+      ...(plan.is_group_plan && offer.id && !syntheticJoinOffer ? { p_offer_id: offer.id } : {}),
     });
     if (error) {
       setBusy(false);
@@ -312,13 +314,17 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
     if (complete) {
       if (action === 'free') await runConfirmFree();
       else if (action === 'pay' && user?.id) {
-        const preview = getAgreementPaymentPreview(
-          plan,
-          offer.bidder_id,
-          plan.agreed_price_cents ?? offer.amount_cents ?? plan.starting_price_cents ?? 0,
-          user.id
-        );
-        if (preview.userIsPayer) await runProceedPayment();
+        if (isGroupSplitPlan(plan) && user.id === plan.creator_id) {
+          await goToEscrowPayment();
+        } else {
+          const preview = getAgreementPaymentPreview(
+            plan,
+            offer.bidder_id,
+            plan.agreed_price_cents ?? offer.amount_cents ?? plan.starting_price_cents ?? 0,
+            user.id
+          );
+          if (preview.userIsPayer) await runProceedPayment();
+        }
       }
     }
     setBusy(false);
@@ -427,7 +433,7 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
         return;
       }
     }
-    if (!bothConfirmed) {
+    if (!bothConfirmed && !(isGroupSplitPlan(plan) && user?.id === plan.creator_id)) {
       showAgreementAlert('Both parties must review and confirm the agreement before secure payment.');
       return;
     }
@@ -563,6 +569,7 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
   const priceLabel = agreedPriceLabel(plan, offer);
   const showCancelPlan = (needsConfirm || awaitingPay) && showPaymentFlow;
   const isGroupSplit = isGroupSplitPlan(plan);
+  const isGroupSplitHost = isGroupSplit && isHost;
   const escrowCents = paymentRequired
     ? (plan.agreed_price_cents ?? offer.amount_cents ?? plan.starting_price_cents ?? null)
     : null;
@@ -637,7 +644,16 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
     onPrimary = () => router.push(`/plan/${planId}`);
   } else if (awaitingPay && showPaymentFlow) {
     const otherName = isHost ? guestParty?.name ?? 'guest' : hostParty?.name ?? 'host';
-    if (userIsPayer) {
+    if (isGroupSplitHost) {
+      if (existingEscrowId) {
+        primaryLabel = 'Complete secure payment';
+        onPrimary = () => void goToEscrowPayment();
+      } else {
+        primaryLabel = 'Close group and pay';
+        onPrimary = () => void goToEscrowPayment();
+      }
+      primaryDisabled = busy;
+    } else if (userIsPayer) {
       if (!bothConfirmed) {
         if (!userConfirmed) {
           primaryLabel = 'Review terms & pay';
@@ -668,7 +684,16 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
     }
   } else if (needsConfirm && showPaymentFlow) {
     const otherName = isHost ? guestParty?.name ?? 'guest' : hostParty?.name ?? 'host';
-    if (!userConfirmed) {
+    if (isGroupSplitHost) {
+      if (existingEscrowId) {
+        primaryLabel = 'Complete secure payment';
+        onPrimary = () => void goToEscrowPayment();
+      } else {
+        primaryLabel = 'Close group and pay';
+        onPrimary = () => void goToEscrowPayment();
+      }
+      primaryDisabled = busy;
+    } else if (!userConfirmed) {
       if (!paymentRequired) {
         primaryLabel = 'Review & confirm plan';
         onPrimary = () => openLegalGate('free');

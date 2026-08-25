@@ -5,6 +5,7 @@ import { planIsPastNegotiation } from '@/lib/plans/planAgreementRoute';
 import { isOfferLive } from '@/lib/plans/negotiationState';
 import { userEscrowLegFunded } from '@/lib/escrow/splitEscrowFunding';
 import {
+  resolveHostGroupPayShareState,
   resolvePlanPayShareState,
   type PlanGuestEscrowSnapshot,
 } from '@/lib/plans/planPayShare';
@@ -46,6 +47,10 @@ export type PlanViewerContext = {
   showPayShare: boolean;
   payShareEscrowId: string | null;
   payShareAmountLabel: string | null;
+  showHostPayShare: boolean;
+  hostPayShareEscrowId: string | null;
+  hostPayShareAmountLabel: string | null;
+  hostPayShareViaAgreement: boolean;
   acceptedGuests: AcceptedGuestRef[];
   isMatchParty: boolean;
   userAcceptedOffer: DbPlanOffer | null;
@@ -115,6 +120,8 @@ export function derivePlanViewerContext(
     completionSelfAcked?: boolean;
     myJoinRequest?: { id: string; status: JoinRequestStatus } | null;
     myGuestEscrow?: PlanGuestEscrowSnapshot | null;
+    myHostEscrow?: PlanGuestEscrowSnapshot | null;
+    approvedJoinRequestCount?: number;
   }
 ): PlanViewerContext {
   const listingExpired = opts?.listingExpired ?? opts?.moodClosed ?? false;
@@ -147,7 +154,8 @@ export function derivePlanViewerContext(
   const isBrowsingGuest = !isHost && !isMatchedGuest && !isNegotiatingGuest;
 
   const acceptedGuests = listAcceptedGuests(offers);
-  const acceptedCount = acceptedGuestCount(plan, offers);
+  const approvedJoinCount = opts?.approvedJoinRequestCount ?? 0;
+  const acceptedCount = Math.max(acceptedGuestCount(plan, offers), approvedJoinCount);
   const { lockState, hasOpenSlots } = computePlanLockState(plan, acceptedCount);
 
   let showSave = false;
@@ -215,8 +223,9 @@ export function derivePlanViewerContext(
       (!isGroup && lockState === 'full') ||
       (isGroup && (lockState === 'partial' || lockState === 'full'));
 
-    if (isGroup && acceptedGuests.length > 0 && lockState !== 'open') {
+    if (isGroup && (acceptedGuests.length > 0 || approvedJoinCount > 0) && lockState !== 'open') {
       showGroupGuestAgreements = true;
+      showViewAgreement = joinRequestFlow;
     } else if (!isGroup && lockState === 'full') {
       showViewAgreement = true;
     }
@@ -226,6 +235,13 @@ export function derivePlanViewerContext(
     isMatchedGuest && plan.status === 'completed' && !completionSelfAcked && !!userId;
 
   const payShare = resolvePlanPayShareState(plan, userId, opts?.myGuestEscrow, isHost);
+  const hostPayShare = resolveHostGroupPayShareState(
+    plan,
+    userId,
+    opts?.myHostEscrow,
+    approvedJoinCount,
+    isHost
+  );
 
   return {
     isHost,
@@ -256,6 +272,10 @@ export function derivePlanViewerContext(
     showPayShare: payShare.showPayShare,
     payShareEscrowId: payShare.payShareEscrowId,
     payShareAmountLabel: payShare.payShareAmountLabel,
+    showHostPayShare: hostPayShare.showPayShare,
+    hostPayShareEscrowId: hostPayShare.payShareEscrowId,
+    hostPayShareAmountLabel: hostPayShare.payShareAmountLabel,
+    hostPayShareViaAgreement: hostPayShare.viaAgreement,
     acceptedGuests,
     isMatchParty: isMatchedGuest || (isHost && lockState !== 'open'),
     userAcceptedOffer: isMatchedGuest ? myOffer : null,

@@ -23,10 +23,23 @@ export function usePlanViewerContext(
     completionSelfAcked?: boolean;
     myJoinRequest?: { id: string; status: JoinRequestStatus } | null;
     myGuestEscrow?: PlanGuestEscrowSnapshot | null;
+    myHostEscrow?: PlanGuestEscrowSnapshot | null;
+    approvedJoinRequestCount?: number;
   }
 ): PlanViewerContext | null {
   return useMemo(() => {
     if (!plan) return null;
     return derivePlanViewerContext(plan, currentUserId, offers, opts);
-  }, [plan, currentUserId, offers, opts?.listingExpired, opts?.moodClosed, opts?.completionSelfAcked, opts?.myJoinRequest, opts?.myGuestEscrow]);
+  }, [
+    plan,
+    currentUserId,
+    offers,
+    opts?.listingExpired,
+    opts?.moodClosed,
+    opts?.completionSelfAcked,
+    opts?.myJoinRequest,
+    opts?.myGuestEscrow,
+    opts?.myHostEscrow,
+    opts?.approvedJoinRequestCount,
+  ]);
 }

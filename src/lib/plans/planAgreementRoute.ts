@@ -34,7 +34,7 @@ export function resolveAgreementOfferId(
 }
 
 export function resolvePlanAgreementHref(
-  plan: PlanSlice,
+  plan: PlanSlice & Pick<DbPlan, 'is_negotiable'>,
   opts?: {
     offerId?: string | null;
     joinRequestId?: string | null;
@@ -43,6 +43,12 @@ export function resolvePlanAgreementHref(
   }
 ): string {
   const planId = plan.id;
+  if (plan.is_negotiable === false) {
+    if (opts?.joinRequestId) {
+      return `/plan/${planId}/agreement?joinRequestId=${opts.joinRequestId}`;
+    }
+    return `/plan/${planId}/agreement`;
+  }
   if (opts?.joinRequestId) {
     return `/plan/${planId}/agreement?joinRequestId=${opts.joinRequestId}`;
   }

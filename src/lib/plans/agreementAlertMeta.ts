@@ -20,6 +20,12 @@ export function agreementAlertMeta(message: string): { title: string; variant: A
       variant: 'error',
     };
   }
+  if (m.includes('close_group_first') || m.includes('Close the group first')) {
+    return {
+      title: 'Close the group first',
+      variant: 'info',
+    };
+  }
   if (m.includes('Could not open chat')) {
     return {
       title: 'Chat unavailable',

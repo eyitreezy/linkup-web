@@ -1,6 +1,10 @@
 import { isPlanSaved, recordPlanView } from '@/lib/plans/planEngagement';
 import type { JoinRequestWithRequester } from '@/lib/plans/joinRequests';
-import { fetchViewerGuestEscrow, type PlanGuestEscrowSnapshot } from '@/lib/plans/planPayShare';
+import {
+  fetchHostGroupEscrow,
+  fetchViewerGuestEscrow,
+  type PlanGuestEscrowSnapshot,
+} from '@/lib/plans/planPayShare';
 import type { PlanFeedRow } from '@/services/plans.service';
 import type { DbPlanOffer, DbProfile, JoinRequestStatus } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -26,6 +30,8 @@ export type PlanDetailBundle = {
   completionSelfAcked: boolean;
   myJoinRequest: { id: string; status: JoinRequestStatus } | null;
   myGuestEscrow: PlanGuestEscrowSnapshot | null;
+  myHostEscrow: PlanGuestEscrowSnapshot | null;
+  approvedJoinRequestCount: number;
   availableSlots: number;
   pendingInvitationCount: number;
 };
@@ -128,6 +134,8 @@ export async function fetchPlanDetailBundle(
   let completionSelfAcked = false;
   let myJoinRequest: { id: string; status: JoinRequestStatus } | null = null;
   let myGuestEscrow: PlanGuestEscrowSnapshot | null = null;
+  let myHostEscrow: PlanGuestEscrowSnapshot | null = null;
+  let approvedJoinRequestCount = 0;
   let availableSlots = 0;
   let pendingInvitationCount = 0;
 
@@ -159,6 +167,22 @@ export async function fetchPlanDetailBundle(
     if (feedRow.creator_id !== viewerId && feedRow.is_paid) {
       myGuestEscrow = await fetchViewerGuestEscrow(client, planId, viewerId);
     }
+    if (feedRow.creator_id === viewerId && feedRow.is_paid && feedRow.is_group_plan) {
+      myHostEscrow = await fetchHostGroupEscrow(client, feedRow, viewerId);
+    }
+  }
+
+  if (feedRow.is_negotiable === false) {
+    if (joinRequests.length > 0) {
+      approvedJoinRequestCount = joinRequests.filter((r) => r.status === 'approved').length;
+    } else if (viewerId && feedRow.creator_id === viewerId) {
+      const { count } = await client
+        .from('plan_join_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('plan_id', planId)
+        .eq('status', 'approved');
+      approvedJoinRequestCount = count ?? 0;
+    }
   }
 
   if (viewerId && feedRow.creator_id === viewerId && feedRow.is_group_plan) {
@@ -184,6 +208,8 @@ export async function fetchPlanDetailBundle(
       completionSelfAcked,
       myJoinRequest,
       myGuestEscrow,
+      myHostEscrow,
+      approvedJoinRequestCount,
       availableSlots,
       pendingInvitationCount,
     },
