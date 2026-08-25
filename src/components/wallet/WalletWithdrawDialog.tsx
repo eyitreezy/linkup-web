@@ -72,16 +72,19 @@ export function WalletWithdrawDialog({
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 backdrop-blur-sm min-[425px]:items-center min-[425px]:p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="wallet-withdraw-title"
       onClick={() => onOpenChange(false)}
     >
       <div
-        className="linkup-card flex w-full min-w-0 max-w-md flex-col rounded-2xl p-4 shadow-xl min-[425px]:p-6"
+        className="linkup-card flex max-h-[min(calc(100dvh-1.5rem),720px)] w-full min-w-0 max-w-md flex-col overflow-hidden rounded-2xl p-4 shadow-xl min-[425px]:p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-display text-lg font-extrabold text-foreground">Withdraw to bank</h2>
+        <h2 id="wallet-withdraw-title" className="shrink-0 font-display text-lg font-extrabold text-foreground">
+          Withdraw to bank
+        </h2>
 
-        {showAddAccount || !account ? (
-          <div className="mt-4">
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+          {showAddAccount || !account ? (
             <RefundAccountForm
               userId={userId}
               savedAccount={account}
@@ -98,51 +101,51 @@ export function WalletWithdrawDialog({
                 }
               }}
             />
-          </div>
-        ) : (
-          <>
-            <p className="mt-2 text-[14px] font-semibold text-muted">
-              {account.bank_name} · {maskAccountNumber(account.account_number)}
-            </p>
-            <p className="text-[13px] font-semibold text-foreground">{account.account_name}</p>
+          ) : (
+            <>
+              <p className="text-[14px] font-semibold text-muted">
+                {account.bank_name} · {maskAccountNumber(account.account_number)}
+              </p>
+              <p className="text-[13px] font-semibold text-foreground">{account.account_name}</p>
 
-            <label className="mt-4 block text-[13px] font-extrabold text-foreground">
-              Amount (NGN)
-              <input
-                type="text"
-                inputMode="numeric"
-                className="mt-1.5 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-[15px] font-semibold"
-                placeholder={String(maxNgn)}
-                value={amountInput}
-                onChange={(e) => setAmountInput(e.target.value)}
-              />
-            </label>
-            <p className="mt-1 text-[12px] font-semibold text-muted">
-              Available: {formatNGN(balanceCents)}
-            </p>
+              <label className="mt-4 block text-[13px] font-extrabold text-foreground">
+                Amount (NGN)
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="mt-1.5 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-[15px] font-semibold"
+                  placeholder={String(maxNgn)}
+                  value={amountInput}
+                  onChange={(e) => setAmountInput(e.target.value)}
+                />
+              </label>
+              <p className="mt-1 text-[12px] font-semibold text-muted">
+                Available: {formatNGN(balanceCents)}
+              </p>
 
-            {error ? <p className="mt-3 text-[13px] font-semibold text-[#EF4444]">{error}</p> : null}
-            {successMsg ? (
-              <p className="mt-3 text-[13px] font-semibold text-emerald-700">{successMsg}</p>
-            ) : null}
+              {error ? <p className="mt-3 text-[13px] font-semibold text-[#EF4444]">{error}</p> : null}
+              {successMsg ? (
+                <p className="mt-3 text-[13px] font-semibold text-emerald-700">{successMsg}</p>
+              ) : null}
 
-            <button
-              type="button"
-              disabled={busy || balanceCents < 100 || !!successMsg}
-              onClick={() => void handleWithdraw()}
-              className={cn(
-                'mt-4 flex min-h-[44px] w-full items-center justify-center rounded-full linkup-gradient-primary px-5 text-[14px] font-extrabold text-white transition hover:opacity-95 disabled:opacity-50'
-              )}
-            >
-              {busy ? 'Processing…' : `Withdraw ${formatNGN(amountCents)}`}
-            </button>
-          </>
-        )}
+              <button
+                type="button"
+                disabled={busy || balanceCents < 100 || !!successMsg}
+                onClick={() => void handleWithdraw()}
+                className={cn(
+                  'mt-4 flex min-h-[44px] w-full items-center justify-center rounded-full linkup-gradient-primary px-5 text-[14px] font-extrabold text-white transition hover:opacity-95 disabled:opacity-50'
+                )}
+              >
+                {busy ? 'Processing…' : `Withdraw ${formatNGN(amountCents)}`}
+              </button>
+            </>
+          )}
+        </div>
 
         <button
           type="button"
           onClick={() => onOpenChange(false)}
-          className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-full border border-border px-4 text-[14px] font-extrabold text-muted transition hover:bg-[#EDE8FF]/50"
+          className="mt-3 flex min-h-[44px] w-full shrink-0 items-center justify-center rounded-full border border-border px-4 text-[14px] font-extrabold text-muted transition hover:bg-[#EDE8FF]/50"
         >
           Close
         </button>

@@ -99,6 +99,12 @@ export interface ProfilePreferences {
   };
   incognito_browse?: boolean;
   hide_profile_views?: boolean;
+  /** Captured when a user completes account deletion (DSR / product feedback). */
+  account_deletion_feedback?: {
+    reason: string;
+    other_text?: string;
+    submitted_at: string;
+  };
   [key: string]: unknown;
 }
 
