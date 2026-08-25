@@ -20,6 +20,7 @@ import { GroupSplitAgreementSection } from '@/components/plans/group/GroupSplitA
 import { HighValueEscrowModal } from '@/components/escrow/HighValueEscrowModal';
 import { PlanEscrowPaymentCard } from '@/components/escrow/PlanEscrowPaymentCard';
 import { CancellationSummaryCard } from '@/components/plans/CancellationSummaryCard';
+import { GroupHostCancellationModal } from '@/components/plans/GroupHostCancellationModal';
 import { EscrowPolicySignOffModal } from '@/components/plans/EscrowPolicySignOffModal';
 import { VerificationGateDialog } from '@/components/plans/VerificationGateDialog';
 import { ConfirmDialog } from '@/features/plan-management/ConfirmDialog';
@@ -51,7 +52,7 @@ import {
 } from '@/lib/escrow/escrowScreenContent';
 import { confirmFreePlan, proceedToSecurePayment } from '@/lib/plans/planAgreementActions';
 import { resolveAgreementEscrowId, resolveEscrowHref } from '@/lib/plans/planAgreementRoute';
-import { agreementAlertMeta } from '@/lib/plans/agreementAlertMeta';
+import { agreementAlertMeta, formatAgreementAlertMessage } from '@/lib/plans/agreementAlertMeta';
 import { formatIsoDateTime } from '@/lib/plans/formatPlanMeta';
 import { MAX_ESCROW_TIER1_CENTS } from '@/lib/plans/planFinancialConfig';
 import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
@@ -94,6 +95,7 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
   const [pendingAction, setPendingAction] = useState<'free' | 'pay' | 'ack' | null>(null);
   const [highValueModal, setHighValueModal] = useState<'platinum' | 'self' | 'counterparty' | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [hostGroupCancelOpen, setHostGroupCancelOpen] = useState(false);
   const [cancelOptionsOpen, setCancelOptionsOpen] = useState(false);
   const [noShowConfirmOpen, setNoShowConfirmOpen] = useState(false);
   const [mutualCancelOpen, setMutualCancelOpen] = useState(false);
@@ -114,7 +116,11 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
 
   function showAgreementAlert(message: string) {
     const meta = agreementAlertMeta(message);
-    setStatusAlert({ title: meta.title, message, variant: meta.variant });
+    setStatusAlert({
+      title: meta.title,
+      message: formatAgreementAlertMessage(message),
+      variant: meta.variant,
+    });
   }
 
   const { subscriptionState } = useSubscriptionContext();
@@ -456,6 +462,11 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
 
   async function handleCancel({ noShow }: { noShow: boolean }) {
     if (!plan || busy) return;
+    if (isHost && plan.is_group_plan) {
+      setCancelOptionsOpen(false);
+      setHostGroupCancelOpen(true);
+      return;
+    }
     setCancelOpen(false);
     setCancelOptionsOpen(false);
     setNoShowConfirmOpen(false);
@@ -479,6 +490,19 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
     }
     setCancellationOutcome(outcome as CancellationOutcome);
     setOutcomeOpen(true);
+  }
+
+  function openHostCancelFlow() {
+    if (!plan) return;
+    if (isHost && plan.is_group_plan) {
+      setHostGroupCancelOpen(true);
+      return;
+    }
+    setCancelOpen(true);
+  }
+
+  function openGuestCancelFlow() {
+    setCancelOptionsOpen(true);
   }
 
   async function handleVoteMutualCancel() {
@@ -807,6 +831,16 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
         variant={highValueModal ?? 'self'}
         onClose={() => setHighValueModal(null)}
       />
+      {hostGroupCancelOpen ? (
+        <GroupHostCancellationModal
+          planId={planId}
+          onCancelled={() => {
+            setHostGroupCancelOpen(false);
+            router.push('/discover');
+          }}
+          onDismiss={() => setHostGroupCancelOpen(false)}
+        />
+      ) : null}
       <ConfirmDialog
         open={cancelOpen}
         title="Cancel this plan?"
@@ -1061,7 +1095,7 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
         <button
           type="button"
                 disabled={busy}
-                onClick={() => (isGuest ? setCancelOptionsOpen(true) : setCancelOpen(true))}
+                onClick={() => (isGuest ? openGuestCancelFlow() : openHostCancelFlow())}
                 className="flex min-h-[48px] flex-1 items-center justify-center rounded-full border border-primary/25 bg-white px-3 text-center text-[13px] font-extrabold leading-tight text-primary transition hover:bg-[#EDE8FF]/50 disabled:opacity-50 sm:px-4 sm:text-[14px]"
         >
                 Cancel this plan
