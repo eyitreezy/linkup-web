@@ -85,12 +85,11 @@ export function AppShell({
                 className={cn(
                   'min-h-full w-full min-w-0 overflow-x-hidden px-4 py-6 md:px-6 lg:pb-0',
                   mobileGutter,
-                  hasContextRail
-                    ? 'max-w-none'
-                    : cn(
-                        'mx-auto lg:max-w-none',
-                        wideMain ? 'max-w-3xl xl:max-w-none' : 'max-w-3xl xl:max-w-4xl'
-                      )
+                  !hasContextRail &&
+                    cn(
+                      'mx-auto lg:max-w-none',
+                      wideMain ? 'max-w-3xl xl:max-w-none' : 'max-w-3xl xl:max-w-4xl'
+                    )
                 )}
               >
                 {children}

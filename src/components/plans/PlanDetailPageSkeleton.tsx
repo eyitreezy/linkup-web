@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 export function PlanDetailPageSkeleton() {
   return (
     <div
-      className="mx-auto max-w-3xl space-y-6 pb-16"
+      className="mx-auto w-full max-w-3xl space-y-6 pb-16"
       role="status"
       aria-busy="true"
       aria-label="Loading meetup details"

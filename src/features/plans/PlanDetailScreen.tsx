@@ -598,7 +598,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
 
   return (
     <GroupPlanPolicyGate active={isGroupPlan}>
-    <div className="w-full min-w-0 space-y-6 pb-16">
+    <div className="mx-auto w-full max-w-3xl space-y-6 pb-16">
       <VerificationGateDialog open={gateOpen} onClose={() => setGateOpen(false)} />
       <AppStatusDialog
         open={statusDialog !== null}
