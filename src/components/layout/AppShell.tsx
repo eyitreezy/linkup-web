@@ -23,6 +23,8 @@ type Props = {
   flushMobileGutter?: boolean;
   /** Subscription / pricing grids — use full center column width (no xl cap). */
   wideMain?: boolean;
+  /** Left-align main column on xl when the right context rail is visible (plan detail flows). */
+  alignMainStart?: boolean;
 };
 
 export function AppShell({
@@ -34,9 +36,11 @@ export function AppShell({
   fixedMain,
   flushMobileGutter,
   wideMain,
+  alignMainStart,
 }: Props) {
   const pathname = usePathname();
   const mainRef = useRef<HTMLElement>(null);
+  const hasContextRail = !fullWidth && !noContext;
 
   useEffect(() => {
     if (fixedMain) return;
@@ -70,18 +74,25 @@ export function AppShell({
               'h-full max-h-full min-h-0 min-w-0 flex-1',
               fixedMain ? 'flex flex-col overflow-hidden' : 'overflow-y-auto overflow-x-hidden overscroll-y-contain',
               !fixedMain && 'max-lg:pb-[var(--linkup-bottom-nav-offset)]',
-              fullWidth
-                ? 'w-full min-w-0 max-w-full overflow-x-hidden px-0 py-0'
-                : cn(
-                    'mx-auto min-w-0 w-full overflow-x-hidden px-4 py-6 md:px-6 lg:max-w-none lg:pb-0',
-                    wideMain ? 'max-w-3xl xl:max-w-none' : 'max-w-3xl xl:max-w-4xl',
-                    flushMobileGutter
-                      ? 'max-lg:px-0 max-lg:py-2.5'
-                      : 'max-[424px]:px-2 max-[424px]:py-2.5 max-[374px]:px-1.5 max-[374px]:py-2 max-[359px]:px-1 max-[359px]:py-2'
-                  )
+              fullWidth && 'w-full min-w-0 max-w-full overflow-x-hidden px-0 py-0'
             )}
           >
-            {children}
+            {fullWidth || fixedMain ? (
+              children
+            ) : (
+              <div
+                className={cn(
+                  'min-w-0 w-full overflow-x-hidden px-4 py-6 md:px-6 lg:pb-0',
+                  alignMainStart && hasContextRail ? 'mx-auto xl:mx-0 xl:mr-auto' : 'mx-auto',
+                  wideMain ? 'max-w-3xl xl:max-w-none' : 'max-w-3xl xl:max-w-4xl',
+                  flushMobileGutter
+                    ? 'max-lg:px-0 max-lg:py-2.5'
+                    : 'max-[424px]:px-2 max-[424px]:py-2.5 max-[374px]:px-1.5 max-[374px]:py-2 max-[359px]:px-1 max-[359px]:py-2'
+                )}
+              >
+                {children}
+              </div>
+            )}
           </main>
 
           {!fullWidth && !noContext ? (

@@ -965,23 +965,35 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
       ) : null}
 
       {isCreator && ctx?.showHostPayShare ? (
-        <button
-          type="button"
-          className={actionPrimary}
-          onClick={() => {
-            if (ctx.hostPayShareEscrowId) {
-              router.push(`/escrow/${ctx.hostPayShareEscrowId}?planId=${planId}&source=plan`);
-              return;
-            }
-            router.push(`/plan/${planId}/agreement`);
-          }}
-        >
-          <span className="inline-flex items-center justify-center gap-2">
-            <IoWalletOutline size={18} aria-hidden />
-            Pay your share
-            {ctx.hostPayShareAmountLabel ? ` · ${ctx.hostPayShareAmountLabel}` : ''}
-          </span>
-        </button>
+        <section className="linkup-card overflow-hidden">
+          <div className="flex flex-wrap items-start justify-between gap-3 px-5 py-4">
+            <div className="min-w-0 flex-1">
+              <h3 className="font-display text-lg font-extrabold text-foreground">Your host share</h3>
+              <p className="mt-1 text-[13px] font-semibold text-muted">
+                {ctx.hostPayShareViaAgreement
+                  ? 'Close the group and pay your share to activate this plan.'
+                  : 'Payment required to confirm your share and activate this group plan.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              className={cn(actionPrimary, 'w-auto shrink-0 self-start')}
+              onClick={() => {
+                if (ctx.hostPayShareEscrowId) {
+                  router.push(`/escrow/${ctx.hostPayShareEscrowId}?planId=${planId}&source=plan`);
+                  return;
+                }
+                router.push(`/plan/${planId}/agreement`);
+              }}
+            >
+              <span className="inline-flex items-center gap-2">
+                <IoWalletOutline size={18} aria-hidden />
+                Pay your share
+                {ctx.hostPayShareAmountLabel ? ` · ${ctx.hostPayShareAmountLabel}` : ''}
+              </span>
+            </button>
+          </div>
+        </section>
       ) : null}
 
       {isCreator && ctx?.showViewAgreement && !ctx.showHostPayShare ? (
@@ -1138,7 +1150,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
       ) : (
       <section className="linkup-card overflow-hidden">
         <div className="border-b border-border/60 px-5 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
                 <h3 className="font-display text-lg font-extrabold text-foreground">

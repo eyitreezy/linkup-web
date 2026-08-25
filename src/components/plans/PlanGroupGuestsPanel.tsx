@@ -223,10 +223,6 @@ export function PlanGroupGuestsPanel({
     seedAcceptedOffers?.length ?? 0
   );
 
-  const footerHref =
-    plan.is_negotiable === false ? `/plan/${plan.id}/requests` : `/plan/${plan.id}/negotiate`;
-  const footerLabel = plan.is_negotiable === false ? 'Manage requests →' : 'View all offers →';
-
   return (
     <section className="linkup-card overflow-hidden">
       <div className="border-b border-border/60 px-5 py-4">
@@ -304,11 +300,6 @@ export function PlanGroupGuestsPanel({
           ))}
         </ul>
       )}
-      <div className="border-t border-border/50 px-5 py-3">
-        <Link href={footerHref} className="text-[13px] font-extrabold text-primary hover:underline">
-          {footerLabel}
-        </Link>
-      </div>
     </section>
   );
 }
