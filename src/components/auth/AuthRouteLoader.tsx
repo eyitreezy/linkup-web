@@ -63,8 +63,9 @@ export function AuthRouteLoader({ variant = 'shell', className }: Props) {
           ))}
         </div>
       </aside>
-      <div className="flex min-h-0 flex-1 flex-col">
-        <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 overflow-hidden px-4 py-6 max-[424px]:px-2">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <main className="flex min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain">
+          <div className="linkup-main-content-inner min-h-full space-y-4 px-4 py-6 max-[424px]:px-2">
           <div className="flex items-center gap-3">
             <Skeleton className="h-12 w-12 shrink-0 rounded-2xl" />
             <div className="min-w-0 flex-1 space-y-2">
@@ -82,6 +83,7 @@ export function AuthRouteLoader({ variant = 'shell', className }: Props) {
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-28 w-full rounded-2xl" />
           ))}
+          </div>
         </main>
       </div>
     </div>

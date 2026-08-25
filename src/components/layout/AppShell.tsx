@@ -21,7 +21,7 @@ type Props = {
   fixedMain?: boolean;
   /** Plan management (etc.): page owns horizontal gutters on mobile. */
   flushMobileGutter?: boolean;
-  /** Subscription / pricing grids — use full center column width (no xl cap). */
+  /** Subscription / pricing grids — wider inner cap via --linkup-main-content-max-width-wide. */
   wideMain?: boolean;
 };
 
@@ -56,7 +56,6 @@ export function AppShell({
     };
   }, []);
 
-  const hasContextRail = !fullWidth && !noContext;
   const mobileGutter = flushMobileGutter
     ? 'max-lg:px-0 max-lg:py-2.5'
     : 'max-[424px]:px-2 max-[424px]:py-2.5 max-[374px]:px-1.5 max-[374px]:py-2 max-[359px]:px-1 max-[359px]:py-2';
@@ -83,13 +82,9 @@ export function AppShell({
             ) : (
               <div
                 className={cn(
-                  'min-h-full w-full min-w-0 overflow-x-hidden px-4 py-6 md:px-6 lg:pb-0',
+                  'linkup-main-content-inner min-h-full overflow-x-hidden px-4 py-6 md:px-6 lg:pb-0',
                   mobileGutter,
-                  !hasContextRail &&
-                    cn(
-                      'mx-auto lg:max-w-none',
-                      wideMain ? 'max-w-3xl xl:max-w-none' : 'max-w-3xl xl:max-w-4xl'
-                    )
+                  wideMain && 'linkup-main-content-inner--wide'
                 )}
               >
                 {children}

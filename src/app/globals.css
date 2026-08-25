@@ -26,6 +26,18 @@
   --linkup-bottom-nav-offset: calc(3.35rem + env(safe-area-inset-bottom, 0px));
   /* Extra inset so last grid card clears the tab bar when scrolled */
   --linkup-tab-clearance: calc(var(--linkup-bottom-nav-offset) + 0.875rem);
+  /* Three-column shell — left nav (lg 240 / xl 260) + center scroll + right rail (300) */
+  --linkup-sidebar-left-lg: 240px;
+  --linkup-sidebar-left-xl: 260px;
+  --linkup-context-rail-width: 300px;
+  /*
+   * Default middle-column content cap (896px). Applied on the inner wrapper inside
+   * the scroll container so the main scrollbar stays at the column edge beside the
+   * Sort & Filter rail.
+   */
+  --linkup-main-content-max-width: 56rem;
+  /* Subscription / pricing grids — wider but still capped on ultra-wide monitors */
+  --linkup-main-content-max-width-wide: 72rem;
 }
 
 @theme inline {
@@ -70,6 +82,23 @@ body {
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+/*
+ * Global middle-column inner wrapper (inside AppShell <main> scroll container).
+ * Max-width lives here — NOT on the scroll container — so the scrollbar remains
+ * flush with the right edge of the middle column / left edge of the context rail.
+ */
+.linkup-main-content-inner {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: min(var(--linkup-main-content-max-width), 100%);
+  margin-inline: auto;
+}
+
+.linkup-main-content-inner--wide {
+  max-width: min(var(--linkup-main-content-max-width-wide), 100%);
 }
 
 /* Horizontal filter / action rows (plan management, etc.) */
