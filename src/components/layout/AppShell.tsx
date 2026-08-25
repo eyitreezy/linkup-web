@@ -23,8 +23,6 @@ type Props = {
   flushMobileGutter?: boolean;
   /** Subscription / pricing grids — use full center column width (no xl cap). */
   wideMain?: boolean;
-  /** Left-align main column on xl when the right context rail is visible (plan detail flows). */
-  alignMainStart?: boolean;
 };
 
 export function AppShell({
@@ -36,11 +34,9 @@ export function AppShell({
   fixedMain,
   flushMobileGutter,
   wideMain,
-  alignMainStart,
 }: Props) {
   const pathname = usePathname();
   const mainRef = useRef<HTMLElement>(null);
-  const hasContextRail = !fullWidth && !noContext;
 
   useEffect(() => {
     if (fixedMain) return;
@@ -59,6 +55,11 @@ export function AppShell({
       body.style.overflow = prevBodyOverflow;
     };
   }, []);
+
+  const hasContextRail = !fullWidth && !noContext;
+  const mobileGutter = flushMobileGutter
+    ? 'max-lg:px-0 max-lg:py-2.5'
+    : 'max-[424px]:px-2 max-[424px]:py-2.5 max-[374px]:px-1.5 max-[374px]:py-2 max-[359px]:px-1 max-[359px]:py-2';
 
   return (
     <div className="linkup-gradient-discovery flex h-full min-h-0 max-h-full w-full overflow-hidden">
@@ -82,12 +83,14 @@ export function AppShell({
             ) : (
               <div
                 className={cn(
-                  'min-w-0 w-full overflow-x-hidden px-4 py-6 md:px-6 lg:pb-0',
-                  alignMainStart && hasContextRail ? 'mx-auto xl:mx-0 xl:mr-auto' : 'mx-auto',
-                  wideMain ? 'max-w-3xl xl:max-w-none' : 'max-w-3xl xl:max-w-4xl',
-                  flushMobileGutter
-                    ? 'max-lg:px-0 max-lg:py-2.5'
-                    : 'max-[424px]:px-2 max-[424px]:py-2.5 max-[374px]:px-1.5 max-[374px]:py-2 max-[359px]:px-1 max-[359px]:py-2'
+                  'min-h-full w-full min-w-0 overflow-x-hidden px-4 py-6 md:px-6 lg:pb-0',
+                  mobileGutter,
+                  hasContextRail
+                    ? 'max-w-none'
+                    : cn(
+                        'mx-auto lg:max-w-none',
+                        wideMain ? 'max-w-3xl xl:max-w-none' : 'max-w-3xl xl:max-w-4xl'
+                      )
                 )}
               >
                 {children}

@@ -18,8 +18,6 @@ import { IoWalletOutline } from 'react-icons/io5';
 
 const actionPrimary =
   'flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full linkup-gradient-primary px-5 py-2.5 text-[14px] font-extrabold text-white shadow-sm transition hover:opacity-95 disabled:opacity-50';
-const actionPrimaryInline =
-  'inline-flex min-h-[44px] w-auto shrink-0 items-center justify-center gap-2 self-start rounded-full linkup-gradient-primary px-5 py-2.5 text-[14px] font-extrabold text-white shadow-sm transition hover:opacity-95 disabled:opacity-50';
 
 type Props = {
   plan: DbPlan;
@@ -51,23 +49,10 @@ export function GuestYourJoinRequestCard({
   return (
     <section className="linkup-card overflow-hidden">
       <div className="border-b border-border/60 px-5 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h3 className="font-display text-lg font-extrabold text-foreground">Your request</h3>
-            <p className="mt-1 text-[13px] font-semibold text-muted">
-              {phase === 'approved_pay'
-                ? 'Payment required to confirm your place on this plan.'
-                : 'Track your join request and next step for this plan.'}
-            </p>
-          </div>
-          {phase === 'approved_pay' && ctx.showPayShare ? (
-            <button type="button" className={actionPrimaryInline} onClick={onPayShare}>
-              <IoWalletOutline size={18} aria-hidden />
-              Pay your share
-              {ctx.payShareAmountLabel ? ` · ${ctx.payShareAmountLabel}` : ''}
-            </button>
-          ) : null}
-        </div>
+        <h3 className="font-display text-lg font-extrabold text-foreground">Your request</h3>
+        <p className="mt-1 text-[13px] font-semibold text-muted">
+          Track your join request and next step for this plan.
+        </p>
       </div>
 
       <div className="px-4 py-6">
@@ -127,18 +112,28 @@ export function GuestYourJoinRequestCard({
         ) : null}
 
         {phase === 'approved_pay' ? (
-          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-4">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="font-extrabold text-foreground">Request approved</p>
-                {slotLabel ? (
-                  <p className="mt-1 text-[13px] font-semibold text-primary">{slotLabel}</p>
-                ) : null}
+          <div className="space-y-4">
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-extrabold text-foreground">Request approved</p>
+                  {slotLabel ? (
+                    <p className="mt-1 text-[13px] font-semibold text-primary">{slotLabel}</p>
+                  ) : null}
+                  <p className="mt-2 text-[13px] font-semibold leading-relaxed text-muted">
+                    Payment required to confirm your place on this plan.
+                  </p>
+                </div>
+                <span className="rounded-full bg-emerald-500/12 px-2.5 py-1 text-[10px] font-extrabold text-emerald-700">
+                  Approved
+                </span>
               </div>
-              <span className="rounded-full bg-emerald-500/12 px-2.5 py-1 text-[10px] font-extrabold text-emerald-700">
-                Approved
-              </span>
             </div>
+            <button type="button" className={actionPrimary} onClick={onPayShare}>
+              <IoWalletOutline size={18} />
+              Pay your share
+              {ctx.payShareAmountLabel ? ` · ${ctx.payShareAmountLabel}` : ''}
+            </button>
           </div>
         ) : null}
 

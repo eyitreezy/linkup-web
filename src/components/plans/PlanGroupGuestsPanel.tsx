@@ -19,6 +19,7 @@ import {
   IoCheckmarkCircle,
   IoShieldCheckmarkOutline,
   IoTimeOutline,
+  IoWalletOutline,
 } from 'react-icons/io5';
 
 type GuestRow = {
@@ -39,7 +40,15 @@ type Props = {
   offersReady?: boolean;
   /** Bumps when parent realtime refreshes offers / plan (escrow, accepts). */
   refreshKey?: string;
+  hostPayShareAction?: {
+    show: boolean;
+    amountLabel: string | null;
+    onClick: () => void;
+  };
 };
+
+const cardHeaderPrimaryBtn =
+  'inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-full linkup-gradient-primary px-5 py-2.5 text-[14px] font-extrabold text-white shadow-sm transition hover:opacity-95 active:scale-[0.98] disabled:opacity-50';
 
 function joinRequestSlotCents(plan: DbPlan): number {
   if (plan.is_group_plan) {
@@ -55,6 +64,7 @@ export function PlanGroupGuestsPanel({
   seedAcceptedOffers,
   offersReady = false,
   refreshKey,
+  hostPayShareAction,
 }: Props) {
   const [rows, setRows] = useState<GuestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -223,24 +233,36 @@ export function PlanGroupGuestsPanel({
     seedAcceptedOffers?.length ?? 0
   );
 
+  const footerHref = `/plan/${plan.id}/negotiate`;
+  const footerLabel = 'View all offers →';
+
   return (
     <section className="linkup-card overflow-hidden">
       <div className="border-b border-border/60 px-5 py-4">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="font-display text-lg font-extrabold text-foreground">
-            Guests ({acceptedCount} / {maxGuests} accepted)
-          </h3>
-        </div>
-        <p className="mt-1 text-[12px] font-semibold text-muted">
-          {acceptedCount} of {maxGuests} guest slots used
-          {freeCap > 0 ? (
-            <>
-              {' '}
-              · {freeUsed} of {freeCap} free-tier
-              {premiumUsed > 0 ? ` · ${premiumUsed} premium` : ''}
-            </>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="font-display text-lg font-extrabold text-foreground">
+              Guests ({acceptedCount} / {maxGuests} accepted)
+            </h3>
+            <p className="mt-1 text-[12px] font-semibold text-muted">
+              {acceptedCount} of {maxGuests} guest slots used
+              {freeCap > 0 ? (
+                <>
+                  {' '}
+                  · {freeUsed} of {freeCap} free-tier
+                  {premiumUsed > 0 ? ` · ${premiumUsed} premium` : ''}
+                </>
+              ) : null}
+            </p>
+          </div>
+          {hostPayShareAction?.show ? (
+            <button type="button" className={cardHeaderPrimaryBtn} onClick={hostPayShareAction.onClick}>
+              <IoWalletOutline size={18} aria-hidden />
+              Pay your share
+              {hostPayShareAction.amountLabel ? ` · ${hostPayShareAction.amountLabel}` : ''}
+            </button>
           ) : null}
-        </p>
+        </div>
       </div>
       {loading ? (
         <p className="px-5 py-6 text-center text-[13px] font-semibold text-muted">Loading guests…</p>
@@ -300,6 +322,13 @@ export function PlanGroupGuestsPanel({
           ))}
         </ul>
       )}
+      {plan.is_negotiable !== false ? (
+        <div className="border-t border-border/50 px-5 py-3">
+          <Link href={footerHref} className="text-[13px] font-extrabold text-primary hover:underline">
+            {footerLabel}
+          </Link>
+        </div>
+      ) : null}
     </section>
   );
 }

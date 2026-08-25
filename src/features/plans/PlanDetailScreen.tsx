@@ -87,7 +87,6 @@ import {
   IoPersonAddOutline,
   IoShareOutline,
   IoTimeOutline,
-  IoWalletOutline,
 } from 'react-icons/io5';
 
 /** Auto-fit grid: buttons share a row until min cell width forces the next row. */
@@ -599,7 +598,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
 
   return (
     <GroupPlanPolicyGate active={isGroupPlan}>
-    <div className="mx-auto max-w-3xl space-y-6 pb-16">
+    <div className="w-full min-w-0 space-y-6 pb-16">
       <VerificationGateDialog open={gateOpen} onClose={() => setGateOpen(false)} />
       <AppStatusDialog
         open={statusDialog !== null}
@@ -824,6 +823,21 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         seedAcceptedOffers={acceptedGuestOffers}
         offersReady={!!bundle}
         refreshKey={guestsPanelRefreshKey}
+        hostPayShareAction={
+          isCreator && ctx?.showHostPayShare
+            ? {
+                show: true,
+                amountLabel: ctx.hostPayShareAmountLabel,
+                onClick: () => {
+                  if (ctx.hostPayShareEscrowId) {
+                    router.push(`/escrow/${ctx.hostPayShareEscrowId}?planId=${planId}&source=plan`);
+                    return;
+                  }
+                  router.push(`/plan/${planId}/agreement`);
+                },
+              }
+            : undefined
+        }
       />
 
       {isAcceptedGuest && plan.is_group_plan ? (
@@ -962,38 +976,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         onChat={() => void openCounterpartyChat()}
           onCalendar={handleAddToCalendar}
         />
-      ) : null}
-
-      {isCreator && ctx?.showHostPayShare ? (
-        <section className="linkup-card overflow-hidden">
-          <div className="flex flex-wrap items-start justify-between gap-3 px-5 py-4">
-            <div className="min-w-0 flex-1">
-              <h3 className="font-display text-lg font-extrabold text-foreground">Your host share</h3>
-              <p className="mt-1 text-[13px] font-semibold text-muted">
-                {ctx.hostPayShareViaAgreement
-                  ? 'Close the group and pay your share to activate this plan.'
-                  : 'Payment required to confirm your share and activate this group plan.'}
-              </p>
-            </div>
-            <button
-              type="button"
-              className={cn(actionPrimary, 'w-auto shrink-0 self-start')}
-              onClick={() => {
-                if (ctx.hostPayShareEscrowId) {
-                  router.push(`/escrow/${ctx.hostPayShareEscrowId}?planId=${planId}&source=plan`);
-                  return;
-                }
-                router.push(`/plan/${planId}/agreement`);
-              }}
-            >
-              <span className="inline-flex items-center gap-2">
-                <IoWalletOutline size={18} aria-hidden />
-                Pay your share
-                {ctx.hostPayShareAmountLabel ? ` · ${ctx.hostPayShareAmountLabel}` : ''}
-              </span>
-            </button>
-          </div>
-        </section>
       ) : null}
 
       {isCreator && ctx?.showViewAgreement && !ctx.showHostPayShare ? (
@@ -1150,7 +1132,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
       ) : (
       <section className="linkup-card overflow-hidden">
         <div className="border-b border-border/60 px-5 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
                 <h3 className="font-display text-lg font-extrabold text-foreground">
@@ -1180,7 +1162,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
                 Manage offers
               </button>
             ) : null}
-            {isCreator && plan.is_negotiable === false && ctx?.showManageRequests ? (
+            {isCreator && plan.is_negotiable === false ? (
               <Link href={`/plan/${planId}/requests`} className={cn(actionPrimary, 'w-auto shrink-0')}>
                 <span className="inline-flex items-center gap-2">
                   <IoPeople size={18} />
