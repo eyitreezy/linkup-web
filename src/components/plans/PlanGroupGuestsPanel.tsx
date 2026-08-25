@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   IoCheckmarkCircle,
+  IoDocumentTextOutline,
   IoShieldCheckmarkOutline,
   IoTimeOutline,
   IoWalletOutline,
@@ -40,9 +41,10 @@ type Props = {
   offersReady?: boolean;
   /** Bumps when parent realtime refreshes offers / plan (escrow, accepts). */
   refreshKey?: string;
-  hostPayShareAction?: {
+  guestsHeaderAction?: {
     show: boolean;
-    amountLabel: string | null;
+    kind: 'pay_share' | 'confirm_plan';
+    amountLabel?: string | null;
     onClick: () => void;
   };
 };
@@ -64,7 +66,7 @@ export function PlanGroupGuestsPanel({
   seedAcceptedOffers,
   offersReady = false,
   refreshKey,
-  hostPayShareAction,
+  guestsHeaderAction,
 }: Props) {
   const [rows, setRows] = useState<GuestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -255,11 +257,20 @@ export function PlanGroupGuestsPanel({
               ) : null}
             </p>
           </div>
-          {hostPayShareAction?.show ? (
-            <button type="button" className={cardHeaderPrimaryBtn} onClick={hostPayShareAction.onClick}>
-              <IoWalletOutline size={18} aria-hidden />
-              Pay your share
-              {hostPayShareAction.amountLabel ? ` · ${hostPayShareAction.amountLabel}` : ''}
+          {guestsHeaderAction?.show ? (
+            <button type="button" className={cardHeaderPrimaryBtn} onClick={guestsHeaderAction.onClick}>
+              {guestsHeaderAction.kind === 'pay_share' ? (
+                <>
+                  <IoWalletOutline size={18} aria-hidden />
+                  Pay your share
+                  {guestsHeaderAction.amountLabel ? ` · ${guestsHeaderAction.amountLabel}` : ''}
+                </>
+              ) : (
+                <>
+                  <IoDocumentTextOutline size={18} aria-hidden />
+                  Confirm plan
+                </>
+              )}
             </button>
           ) : null}
         </div>

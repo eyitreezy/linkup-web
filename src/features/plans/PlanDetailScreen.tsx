@@ -51,6 +51,7 @@ import { planMeetupCoords } from '@/lib/plans/planMeetupCoords';
 import { daysUntilIso, isPlanActiveWindowExpiringSoon } from '@/lib/plans/planActiveWindow';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { isPlanListingExpired, isPlanMoodWindowClosed, planListingExpiresAt } from '@/lib/plans/planExpiry';
+import { resolvePlanMeetupInactive } from '@/lib/plans/planMeetupInactive';
 import { planExpiredDialogContent } from '@/lib/plans/planExpiredDialog';
 import { planShareCity, planSharePriceLabel } from '@/lib/plans/planSharePreview';
 import { formatPlanAppFee, formatPlanCreated, formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
@@ -327,6 +328,32 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     setStatusDialog({ ...dialog, variant: 'info' });
   }
 
+  function showMeetupInactiveModal(): boolean {
+    if (!plan) return false;
+    const inactive = resolvePlanMeetupInactive(plan, planListingExpired);
+    if (!inactive.inactive) return false;
+    setStatusDialog({
+      title: inactive.title,
+      message: inactive.message,
+      variant: 'info',
+      buttonLabel: 'Got it',
+    });
+    return true;
+  }
+
+  function handleHostGuestsHeaderAction() {
+    if (showMeetupInactiveModal()) return;
+    if (ctx?.showHostPayShare) {
+      if (ctx.hostPayShareEscrowId) {
+        router.push(`/escrow/${ctx.hostPayShareEscrowId}?planId=${planId}&source=plan`);
+        return;
+      }
+      router.push(`/plan/${planId}/agreement`);
+      return;
+    }
+    goAgreement();
+  }
+
   function goNegotiate() {
     if (planListingExpired) {
       showPlanExpired('offer');
@@ -353,6 +380,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
 
   function goAgreement(offerId?: string, joinRequestId?: string) {
     if (!plan) return;
+    if (showMeetupInactiveModal()) return;
 
     if (plan.is_negotiable === false) {
       if (isCreator && !joinRequestId) {
@@ -823,18 +851,16 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         seedAcceptedOffers={acceptedGuestOffers}
         offersReady={!!bundle}
         refreshKey={guestsPanelRefreshKey}
-        hostPayShareAction={
-          isCreator && ctx?.showHostPayShare
+        guestsHeaderAction={
+          isCreator &&
+          plan.is_group_plan &&
+          !resolvePlanMeetupInactive(plan, planListingExpired).inactive &&
+          (ctx?.showHostPayShare || (ctx?.showViewAgreement && !ctx.showHostPayShare))
             ? {
                 show: true,
-                amountLabel: ctx.hostPayShareAmountLabel,
-                onClick: () => {
-                  if (ctx.hostPayShareEscrowId) {
-                    router.push(`/escrow/${ctx.hostPayShareEscrowId}?planId=${planId}&source=plan`);
-                    return;
-                  }
-                  router.push(`/plan/${planId}/agreement`);
-                },
+                kind: ctx?.showHostPayShare ? 'pay_share' : 'confirm_plan',
+                amountLabel: ctx?.hostPayShareAmountLabel ?? null,
+                onClick: handleHostGuestsHeaderAction,
               }
             : undefined
         }
@@ -978,7 +1004,11 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         />
       ) : null}
 
-      {isCreator && ctx?.showViewAgreement && !ctx.showHostPayShare ? (
+      {isCreator &&
+      !plan.is_group_plan &&
+      ctx?.showViewAgreement &&
+      !ctx.showHostPayShare &&
+      !resolvePlanMeetupInactive(plan, planListingExpired).inactive ? (
         <button type="button" className={actionPrimary} onClick={() => goAgreement()}>
           <span className="inline-flex items-center justify-center gap-2">
             <IoDocumentTextOutline size={18} aria-hidden />
