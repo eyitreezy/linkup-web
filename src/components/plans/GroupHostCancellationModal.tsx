@@ -24,6 +24,26 @@ const REASON_OPTIONS = [
   { value: 'other', label: 'Other' },
 ];
 
+const modalActionGrid =
+  'mt-4 grid grid-cols-2 gap-3';
+
+const modalBtnBase =
+  'flex min-h-[44px] w-full items-center justify-center rounded-full px-4 text-[14px] font-extrabold transition disabled:opacity-50';
+
+function formatCancellationError(message: string): string {
+  const m = message.trim();
+  if (m.includes('no_matrix_entry_found')) {
+    return 'Cancellation terms are not available for this plan setup yet. Please try again later or contact support.';
+  }
+  if (m.includes('not_authenticated')) {
+    return 'Please sign in and try again.';
+  }
+  if (m.includes('forbidden')) {
+    return 'Only the host can cancel this group plan.';
+  }
+  return message;
+}
+
 export function GroupHostCancellationModal({ planId, onCancelled, onDismiss }: Props) {
   const [step, setStep] = useState<Step>('reason');
   const [reasonType, setReasonType] = useState('');
@@ -40,7 +60,7 @@ export function GroupHostCancellationModal({ planId, onCancelled, onDismiss }: P
     const result = await fetchCancellationTerms(planId);
     setBusy(false);
     if (result.error || !result.terms) {
-      setError(result.error ?? 'Could not load cancellation terms');
+      setError(formatCancellationError(result.error ?? 'Could not load cancellation terms'));
       return;
     }
     setTerms(result.terms);
@@ -57,7 +77,7 @@ export function GroupHostCancellationModal({ planId, onCancelled, onDismiss }: P
     });
     setBusy(false);
     if (result.error) {
-      setError(result.error);
+      setError(formatCancellationError(result.error));
       return;
     }
     onCancelled();
@@ -99,23 +119,25 @@ export function GroupHostCancellationModal({ planId, onCancelled, onDismiss }: P
               />
             ) : null}
             {error ? <p className="mt-3 text-[13px] font-semibold text-[#EF4444]">{error}</p> : null}
-            <button
-              type="button"
-              onClick={() => void handleReasonContinue()}
-              disabled={
-                !reasonType || (reasonType === 'other' && !reasonText.trim()) || busy
-              }
-              className="mt-4 flex min-h-[44px] w-full items-center justify-center rounded-full linkup-gradient-primary text-[14px] font-extrabold text-white disabled:opacity-50"
-            >
-              {busy ? 'Checking…' : 'Continue'}
-            </button>
-            <button
-              type="button"
-              onClick={onDismiss}
-              className="mt-2 flex min-h-[44px] w-full items-center justify-center rounded-full border border-border text-[14px] font-extrabold text-muted"
-            >
-              Go back
-            </button>
+            <div className={modalActionGrid}>
+              <button
+                type="button"
+                onClick={onDismiss}
+                className={cn(modalBtnBase, 'border border-border text-muted hover:bg-[#F5F6FA]')}
+              >
+                Go back
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleReasonContinue()}
+                disabled={
+                  !reasonType || (reasonType === 'other' && !reasonText.trim()) || busy
+                }
+                className={cn(modalBtnBase, 'linkup-gradient-primary text-white')}
+              >
+                {busy ? 'Checking…' : 'Continue'}
+              </button>
+            </div>
           </>
         ) : terms ? (
           <>
@@ -165,21 +187,23 @@ export function GroupHostCancellationModal({ planId, onCancelled, onDismiss }: P
               undone.
             </p>
             {error ? <p className="mt-2 text-[13px] font-semibold text-[#EF4444]">{error}</p> : null}
-            <button
-              type="button"
-              onClick={() => void handleConfirmCancellation()}
-              disabled={busy}
-              className="mt-4 flex min-h-[44px] w-full items-center justify-center rounded-full bg-[#EF4444] text-[14px] font-extrabold text-white disabled:opacity-50"
-            >
-              {busy ? 'Cancelling…' : 'Confirm cancellation'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setStep('reason')}
-              className="mt-2 flex min-h-[44px] w-full items-center justify-center rounded-full border border-border text-[14px] font-extrabold text-muted"
-            >
-              Go back
-            </button>
+            <div className={modalActionGrid}>
+              <button
+                type="button"
+                onClick={() => setStep('reason')}
+                className={cn(modalBtnBase, 'border border-border text-muted hover:bg-[#F5F6FA]')}
+              >
+                Go back
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmCancellation()}
+                disabled={busy}
+                className={cn(modalBtnBase, 'bg-[#EF4444] text-white hover:opacity-95')}
+              >
+                {busy ? 'Cancelling…' : 'Confirm cancellation'}
+              </button>
+            </div>
           </>
         ) : null}
       </div>
