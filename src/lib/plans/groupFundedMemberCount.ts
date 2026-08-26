@@ -56,17 +56,13 @@ export function countGroupFundedMembers(
   const activeEscrows = activeGroupEscrowRows(escrows);
   let count = 0;
 
-  const hostEscrow =
-    (plan.host_escrow_id
-      ? activeEscrows.find((row) => row.id === plan.host_escrow_id)
-      : null) ??
-    activeEscrows.find(
-      (row) =>
-        row.guest_id == null &&
-        (row.payer_id === plan.creator_id || row.host_id === plan.creator_id)
-    );
+  const hostEscrows = activeEscrows.filter(
+    (row) =>
+      row.guest_id == null &&
+      (row.payer_id === plan.creator_id || row.host_id === plan.creator_id)
+  );
 
-  if (hostEscrow && memberHasFunded(hostEscrow, plan.creator_id)) {
+  if (hostEscrows.some((row) => memberHasFunded(row, plan.creator_id))) {
     count += 1;
   }
 

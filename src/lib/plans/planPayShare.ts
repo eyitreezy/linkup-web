@@ -137,6 +137,20 @@ export async function fetchHostGroupEscrow(
   const select =
     'id, status, escrow_pattern, payer_id, host_id, guest_id, amount_cents, host_share_cents, guest_share_cents, host_funded_at, guest_funded_at';
 
+  // Outstanding host top-up after guest removal (do not rely on host_escrow_id alone).
+  const { data: pendingTopUp } = await client
+    .from('escrow_transactions')
+    .select(select)
+    .eq('plan_id', plan.id)
+    .eq('payer_id', hostId)
+    .is('guest_id', null)
+    .eq('status', 'pending_funding')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (pendingTopUp) return pendingTopUp as PlanGuestEscrowSnapshot;
+
   if (plan.host_escrow_id) {
     const { data } = await client
       .from('escrow_transactions')
@@ -151,6 +165,7 @@ export async function fetchHostGroupEscrow(
     .select(select)
     .eq('plan_id', plan.id)
     .eq('payer_id', hostId)
+    .is('guest_id', null)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();

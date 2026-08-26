@@ -5,6 +5,7 @@ import {
   joinRequestSlotCents,
   syntheticOfferFromJoinRequest,
 } from '@/lib/plans/joinRequestOffers';
+import { fetchHostGroupEscrow } from '@/lib/plans/planPayShare';
 import { fetchPlanById } from '@/services/plans.service';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DbEscrowTransaction, DbPlan, DbPlanJoinRequest, DbPlanOffer } from '@/types/database';
@@ -196,20 +197,7 @@ export async function fetchPlanAgreementBundle(
     if (!paymentRequired || !opts?.userId) return null;
 
     if (groupSplit && isHostViewer) {
-      if (planRow.host_escrow_id) {
-        const { data } = await client
-          .from('escrow_transactions')
-          .select(escrowSelect)
-          .eq('id', planRow.host_escrow_id)
-          .maybeSingle();
-        if (data) return data as AgreementEscrowRow;
-      }
-      const { data: hostRow } = await client
-        .from('escrow_transactions')
-        .select(escrowSelect)
-        .eq('plan_id', planId)
-        .eq('payer_id', planRow.creator_id)
-        .maybeSingle();
+      const hostRow = await fetchHostGroupEscrow(client, planRow, planRow.creator_id);
       if (hostRow) return hostRow as AgreementEscrowRow;
       // Host in group-split should never fall back to a guest slot escrow row.
       return null;
@@ -236,15 +224,9 @@ export async function fetchPlanAgreementBundle(
 
   const groupSplitQueries = groupSplit
     ? (async () => {
-        const [guestEscrowsRes, hostEscrowRes] = await Promise.all([
+        const [guestEscrowsRes, hostEscrowRow] = await Promise.all([
           client.from('escrow_transactions').select(escrowSelect).eq('plan_id', planId),
-          planRow.host_escrow_id
-            ? client
-                .from('escrow_transactions')
-                .select(escrowSelect)
-                .eq('id', planRow.host_escrow_id)
-                .maybeSingle()
-            : Promise.resolve({ data: null }),
+          fetchHostGroupEscrow(client, planRow, planRow.creator_id),
         ]);
         const acceptedOffersData =
           planRow.is_negotiable === false
@@ -256,7 +238,11 @@ export async function fetchPlanAgreementBundle(
                   .eq('plan_id', planId)
                   .eq('status', 'accepted')
               ).data ?? []);
-        return [{ data: acceptedOffersData }, guestEscrowsRes, hostEscrowRes] as const;
+        return [
+          { data: acceptedOffersData },
+          guestEscrowsRes,
+          { data: hostEscrowRow },
+        ] as const;
       })()
     : Promise.resolve([{ data: [] }, { data: [] }, { data: null }] as const);
 

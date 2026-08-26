@@ -239,7 +239,7 @@ export function derivePlanViewerContext(
     plan,
     userId,
     opts?.myHostEscrow,
-    approvedJoinCount,
+    acceptedCount,
     isHost
   );
 
