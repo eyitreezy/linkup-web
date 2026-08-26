@@ -1,7 +1,10 @@
 'use client';
 
 import { subscribeEscrowRealtime } from '@/lib/escrow/subscribeEscrowRealtime';
-import { countGroupFundedMembers } from '@/lib/plans/groupFundedMemberCount';
+import {
+  countGroupFundedMembers,
+  groupPlanMemberCapacity,
+} from '@/lib/plans/groupFundedMemberCount';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/utils/cn';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -11,10 +14,8 @@ type Props = {
   planId: string;
   hostUserId: string;
   hostEscrowId?: string | null;
-  /** Current roster size (accepted guests + host). */
-  memberCapacity: number;
-  /** Max plan capacity (max guests + host), used as fallback only. */
-  maxCapacity?: number;
+  /** Full plan size: max guests + host (e.g. 6). Does not shrink when a guest is removed. */
+  totalCapacity: number;
   minimumCount?: number;
   /** Bumps when parent refetches plan / escrow state. */
   refreshKey?: string;
@@ -27,20 +28,18 @@ export function GroupPlanMemberCountBadge({
   planId,
   hostUserId,
   hostEscrowId,
-  memberCapacity,
-  maxCapacity,
+  totalCapacity,
   minimumCount = 5,
   refreshKey,
 }: Props) {
   const [count, setCount] = useState(0);
-  const [capacity, setCapacity] = useState(memberCapacity);
+  const [capacity, setCapacity] = useState(totalCapacity);
   const [minimum, setMinimum] = useState(minimumCount);
 
   useEffect(() => {
-    const nextCapacity = Math.max(1, memberCapacity || maxCapacity || 1);
-    setCapacity(nextCapacity);
+    setCapacity(Math.max(1, totalCapacity));
     setMinimum(minimumCount);
-  }, [maxCapacity, memberCapacity, minimumCount]);
+  }, [minimumCount, totalCapacity]);
 
   const loadFundedCount = useCallback(async () => {
     const client = createClient();
@@ -79,14 +78,11 @@ export function GroupPlanMemberCountBadge({
         },
         (payload) => {
           const row = payload.new as {
-            accepted_guest_count?: number;
             max_guests?: number;
             minimum_member_count?: number;
           };
-          if (row.accepted_guest_count != null) {
-            setCapacity(Math.max(1, row.accepted_guest_count + 1));
-          } else if (row.max_guests != null) {
-            setCapacity(Math.max(1, row.max_guests + 1));
+          if (row.max_guests != null) {
+            setCapacity(groupPlanMemberCapacity({ max_guests: row.max_guests }));
           }
           if (row.minimum_member_count != null) setMinimum(row.minimum_member_count);
           void loadRef.current();

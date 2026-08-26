@@ -41,6 +41,13 @@ function memberHasFunded(
   );
 }
 
+/** Host + max guest slots (full group plan size). */
+export function groupPlanMemberCapacity(
+  plan: Pick<DbPlan, 'max_guests'>
+): number {
+  return Math.max(1, (plan.max_guests ?? 0) + 1);
+}
+
 /** Count host + guests who have funded their share on a group plan. */
 export function countGroupFundedMembers(
   plan: Pick<DbPlan, 'creator_id' | 'host_escrow_id'>,
@@ -78,7 +85,12 @@ export function countGroupFundedMembers(
 export function resolveGroupPlanDisplayStatus(
   plan: Pick<
     DbPlan,
-    'status' | 'creator_id' | 'host_escrow_id' | 'is_group_plan' | 'accepted_guest_count'
+    | 'status'
+    | 'creator_id'
+    | 'host_escrow_id'
+    | 'is_group_plan'
+    | 'accepted_guest_count'
+    | 'max_guests'
   >,
   escrows: GroupEscrowFundingRow[]
 ): PlanStatus {
@@ -87,14 +99,17 @@ export function resolveGroupPlanDisplayStatus(
   }
 
   const activeEscrows = activeGroupEscrowRows(escrows);
-  if (activeEscrows.length === 0) {
-    return plan.status === 'active' ? 'awaiting_payment' : plan.status;
-  }
+  const planCapacity = groupPlanMemberCapacity(plan);
+  const fundedMembers = countGroupFundedMembers(plan, escrows);
+  const rosterFilled = (plan.accepted_guest_count ?? 0) >= (plan.max_guests ?? 0);
+  const allLegsSatisfied =
+    activeEscrows.length > 0 &&
+    activeEscrows.every((row) => escrowRequiredLegsSatisfied(row));
 
-  const expectedMembers = Math.max(1, (plan.accepted_guest_count ?? 0) + 1);
-  const fundedMembers = countGroupFundedMembers(plan, activeEscrows);
-  const allLegsSatisfied = activeEscrows.every((row) => escrowRequiredLegsSatisfied(row));
-  const fullyFunded = fundedMembers >= expectedMembers && allLegsSatisfied;
+  const fullyFunded =
+    rosterFilled &&
+    fundedMembers >= planCapacity &&
+    allLegsSatisfied;
 
   if (fullyFunded) {
     return 'active';

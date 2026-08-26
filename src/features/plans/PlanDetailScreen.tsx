@@ -764,8 +764,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
                 planId={plan.id}
                 hostUserId={plan.creator_id}
                 hostEscrowId={plan.host_escrow_id ?? null}
-                memberCapacity={Math.max(1, (plan.accepted_guest_count ?? 0) + 1)}
-                maxCapacity={(plan.max_guests ?? 0) + 1}
+                totalCapacity={(plan.max_guests ?? 0) + 1}
                 minimumCount={plan.minimum_member_count ?? 5}
                 refreshKey={guestsPanelRefreshKey}
               />
