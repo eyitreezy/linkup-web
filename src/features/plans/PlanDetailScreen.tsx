@@ -928,18 +928,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         />
       ) : null}
 
-      {plan.is_group_plan && ['active', 'agreed'].includes(plan.status) ? (
-        <button
-          type="button"
-          onClick={() => void handleOpenGroupChat()}
-          disabled={groupChatBusy}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-[14px] font-extrabold text-foreground transition hover:bg-[#F8F7FF] disabled:opacity-50 sm:w-auto"
-        >
-          <IoChatbubbleEllipsesOutline size={18} />
-          Group chat
-        </button>
-      ) : null}
-
       {isCreator && viewerUserId ? (
         <PlanInterestedStrip planId={plan.id} hostUserId={plan.creator_id} currentUserId={viewerUserId} />
       ) : null}

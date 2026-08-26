@@ -383,27 +383,29 @@ export function PlanGroupGuestsPanel({
                   <p className="truncate text-[14px] font-extrabold text-foreground">
                     {guest.profile?.display_name ?? 'Guest'}
                   </p>
-                  <TierBadge
-                    tier={(guest.subscription_tier as 'FREE' | 'SILVER' | 'GOLD' | 'PLATINUM') ?? 'FREE'}
-                    size="sm"
-                  />
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={`inline-flex max-w-[7rem] items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+                        guest.funded
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-primary/10 text-primary'
+                      }`}
+                    >
+                      {guest.funded ? (
+                        <IoCheckmarkCircle size={12} className="shrink-0" />
+                      ) : (
+                        <IoTimeOutline size={12} className="shrink-0" />
+                      )}
+                      <span className="truncate">{guest.statusLabel}</span>
+                    </span>
+                    <TierBadge
+                      tier={(guest.subscription_tier as 'FREE' | 'SILVER' | 'GOLD' | 'PLATINUM') ?? 'FREE'}
+                      size="sm"
+                    />
+                  </div>
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <span
-                  className={`inline-flex max-w-[6rem] items-center gap-1 rounded-full px-2 py-1 text-[11px] font-extrabold ${
-                    guest.funded
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-primary/10 text-primary'
-                  }`}
-                >
-                  {guest.funded ? (
-                    <IoCheckmarkCircle size={13} className="shrink-0" />
-                  ) : (
-                    <IoTimeOutline size={13} className="shrink-0" />
-                  )}
-                  <span className="truncate">{guest.statusLabel}</span>
-                </span>
                 {guest.escrow_id ? (
                   <Link
                     href={resolveEscrowHref(guest.escrow_id, {

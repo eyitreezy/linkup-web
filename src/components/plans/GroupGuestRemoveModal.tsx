@@ -28,6 +28,9 @@ const modalBtnBase =
 
 function formatRemoveError(message: string): string {
   const m = message.trim();
+  if (m.includes('integer out of range') || m.includes('refund_amount_too_large')) {
+    return 'Could not process the refund for this guest. Please contact support.';
+  }
   if (m.includes('not_authenticated')) return 'Please sign in and try again.';
   if (m.includes('not_plan_host')) return 'Only the host can remove guests.';
   if (m.includes('guest_not_on_plan')) return 'This guest is no longer on the plan.';
