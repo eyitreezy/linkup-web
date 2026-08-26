@@ -1,6 +1,7 @@
 'use client';
 
 import { openEscrowCheckout } from '@/lib/escrow/openEscrowCheckout';
+import { userEscrowLegFunded } from '@/lib/escrow/splitEscrowFunding';
 import type { DbEscrowTransaction } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
 import { useCallback, useRef, useState } from 'react';
@@ -26,8 +27,7 @@ type EscrowRow = Pick<
 
 function userLegFunded(escrow: EscrowRow, userId: string): boolean {
   if (escrow.escrow_pattern === 'B') {
-    if (userId === escrow.host_id) return !!escrow.host_funded_at;
-    if (userId === escrow.guest_id) return !!escrow.guest_funded_at;
+    return userEscrowLegFunded(escrow, userId);
   }
   return escrow.status !== 'pending_funding';
 }
@@ -87,10 +87,19 @@ export function useEscrowFunding() {
 
       let escrowLeg: 'host' | 'guest' | undefined;
       if (escrow.escrow_pattern === 'B') {
-        if (userId === escrow.host_id && !escrow.host_funded_at) {
+        const hostShare = Math.max(0, escrow.host_share_cents ?? 0);
+        const guestShare = Math.max(0, escrow.guest_share_cents ?? 0);
+        const paysHostLeg =
+          userId === escrow.host_id || (escrow.guest_id == null && userId === escrow.payer_id);
+        const paysGuestLeg =
+          userId === escrow.guest_id || (escrow.guest_id != null && userId === escrow.payer_id);
+
+        if (paysHostLeg && (escrow.guest_id == null || hostShare > 0) && !escrow.host_funded_at) {
           escrowLeg = 'host';
-        } else if (userId === escrow.guest_id && !escrow.guest_funded_at) {
+        } else if (paysGuestLeg && guestShare > 0 && !escrow.guest_funded_at) {
           escrowLeg = 'guest';
+        } else if (userEscrowLegFunded(escrow, userId)) {
+          return { ok: false, error: 'Your share is already funded.' };
         } else {
           return { ok: false, error: 'No pending share for you on this escrow.' };
         }

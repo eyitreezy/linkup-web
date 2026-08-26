@@ -1,10 +1,12 @@
 'use client';
 
+import { GroupGuestRemoveModal } from '@/components/plans/GroupGuestRemoveModal';
 import { ProfileAvatar } from '@/components/profile/ProfileAvatar';
 import { TierBadge } from '@/components/subscription/TierBadge';
 import { subscribeEscrowRealtime } from '@/lib/escrow/subscribeEscrowRealtime';
 import { subscribePostgresRealtime } from '@/lib/realtime/subscribePostgresRealtime';
 import {
+  findGuestEscrowForBidder,
   findGuestEscrowForJoinRequestOffer,
   guestEscrowStatusLabel,
   isGuestEscrowFunded,
@@ -17,6 +19,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   IoCheckmarkCircle,
+  IoCloseCircleOutline,
   IoDocumentTextOutline,
   IoShieldCheckmarkOutline,
   IoTimeOutline,
@@ -59,6 +62,78 @@ function joinRequestSlotCents(plan: DbPlan): number {
   return plan.agreed_price_cents ?? plan.starting_price_cents ?? 0;
 }
 
+function syntheticOfferFromJoinRequest(
+  plan: DbPlan,
+  row: Record<string, unknown>
+): DbPlanOffer {
+  const cents = joinRequestSlotCents(plan);
+  return {
+    id: row.id as string,
+    plan_id: plan.id,
+    bidder_id: row.requester_id as string,
+    amount_cents: cents,
+    current_amount_cents: cents,
+    message: (row.message as string | null) ?? null,
+    status: 'accepted',
+    round: 1,
+    expires_at: null,
+    proposed_scheduled_at: plan.scheduled_at ?? null,
+    proposed_location: null,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
+  };
+}
+
+function syntheticOfferFromInvitation(
+  plan: DbPlan,
+  row: Record<string, unknown>
+): DbPlanOffer {
+  const cents = joinRequestSlotCents(plan);
+  return {
+    id: `invitation-${row.id as string}`,
+    plan_id: plan.id,
+    bidder_id: row.invitee_user_id as string,
+    amount_cents: cents,
+    current_amount_cents: cents,
+    message: null,
+    status: 'accepted',
+    round: 1,
+    expires_at: null,
+    proposed_scheduled_at: plan.scheduled_at ?? null,
+    proposed_location: null,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
+  };
+}
+
+function mergeAcceptedGuestOffers(
+  plan: DbPlan,
+  joinRequests: Record<string, unknown>[],
+  invitations: Record<string, unknown>[],
+  offers: DbPlanOffer[]
+): DbPlanOffer[] {
+  const byUserId = new Map<string, DbPlanOffer>();
+
+  for (const row of joinRequests) {
+    const bidderId = row.requester_id as string;
+    byUserId.set(bidderId, syntheticOfferFromJoinRequest(plan, row));
+  }
+
+  for (const row of invitations) {
+    const bidderId = row.invitee_user_id as string | null;
+    if (!bidderId || byUserId.has(bidderId)) continue;
+    byUserId.set(bidderId, syntheticOfferFromInvitation(plan, row));
+  }
+
+  for (const offer of offers) {
+    if (!byUserId.has(offer.bidder_id)) {
+      byUserId.set(offer.bidder_id, offer);
+    }
+  }
+
+  return Array.from(byUserId.values());
+}
+
 export function PlanGroupGuestsPanel({
   plan,
   hostUserId,
@@ -70,6 +145,7 @@ export function PlanGroupGuestsPanel({
 }: Props) {
   const [rows, setRows] = useState<GuestRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [removeTarget, setRemoveTarget] = useState<GuestRow | null>(null);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
 
@@ -83,40 +159,42 @@ export function PlanGroupGuestsPanel({
 
     let accepted: DbPlanOffer[];
 
+    const client = createClient();
+
     if (plan.is_negotiable === false) {
-      const client = createClient();
-      const { data: joinRows } = await client
-        .from('plan_join_requests')
-        .select('*')
-        .eq('plan_id', plan.id)
-        .eq('status', 'approved');
-      const joinRequests = joinRows ?? [];
-      const cents = joinRequestSlotCents(plan);
-      accepted = joinRequests.map((row) => ({
-        id: row.id as string,
-        plan_id: plan.id,
-        bidder_id: row.requester_id as string,
-        amount_cents: cents,
-        current_amount_cents: cents,
-        message: (row.message as string | null) ?? null,
-        status: 'accepted' as const,
-        round: 1,
-        expires_at: null,
-        proposed_scheduled_at: plan.scheduled_at ?? null,
-        proposed_location: null,
-        created_at: row.created_at as string,
-        updated_at: row.updated_at as string,
-      }));
+      const [{ data: joinRows }, { data: inviteRows }] = await Promise.all([
+        client
+          .from('plan_join_requests')
+          .select('*')
+          .eq('plan_id', plan.id)
+          .eq('status', 'approved'),
+        client
+          .from('plan_invitations')
+          .select('*')
+          .eq('plan_id', plan.id)
+          .eq('status', 'accepted')
+          .not('invitee_user_id', 'is', null),
+      ]);
+      accepted = mergeAcceptedGuestOffers(plan, joinRows ?? [], inviteRows ?? [], []);
     } else if (seedAcceptedOffers && offersReady) {
-      accepted = seedAcceptedOffers;
-    } else {
-      const client = createClient();
-      const { data: offers } = await client
-        .from('plan_offers')
+      const { data: inviteRows } = await client
+        .from('plan_invitations')
         .select('*')
         .eq('plan_id', plan.id)
-        .eq('status', 'accepted');
-      accepted = (offers ?? []) as DbPlanOffer[];
+        .eq('status', 'accepted')
+        .not('invitee_user_id', 'is', null);
+      accepted = mergeAcceptedGuestOffers(plan, [], inviteRows ?? [], seedAcceptedOffers);
+    } else {
+      const [{ data: offers }, { data: inviteRows }] = await Promise.all([
+        client.from('plan_offers').select('*').eq('plan_id', plan.id).eq('status', 'accepted'),
+        client
+          .from('plan_invitations')
+          .select('*')
+          .eq('plan_id', plan.id)
+          .eq('status', 'accepted')
+          .not('invitee_user_id', 'is', null),
+      ]);
+      accepted = mergeAcceptedGuestOffers(plan, [], inviteRows ?? [], (offers ?? []) as DbPlanOffer[]);
     }
 
     if (accepted.length === 0) {
@@ -125,7 +203,6 @@ export function PlanGroupGuestsPanel({
       return;
     }
 
-    const client = createClient();
     const bidderIds = accepted.map((o) => o.bidder_id);
     const [{ data: profiles }, { data: users }, { data: escrows }] = await Promise.all([
       client
@@ -136,7 +213,7 @@ export function PlanGroupGuestsPanel({
       client
         .from('escrow_transactions')
         .select(
-          'id, plan_id, host_id, payer_id, guest_id, status, escrow_pattern, host_funded_at, guest_funded_at, metadata'
+          'id, plan_id, host_id, payer_id, guest_id, status, escrow_pattern, host_funded_at, guest_funded_at, host_share_cents, guest_share_cents, metadata'
         )
         .eq('plan_id', plan.id)
         .not('guest_id', 'is', null),
@@ -150,7 +227,9 @@ export function PlanGroupGuestsPanel({
       accepted.map((offer) => {
         const prof = profMap.get(offer.bidder_id);
         const u = userMap.get(offer.bidder_id);
-        const esc = findGuestEscrowForJoinRequestOffer(escrowList, offer.bidder_id, offer.id);
+        const esc = offer.id.startsWith('invitation-')
+          ? findGuestEscrowForBidder(escrowList, offer.bidder_id)
+          : findGuestEscrowForJoinRequestOffer(escrowList, offer.bidder_id, offer.id);
         const funded = isGuestEscrowFunded(esc ?? null, offer.bidder_id);
         return {
           offer,
@@ -226,6 +305,17 @@ export function PlanGroupGuestsPanel({
       { channelPrefix: 'plan-guests-join-rt' }
     );
   }, [plan.id, plan.is_group_plan, plan.is_negotiable]);
+
+  useEffect(() => {
+    if (!plan.is_group_plan) return;
+    return subscribePostgresRealtime(
+      () => {
+        void loadRef.current();
+      },
+      { table: 'plan_invitations', filter: `plan_id=eq.${plan.id}` },
+      { channelPrefix: 'plan-guests-invite-rt' }
+    );
+  }, [plan.id, plan.is_group_plan]);
 
   if (!plan.is_group_plan || currentUserId !== hostUserId) return null;
 
@@ -328,11 +418,33 @@ export function PlanGroupGuestsPanel({
                     Escrow
                   </Link>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={() => setRemoveTarget(guest)}
+                  className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-full border border-[#EF4444]/30 px-2.5 py-2 text-[12px] font-extrabold text-[#EF4444] transition hover:bg-[#EF4444]/5"
+                  aria-label={`Remove ${guest.profile?.display_name ?? 'guest'}`}
+                >
+                  <IoCloseCircleOutline size={14} aria-hidden />
+                  Remove
+                </button>
               </div>
             </li>
           ))}
         </ul>
       )}
+      {removeTarget ? (
+        <GroupGuestRemoveModal
+          planId={plan.id}
+          guestUserId={removeTarget.offer.bidder_id}
+          guestName={removeTarget.profile?.display_name ?? 'Guest'}
+          guestFunded={removeTarget.funded}
+          onDismiss={() => setRemoveTarget(null)}
+          onRemoved={() => {
+            setRemoveTarget(null);
+            void loadRef.current();
+          }}
+        />
+      ) : null}
       {plan.is_negotiable !== false ? (
         <div className="border-t border-border/50 px-5 py-3">
           <Link href={footerHref} className="text-[13px] font-extrabold text-primary hover:underline">

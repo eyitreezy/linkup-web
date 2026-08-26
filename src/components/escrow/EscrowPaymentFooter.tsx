@@ -5,7 +5,8 @@ import { cn } from '@/utils/cn';
 import Link from 'next/link';
 import { IoCheckmarkCircle, IoHourglassOutline, IoSparklesOutline } from 'react-icons/io5';
 
-export const ESCROW_FOOTER_CLEARANCE = 'pb-[10.5rem]';
+export const ESCROW_FOOTER_CLEARANCE =
+  'pb-[10.5rem] max-lg:pb-[calc(10.5rem+var(--linkup-bottom-nav-offset))]';
 
 type PaymentConfirmedCopy = {
   title: string;
@@ -55,7 +56,8 @@ export function EscrowPaymentFooter({
   return (
     <div
       className={cn(
-        'fixed bottom-0 left-0 right-0 z-40 border-t border-border/60 bg-white/95 backdrop-blur-sm',
+        'fixed left-0 right-0 z-50 border-t border-border/60 bg-white/95 backdrop-blur-sm',
+        'bottom-0 max-lg:bottom-[var(--linkup-bottom-nav-offset)]',
         className
       )}
       role="region"

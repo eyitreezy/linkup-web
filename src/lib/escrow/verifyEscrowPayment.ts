@@ -28,7 +28,7 @@ export async function invokeVerifyEscrowPayment(
         return { funded: true, partial: row.partial };
       }
       if (row.ok && row.partial) {
-        return { funded: false, partial: true };
+        return { funded: true, partial: true };
       }
     }
   }
@@ -48,9 +48,10 @@ export async function invokeVerifyEscrowPayment(
     error?: string;
   };
 
+  const partial = row.partial === true;
   return {
-    funded: row.funded === true,
-    partial: row.partial,
+    funded: row.funded === true || partial,
+    partial,
     fw_status: row.fw_status,
     error: row.error,
   };

@@ -29,6 +29,7 @@ export async function recordEscrowPaymentInitiated(
     payment_initiated_at: new Date().toISOString(),
     checkout_reference: checkoutRef,
     checkout_initiated_by: initiatedByUserId,
+    checkout_returned_at: null,
   });
   const { error } = await client
     .from('escrow_transactions')
@@ -36,6 +37,37 @@ export async function recordEscrowPaymentInitiated(
       metadata: meta,
       payment_tx_ref: checkoutRef,
     })
+    .eq('id', escrowId);
+  return { error: error?.message ?? null };
+}
+
+export async function recordEscrowCheckoutReturned(
+  client: SupabaseClient,
+  escrowId: string
+): Promise<{ error: string | null }> {
+  const { data, error: readErr } = await client
+    .from('escrow_transactions')
+    .select('metadata')
+    .eq('id', escrowId)
+    .single();
+  if (readErr) return { error: readErr.message };
+
+  const existing = data?.metadata as Record<string, unknown> | null;
+  if (
+    existing &&
+    typeof existing === 'object' &&
+    !Array.isArray(existing) &&
+    typeof existing.checkout_returned_at === 'string'
+  ) {
+    return { error: null };
+  }
+
+  const meta = mergeEscrowMetadata(existing, {
+    checkout_returned_at: new Date().toISOString(),
+  });
+  const { error } = await client
+    .from('escrow_transactions')
+    .update({ metadata: meta })
     .eq('id', escrowId);
   return { error: error?.message ?? null };
 }

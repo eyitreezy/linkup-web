@@ -35,10 +35,12 @@ import {
   escrowCheckoutInitiator,
   escrowCheckoutReference,
   escrowCheckoutReturned,
+  escrowPaymentInitiated,
 } from '@/lib/escrow/escrowCheckoutMetadata';
 import {
   confirmMeetupComplete,
   openEscrowDisputeWithTicket,
+  recordEscrowCheckoutReturned,
   releaseEscrowFunds,
 } from '@/lib/escrow/escrowActions';
 import { getEscrowFundingUiState } from '@/lib/escrow/escrowFundingUi';
@@ -320,8 +322,31 @@ function EscrowDetailContent({
   } = useEscrowConfirmation(client, escrowId, {
     enabled: confirmPaymentEnabled,
     txRef: checkoutRef,
+    viewerUserId: user?.id,
     onVerified,
   });
+
+  useEffect(() => {
+    if (!escrowId || !escrow || escrowCheckoutReturned(escrow)) return;
+    if (!escrowPaymentInitiated(escrow)) return;
+
+    function markReturned() {
+      void recordEscrowCheckoutReturned(client, escrowId).then(() => {
+        void queryClient.invalidateQueries({ queryKey: ['escrow', escrowId] });
+      });
+    }
+
+    function onFocus() {
+      markReturned();
+    }
+
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [client, escrow, escrowId, queryClient]);
 
   async function onMessage() {
     if (!user?.id || !escrow?.plan_id) return;

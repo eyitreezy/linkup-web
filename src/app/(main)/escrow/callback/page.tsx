@@ -2,7 +2,7 @@
 
 import { EscrowPaymentSuccessModal } from '@/components/escrow/EscrowPaymentSuccessModal';
 import { useEscrowConfirmation } from '@/hooks/useEscrowConfirmation';
-import { invokeVerifyEscrowPayment } from '@/lib/escrow/verifyEscrowPayment';
+import { recordEscrowCheckoutReturned } from '@/lib/escrow/escrowActions';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -50,6 +50,11 @@ function EscrowCallbackContent() {
   );
 
   useEffect(() => {
+    if (!escrowId || status !== 'successful') return;
+    void recordEscrowCheckoutReturned(client, escrowId);
+  }, [client, escrowId, status]);
+
+  useEffect(() => {
     if (!escrowId) return;
     void client
       .from('escrow_transactions')
@@ -85,15 +90,6 @@ function EscrowCallbackContent() {
       const funded = await retryVerify();
       if (funded) {
         setShowSuccess(true);
-        return;
-      }
-      const result = await invokeVerifyEscrowPayment(client, escrowId, txRef ?? undefined);
-      if (result.funded) {
-        setShowSuccess(true);
-      } else if (planId) {
-        router.replace(`/plan/${planId}`);
-      } else {
-        router.replace(`/support?ref=payment_delayed&escrow=${escrowId}`);
       }
     } finally {
       setCheckBusy(false);

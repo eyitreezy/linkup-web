@@ -11,6 +11,8 @@ export type GuestEscrowRowFields = Pick<
   | 'escrow_pattern'
   | 'host_funded_at'
   | 'guest_funded_at'
+  | 'host_share_cents'
+  | 'guest_share_cents'
   | 'metadata'
 >;
 

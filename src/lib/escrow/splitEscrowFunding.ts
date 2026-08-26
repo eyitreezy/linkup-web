@@ -25,13 +25,34 @@ export function isEscrowFullyFundedForMeet(escrow: SplitFields): boolean {
 export function userEscrowLegFunded(
   escrow: Pick<
     DbEscrowTransaction,
-    'status' | 'escrow_pattern' | 'host_id' | 'guest_id' | 'payer_id' | 'host_funded_at' | 'guest_funded_at'
+    | 'status'
+    | 'escrow_pattern'
+    | 'host_id'
+    | 'guest_id'
+    | 'payer_id'
+    | 'host_funded_at'
+    | 'guest_funded_at'
+    | 'host_share_cents'
+    | 'guest_share_cents'
   >,
   userId: string
 ): boolean {
   if (isSplitEscrowPattern(escrow.escrow_pattern)) {
-    if (userId === escrow.host_id) return !!escrow.host_funded_at;
-    if (userId === escrow.guest_id) return !!escrow.guest_funded_at;
+    const hostShare = Math.max(0, escrow.host_share_cents ?? 0);
+    const guestShare = Math.max(0, escrow.guest_share_cents ?? 0);
+    const paysHostLeg =
+      userId === escrow.host_id ||
+      (escrow.guest_id == null && userId === escrow.payer_id);
+    const paysGuestLeg =
+      userId === escrow.guest_id ||
+      (escrow.guest_id != null && userId === escrow.payer_id);
+
+    if (paysHostLeg && (escrow.guest_id == null || hostShare > 0)) {
+      return !!escrow.host_funded_at;
+    }
+    if (paysGuestLeg && guestShare > 0) {
+      return !!escrow.guest_funded_at;
+    }
     return false;
   }
   if (escrow.status === 'funded' || escrow.status === 'active' || escrow.status === 'released') {

@@ -1,19 +1,28 @@
 'use client';
 
+import { subscribeEscrowRealtime } from '@/lib/escrow/subscribeEscrowRealtime';
+import { countGroupFundedMembers } from '@/lib/plans/groupFundedMemberCount';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/utils/cn';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { IoPeopleOutline } from 'react-icons/io5';
 
 type Props = {
   planId: string;
+  hostUserId: string;
+  hostEscrowId?: string | null;
   initialCount?: number;
   totalCapacity: number;
   minimumCount?: number;
 };
 
+const ESCROW_SELECT =
+  'id, guest_id, host_id, payer_id, status, escrow_pattern, host_funded_at, guest_funded_at, host_share_cents, guest_share_cents';
+
 export function GroupPlanMemberCountBadge({
   planId,
+  hostUserId,
+  hostEscrowId,
   initialCount = 0,
   totalCapacity,
   minimumCount = 5,
@@ -23,10 +32,32 @@ export function GroupPlanMemberCountBadge({
   const [minimum, setMinimum] = useState(minimumCount);
 
   useEffect(() => {
-    setCount(initialCount);
     setCapacity(totalCapacity);
     setMinimum(minimumCount);
-  }, [initialCount, totalCapacity, minimumCount]);
+  }, [totalCapacity, minimumCount]);
+
+  const loadFundedCount = useCallback(async () => {
+    const client = createClient();
+    const { data } = await client
+      .from('escrow_transactions')
+      .select(ESCROW_SELECT)
+      .eq('plan_id', planId);
+
+    const escrows = data ?? [];
+    setCount(
+      countGroupFundedMembers(
+        { creator_id: hostUserId, host_escrow_id: hostEscrowId ?? null },
+        escrows
+      )
+    );
+  }, [hostEscrowId, hostUserId, planId]);
+
+  const loadRef = useRef(loadFundedCount);
+  loadRef.current = loadFundedCount;
+
+  useEffect(() => {
+    void loadFundedCount();
+  }, [loadFundedCount]);
 
   useEffect(() => {
     const client = createClient();
@@ -46,9 +77,9 @@ export function GroupPlanMemberCountBadge({
             max_guests?: number;
             minimum_member_count?: number;
           };
-          if (row.accepted_guest_count != null) setCount(row.accepted_guest_count);
           if (row.max_guests != null) setCapacity(row.max_guests + 1);
           if (row.minimum_member_count != null) setMinimum(row.minimum_member_count);
+          void loadRef.current();
         }
       )
       .subscribe();
@@ -56,6 +87,15 @@ export function GroupPlanMemberCountBadge({
     return () => {
       void client.removeChannel(channel);
     };
+  }, [planId]);
+
+  useEffect(() => {
+    return subscribeEscrowRealtime({
+      planId,
+      onRefresh: () => {
+        void loadRef.current();
+      },
+    });
   }, [planId]);
 
   const displayCapacity = Math.max(capacity, 1);

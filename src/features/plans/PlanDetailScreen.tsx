@@ -51,6 +51,7 @@ import { planMeetupCoords } from '@/lib/plans/planMeetupCoords';
 import { daysUntilIso, isPlanActiveWindowExpiringSoon } from '@/lib/plans/planActiveWindow';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { isPlanListingExpired, isPlanMoodWindowClosed, planListingExpiresAt } from '@/lib/plans/planExpiry';
+import { resolveGroupPlanDisplayStatus } from '@/lib/plans/groupFundedMemberCount';
 import { resolvePlanMeetupInactive } from '@/lib/plans/planMeetupInactive';
 import { planExpiredDialogContent } from '@/lib/plans/planExpiredDialog';
 import { planShareCity, planSharePriceLabel } from '@/lib/plans/planSharePreview';
@@ -188,8 +189,31 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     },
   });
 
+  const groupEscrowsQuery = useQuery({
+    queryKey: ['plan-group-escrows', planId],
+    enabled: !!detailQuery.data?.plan?.is_group_plan,
+    queryFn: async () => {
+      const client = createClient();
+      const { data } = await client
+        .from('escrow_transactions')
+        .select(
+          'id, guest_id, host_id, payer_id, status, escrow_pattern, host_funded_at, guest_funded_at, host_share_cents, guest_share_cents'
+        )
+        .eq('plan_id', planId);
+      return data ?? [];
+    },
+    staleTime: 10_000,
+  });
+
   const bundle = detailQuery.data;
   const plan = bundle?.plan;
+  const displayPlanStatus = useMemo(() => {
+    if (!plan) return null;
+    if (!plan.is_group_plan || groupEscrowsQuery.isLoading) {
+      return plan.status;
+    }
+    return resolveGroupPlanDisplayStatus(plan, groupEscrowsQuery.data ?? []);
+  }, [groupEscrowsQuery.data, groupEscrowsQuery.isLoading, plan]);
   usePlanOffersRealtime(planId);
   const dbUser = profileQuery.data?.dbUser ?? null;
   const runGated = useGatedAction();
@@ -737,7 +761,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
                 ) : null}
               {boosted ? <BoostPill /> : null}
                 {(() => {
-                  const chip = planStatusChip(plan.status);
+                  const chip = planStatusChip(displayPlanStatus ?? plan.status);
                   return (
                     <span
                       className={cn(
@@ -755,6 +779,8 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
             {plan.is_group_plan ? (
               <GroupPlanMemberCountBadge
                 planId={plan.id}
+                hostUserId={plan.creator_id}
+                hostEscrowId={plan.host_escrow_id ?? null}
                 initialCount={plan.accepted_guest_count ?? 0}
                 totalCapacity={(plan.max_guests ?? 0) + 1}
                 minimumCount={plan.minimum_member_count ?? 5}

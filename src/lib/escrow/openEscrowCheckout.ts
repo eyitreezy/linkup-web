@@ -54,6 +54,16 @@ export async function openEscrowCheckout(args: OpenEscrowCheckoutArgs): Promise<
     return { ok: false, error: row?.error ?? 'Could not start escrow checkout.', reference: '' };
   }
 
+  if (typeof document !== 'undefined') {
+    const preconnectHost = new URL(paymentLink).origin;
+    if (!document.querySelector(`link[rel="preconnect"][href="${preconnectHost}"]`)) {
+      const link = document.createElement('link');
+      link.rel = 'preconnect';
+      link.href = preconnectHost;
+      document.head.appendChild(link);
+    }
+  }
+
   const opened = openFlutterwaveCheckout(paymentLink);
   if (!opened.ok) {
     return { ok: false, error: opened.error, reference: row.tx_ref };
