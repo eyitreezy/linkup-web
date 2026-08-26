@@ -182,15 +182,25 @@ export function hostShareFromGuestCommitments(
 
 export function isGroupHostCloseEscrowRow(
   plan: Pick<DbPlan, 'host_escrow_id'>,
-  escrow: Pick<DbEscrowTransaction, 'id' | 'guest_id' | 'host_share_cents' | 'amount_cents'>
+  escrow: Pick<
+    DbEscrowTransaction,
+    'id' | 'guest_id' | 'host_share_cents' | 'amount_cents'
+  > & { metadata?: DbEscrowTransaction['metadata'] }
 ): boolean {
+  if (escrow.guest_id != null) return false;
+  const hostShare = Math.max(0, escrow.host_share_cents ?? escrow.amount_cents ?? 0);
+  if (hostShare <= 0) return false;
+
+  const meta = escrow.metadata as { host_share_top_up?: boolean | string } | null | undefined;
+  if (meta?.host_share_top_up === true || meta?.host_share_top_up === 'true') {
+    return true;
+  }
+
   if (plan.host_escrow_id) {
     return escrow.id === plan.host_escrow_id;
   }
-  return (
-    escrow.guest_id == null &&
-    Math.max(0, escrow.host_share_cents ?? escrow.amount_cents ?? 0) > 0
-  );
+
+  return true;
 }
 
 export type GroupHostShareResolution = {
@@ -203,7 +213,7 @@ export type ResolveGroupHostShareOptions = {
   hostEscrowRow?: Pick<
     DbEscrowTransaction,
     'id' | 'host_share_cents' | 'amount_cents' | 'guest_id'
-  > & { guest_share_cents?: number | null } | null;
+  > & { guest_share_cents?: number | null; metadata?: DbEscrowTransaction['metadata'] } | null;
 };
 
 function storedHostBudgetCents(
@@ -240,7 +250,10 @@ export type GroupSplitPlanSnapshot = Pick<
 
 export function resolveGroupHostShareCents(
   plan: GroupSplitPlanSnapshot,
-  escrow: Pick<DbEscrowTransaction, 'id' | 'host_share_cents' | 'amount_cents' | 'guest_id'> & {
+  escrow: Pick<
+    DbEscrowTransaction,
+    'id' | 'host_share_cents' | 'amount_cents' | 'guest_id' | 'metadata'
+  > & {
     guest_share_cents?: number | null;
   },
   guestEscrows: GuestEscrowLeg[] = [],
@@ -261,6 +274,13 @@ export function resolveGroupHostShareCents(
       : null;
   const stored = storedEscrow ? storedHostBudgetCents(storedEscrow) : 0;
   const storedGross = storedEscrow ? storedHostGrossCents(storedEscrow) : 0;
+  const topUpMeta = storedEscrow?.metadata as { host_share_top_up?: boolean | string } | null | undefined;
+  const isHostTopUpEscrow =
+    topUpMeta?.host_share_top_up === true || topUpMeta?.host_share_top_up === 'true';
+
+  if (isHostTopUpEscrow && storedGross > 0) {
+    return { displayCents: stored, paymentCents: storedGross };
+  }
 
   if (plan.group_closed_at && storedGross > 0) {
     return { displayCents: stored, paymentCents: storedGross };

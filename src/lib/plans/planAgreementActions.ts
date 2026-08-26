@@ -1,5 +1,6 @@
 import { resolveEscrowParties } from '@/lib/plans/escrowParties';
 import { isSyntheticJoinRequestOffer } from '@/lib/plans/joinRequestOffers';
+import { fetchHostGroupEscrow } from '@/lib/plans/planPayShare';
 import { MAX_ESCROW_TIER1_CENTS, MIN_ESCROW_CENTS } from '@/lib/plans/planFinancialConfig';
 import { checkPermission } from '@/lib/subscription/checkPermission';
 import type { DbPlan, DbPlanOffer } from '@/types/database';
@@ -91,6 +92,10 @@ export async function proceedToSecurePayment(
 
   if (isSyntheticJoinRequestOffer(plan)) {
     if (actorId === hostId) {
+      const fundableHostEscrow = await fetchHostGroupEscrow(client, plan, hostId);
+      if (fundableHostEscrow?.id) {
+        return { error: null, escrowId: fundableHostEscrow.id };
+      }
       if (plan.host_escrow_id) {
         return { error: null, escrowId: plan.host_escrow_id };
       }
@@ -120,6 +125,10 @@ export async function proceedToSecurePayment(
 
   // Group split host must use/create host escrow leg, never guest slot escrow.
   if (plan.is_group_plan && pattern === 'B' && actorId === hostId) {
+    const fundableHostEscrow = await fetchHostGroupEscrow(client, plan, hostId);
+    if (fundableHostEscrow?.id) {
+      return { error: null, escrowId: fundableHostEscrow.id };
+    }
     if (plan.host_escrow_id) {
       return { error: null, escrowId: plan.host_escrow_id };
     }

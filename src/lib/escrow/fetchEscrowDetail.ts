@@ -1,4 +1,7 @@
-import type { DbEscrowTransaction, DbEscrowDispute, DbPlanOffer } from '@/types/database';
+import { activeGroupGuestUserIds, fetchActiveGroupAcceptedOffers } from '@/lib/plans/groupAcceptedGuests';
+import { ensureGroupHostShareReconciled } from '@/lib/plans/ensureGroupHostShareReconciled';
+import { fetchHostGroupEscrow } from '@/lib/plans/planPayShare';
+import type { DbEscrowTransaction, DbEscrowDispute, DbPlan, DbPlanOffer } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 const PLAN_SELECT_CORE =
@@ -10,6 +13,7 @@ export type EscrowDetailPlan = EscrowDetailPlanFields;
 
 export type EscrowDetailPlanFields = {
   title: string;
+  creator_id?: string;
   location_label: string | null;
   agreed_location?: string | null;
   agreed_scheduled_at?: string | null;
@@ -126,6 +130,20 @@ export async function fetchEscrowDetail(
 
   const resolvedEscrowId = row.id;
   const plan = row.plan_id ? await fetchPlanForEscrow(client, row.plan_id) : null;
+
+  if (
+    plan?.is_group_plan &&
+    viewerUserId &&
+    plan.creator_id === viewerUserId &&
+    plan.is_paid
+  ) {
+    await ensureGroupHostShareReconciled(client, plan as DbPlan, viewerUserId);
+    const refreshed = await fetchPlanForEscrow(client, row.plan_id!);
+    if (refreshed) {
+      Object.assign(plan, refreshed);
+    }
+  }
+
   const esc = { ...(row as DbEscrowTransaction), plans: plan };
 
   const partyIds = [esc.host_id, esc.guest_id].filter(Boolean) as string[];
@@ -165,7 +183,7 @@ export async function fetchEscrowDetail(
     }
   }
 
-  const [{ data: dRow }, guestEscRes, hostEscRes, offersRes] = await Promise.all([
+  const [{ data: dRow }, guestEscRes, hostEscRes] = await Promise.all([
     client
       .from('escrow_disputes')
       .select('*')
@@ -179,6 +197,7 @@ export async function fetchEscrowDetail(
           .select('*')
           .eq('plan_id', esc.plan_id)
           .not('guest_id', 'is', null)
+          .not('status', 'in', '("cancelled","refunded")')
       : Promise.resolve({ data: [] as DbEscrowTransaction[] }),
     plan?.host_escrow_id
       ? client
@@ -187,17 +206,26 @@ export async function fetchEscrowDetail(
           .eq('id', plan.host_escrow_id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
-    esc.plan_id && (plan?.is_paid || plan?.is_group_plan || esc.escrow_pattern === 'C')
-      ? client
-          .from('plan_offers')
-          .select('id, bidder_id, current_amount_cents, amount_cents')
-          .eq('plan_id', esc.plan_id)
-          .eq('status', 'accepted')
-      : Promise.resolve({ data: [] }),
   ]);
 
-  const guestEscrowRows = (guestEscRes.data ?? []) as DbEscrowTransaction[];
-  const acceptedOffers = (offersRes.data ?? []) as EscrowDetailResult['acceptedOffers'];
+  let acceptedOffers: EscrowDetailResult['acceptedOffers'] = [];
+  if (esc.plan_id && plan && (plan.is_paid || plan.is_group_plan || esc.escrow_pattern === 'C')) {
+    if (plan.is_group_plan) {
+      acceptedOffers = await fetchActiveGroupAcceptedOffers(client, plan as DbPlan);
+    } else {
+      const { data: offerRows } = await client
+        .from('plan_offers')
+        .select('id, bidder_id, current_amount_cents, amount_cents')
+        .eq('plan_id', esc.plan_id)
+        .eq('status', 'accepted');
+      acceptedOffers = (offerRows ?? []) as EscrowDetailResult['acceptedOffers'];
+    }
+  }
+
+  const activeGuestIds = activeGroupGuestUserIds(acceptedOffers as DbPlanOffer[]);
+  const guestEscrowRows = ((guestEscRes.data ?? []) as DbEscrowTransaction[]).filter(
+    (guestRow) => guestRow.guest_id && activeGuestIds.has(guestRow.guest_id)
+  );
   const profileIds = new Set<string>();
   for (const row of guestEscrowRows) {
     if (row.guest_id) profileIds.add(row.guest_id);

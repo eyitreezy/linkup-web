@@ -733,20 +733,9 @@ function EscrowDetailContent({
   const goodwillApplied = escrow.goodwill_applied_cents ?? 0;
   const netRelease = escrow.amount_cents - platformFee;
   const footerActive = showFund || paymentPendingConfirmation || showPaymentConfirmedFooter;
-  const hostGuestPaymentEntries = (() => {
-    const byBidder = new Map<string, { bidderId: string; key: string }>();
-    for (const offer of acceptedOffers) {
-      if (offer.bidder_id) {
-        byBidder.set(offer.bidder_id, { bidderId: offer.bidder_id, key: offer.id });
-      }
-    }
-    for (const row of guestEscrowRows) {
-      if (row.guest_id && !byBidder.has(row.guest_id)) {
-        byBidder.set(row.guest_id, { bidderId: row.guest_id, key: row.id });
-      }
-    }
-    return [...byBidder.values()];
-  })();
+  const hostGuestPaymentEntries = acceptedOffers
+    .filter((offer) => !!offer.bidder_id)
+    .map((offer) => ({ bidderId: offer.bidder_id, key: offer.id }));
   const groupSplitTotalOpts = { acceptedOffers, hostEscrowRow };
   const planTotalCents = groupSplitPlanInput
     ? resolveGroupPlanTotalCents(groupSplitPlanInput, guestEscrowRows, groupSplitTotalOpts)
