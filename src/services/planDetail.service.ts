@@ -1,5 +1,6 @@
 import { isPlanSaved, recordPlanView } from '@/lib/plans/planEngagement';
 import type { JoinRequestWithRequester } from '@/lib/plans/joinRequests';
+import { ensureGroupHostShareReconciled } from '@/lib/plans/ensureGroupHostShareReconciled';
 import {
   fetchHostGroupEscrow,
   fetchViewerGuestEscrow,
@@ -130,6 +131,7 @@ export async function fetchPlanDetailBundle(
       : null,
   };
 
+  let feedPlan: PlanFeedRow = feedRow;
   let saved = false;
   let completionSelfAcked = false;
   let myJoinRequest: { id: string; status: JoinRequestStatus } | null = null;
@@ -164,18 +166,32 @@ export async function fetchPlanDetailBundle(
       .maybeSingle();
     myJoinRequest = joinReq as { id: string; status: JoinRequestStatus } | null;
 
-    if (feedRow.creator_id !== viewerId && feedRow.is_paid) {
+    if (feedPlan.creator_id !== viewerId && feedPlan.is_paid) {
       myGuestEscrow = await fetchViewerGuestEscrow(client, planId, viewerId);
     }
-    if (feedRow.creator_id === viewerId && feedRow.is_paid && feedRow.is_group_plan) {
-      myHostEscrow = await fetchHostGroupEscrow(client, feedRow, viewerId);
+    if (feedPlan.creator_id === viewerId && feedPlan.is_paid && feedPlan.is_group_plan) {
+      await ensureGroupHostShareReconciled(client, feedPlan, viewerId);
+
+      const { data: refreshedPlan } = await client
+        .from('plans')
+        .select(
+          'host_escrow_id, group_closed_at, status, accepted_guest_count, accepted_guest_amounts_sum_cents, current_suggested_share_cents'
+        )
+        .eq('id', planId)
+        .maybeSingle();
+
+      if (refreshedPlan) {
+        feedPlan = { ...feedPlan, ...refreshedPlan };
+      }
+
+      myHostEscrow = await fetchHostGroupEscrow(client, feedPlan, viewerId);
     }
   }
 
-  if (feedRow.is_negotiable === false) {
+  if (feedPlan.is_negotiable === false) {
     if (joinRequests.length > 0) {
       approvedJoinRequestCount = joinRequests.filter((r) => r.status === 'approved').length;
-    } else if (viewerId && feedRow.creator_id === viewerId) {
+    } else if (viewerId && feedPlan.creator_id === viewerId) {
       const { count } = await client
         .from('plan_join_requests')
         .select('*', { count: 'exact', head: true })
@@ -185,7 +201,7 @@ export async function fetchPlanDetailBundle(
     }
   }
 
-  if (viewerId && feedRow.creator_id === viewerId && feedRow.is_group_plan) {
+  if (viewerId && feedPlan.creator_id === viewerId && feedPlan.is_group_plan) {
     const [{ data: slotsRaw }, { count: pendingCount }] = await Promise.all([
       client.rpc('get_plan_available_slots', { p_plan_id: planId }),
       client
@@ -200,7 +216,7 @@ export async function fetchPlanDetailBundle(
 
   return {
     data: {
-      plan: feedRow,
+      plan: feedPlan,
       offers,
       joinRequests,
       profilesById,

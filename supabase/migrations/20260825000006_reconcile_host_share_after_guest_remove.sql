@@ -6,22 +6,9 @@ RETURNS BIGINT
 LANGUAGE plpgsql
 STABLE
 AS $$
-DECLARE
-  _total BIGINT := 0;
 BEGIN
-  _total := GREATEST(0, COALESCE(p_plan.total_amount_cents, 0)::BIGINT);
-  IF _total > 0 THEN
-    RETURN _total;
-  END IF;
-
-  _total := GREATEST(
-    0,
-    COALESCE(p_plan.starting_price_cents, 0)::BIGINT,
-    COALESCE(p_plan.agreed_price_cents, 0)::BIGINT,
-    COALESCE(p_plan.budget_max_cents, p_plan.budget_min_cents, 0)::BIGINT
-  );
-
-  RETURN _total;
+  -- Authoritative total (same helper used by group invitation/accept flows).
+  RETURN GREATEST(0, public.plan_total_cost_cents(p_plan)::BIGINT);
 END;
 $$;
 

@@ -50,9 +50,34 @@ export function getEscrowFundingUiState(escrow: EscrowFundingFields, userId: str
 
   if (!pending) return idle;
 
+  const hostShare = escrow.host_share_cents ?? 0;
+  const guestShare = escrow.guest_share_cents ?? 0;
+
+  // Host-only / guest-only legs (e.g. group host top-up after guest removal).
+  if (hostShare > 0 && guestShare <= 0 && isHost && !escrow.host_funded_at) {
+    return {
+      ...idle,
+      canFund: true,
+      payAmountCents: grossAmountCents(hostShare),
+      escrowLeg: 'host',
+      showSplitCard: pattern === 'B',
+      showSinglePayerCard: pattern !== 'B',
+      fundCtaTitle: 'Pay your share',
+    };
+  }
+  if (guestShare > 0 && hostShare <= 0 && isGuest && !escrow.guest_funded_at) {
+    return {
+      ...idle,
+      canFund: true,
+      payAmountCents: grossAmountCents(guestShare),
+      escrowLeg: 'guest',
+      showSplitCard: pattern === 'B',
+      showSinglePayerCard: pattern !== 'B',
+      fundCtaTitle: 'Pay your share',
+    };
+  }
+
   if (pattern === 'B') {
-    const hostShare = escrow.host_share_cents ?? 0;
-    const guestShare = escrow.guest_share_cents ?? 0;
     const hostNeeds = isHost && !escrow.host_funded_at && hostShare > 0;
     const guestNeeds = isGuest && !escrow.guest_funded_at && guestShare > 0;
     const userPaidLeg =
