@@ -39,6 +39,7 @@ import { insertPlanCompletionAck } from '@/lib/plans/planCompletionAck';
 import { usePlanViewerContext, type PlanViewerContext } from '@/lib/plans/usePlanViewerContext';
 import { planNegotiateHref } from '@/lib/plans/negotiateRoute';
 import { usePlanOffersRealtime } from '@/hooks/useOffersRealtime';
+import { useGroupPlanDetailRealtime } from '@/hooks/useGroupPlanDetailRealtime';
 import { openDirectChatPath } from '@/lib/messaging/openDirectChat';
 import { findGroupChatIdForPlan } from '@/lib/messaging/groupChatLookup';
 import { groupChatErrorDialog, openOrCreateGroupChat } from '@/lib/messaging/openOrCreateGroupChat';
@@ -76,7 +77,7 @@ import { cn } from '@/utils/cn';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   IoCalendarOutline,
   IoChatbubbleEllipsesOutline,
@@ -202,7 +203,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         .eq('plan_id', planId);
       return data ?? [];
     },
-    staleTime: 10_000,
+    staleTime: 0,
   });
 
   const bundle = detailQuery.data;
@@ -215,6 +216,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     return resolveGroupPlanDisplayStatus(plan, groupEscrowsQuery.data ?? []);
   }, [groupEscrowsQuery.data, groupEscrowsQuery.isLoading, plan]);
   usePlanOffersRealtime(planId);
+  useGroupPlanDetailRealtime(planId, !!plan?.is_group_plan);
   const dbUser = profileQuery.data?.dbUser ?? null;
   const runGated = useGatedAction();
 
@@ -280,12 +282,22 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         plan?.accepted_guest_count,
         plan?.max_guests,
         plan?.updated_at,
+        plan?.status,
+        groupEscrowsQuery.dataUpdatedAt,
         ...acceptedGuestOffers.map(
           (o) => `${o.id}:${o.status}:${o.current_amount_cents ?? o.amount_cents}:${o.bidder_id}`
         ),
         detailQuery.dataUpdatedAt,
       ].join('|'),
-    [acceptedGuestOffers, detailQuery.dataUpdatedAt, plan?.accepted_guest_count, plan?.max_guests, plan?.updated_at]
+    [
+      acceptedGuestOffers,
+      detailQuery.dataUpdatedAt,
+      groupEscrowsQuery.dataUpdatedAt,
+      plan?.accepted_guest_count,
+      plan?.max_guests,
+      plan?.status,
+      plan?.updated_at,
+    ]
   );
 
   useEffect(() => {
@@ -298,6 +310,12 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     void getPlanAvailableSlots(plan.id).then(setAvailableSlots);
     void countPendingInvitations(plan.id).then(setPendingInvitationCount);
   }
+
+  const refreshGroupPlanState = useCallback(() => {
+    void detailQuery.refetch();
+    void groupEscrowsQuery.refetch();
+    refreshInvitationSlots();
+  }, [detailQuery, groupEscrowsQuery, plan?.id, isCreator, isGroupPlan]);
 
   function handleAddToCalendar() {
     if (!plan) return;
@@ -575,41 +593,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     }
   }
 
-  useEffect(() => {
-    if (!planId || !viewerUserId || plan?.is_negotiable !== false) return;
-    const client = createClient();
-    const channel = client
-      .channel(`plan-join-escrow-web-${planId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'plan_join_requests',
-          filter: `plan_id=eq.${planId}`,
-        },
-        () => {
-          void detailQuery.refetch();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'escrow_transactions',
-          filter: `plan_id=eq.${planId}`,
-        },
-        () => {
-          void detailQuery.refetch();
-        }
-      )
-      .subscribe();
-    return () => {
-      void client.removeChannel(channel);
-    };
-  }, [planId, viewerUserId, plan?.is_negotiable, detailQuery.refetch]);
-
   if (detailQuery.isLoading && !plan) {
     return (
       <div className="space-y-6 pb-12">
@@ -781,9 +764,10 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
                 planId={plan.id}
                 hostUserId={plan.creator_id}
                 hostEscrowId={plan.host_escrow_id ?? null}
-                initialCount={plan.accepted_guest_count ?? 0}
-                totalCapacity={(plan.max_guests ?? 0) + 1}
+                memberCapacity={Math.max(1, (plan.accepted_guest_count ?? 0) + 1)}
+                maxCapacity={(plan.max_guests ?? 0) + 1}
                 minimumCount={plan.minimum_member_count ?? 5}
+                refreshKey={guestsPanelRefreshKey}
               />
             ) : null}
           </div>
@@ -890,9 +874,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
               }
             : undefined
         }
-        onGuestRemoved={() => {
-          void detailQuery.refetch();
-        }}
+        onGuestRemoved={refreshGroupPlanState}
       />
 
       {isAcceptedGuest && plan.is_group_plan ? (

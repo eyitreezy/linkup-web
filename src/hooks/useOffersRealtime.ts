@@ -31,6 +31,7 @@ export function usePlanOffersRealtime(planId: string | undefined) {
       void queryClient.invalidateQueries({ queryKey: ['plan-offers', planId] });
       void queryClient.invalidateQueries({ queryKey: ['plan', planId] });
       void queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+      void queryClient.invalidateQueries({ queryKey: ['plan-group-escrows', planId] });
       void queryClient.invalidateQueries({ queryKey: ['offer-rounds'] });
     };
     return subscribePostgresRealtime(

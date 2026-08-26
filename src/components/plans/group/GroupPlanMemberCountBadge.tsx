@@ -11,9 +11,13 @@ type Props = {
   planId: string;
   hostUserId: string;
   hostEscrowId?: string | null;
-  initialCount?: number;
-  totalCapacity: number;
+  /** Current roster size (accepted guests + host). */
+  memberCapacity: number;
+  /** Max plan capacity (max guests + host), used as fallback only. */
+  maxCapacity?: number;
   minimumCount?: number;
+  /** Bumps when parent refetches plan / escrow state. */
+  refreshKey?: string;
 };
 
 const ESCROW_SELECT =
@@ -23,18 +27,20 @@ export function GroupPlanMemberCountBadge({
   planId,
   hostUserId,
   hostEscrowId,
-  initialCount = 0,
-  totalCapacity,
+  memberCapacity,
+  maxCapacity,
   minimumCount = 5,
+  refreshKey,
 }: Props) {
-  const [count, setCount] = useState(initialCount);
-  const [capacity, setCapacity] = useState(totalCapacity);
+  const [count, setCount] = useState(0);
+  const [capacity, setCapacity] = useState(memberCapacity);
   const [minimum, setMinimum] = useState(minimumCount);
 
   useEffect(() => {
-    setCapacity(totalCapacity);
+    const nextCapacity = Math.max(1, memberCapacity || maxCapacity || 1);
+    setCapacity(nextCapacity);
     setMinimum(minimumCount);
-  }, [totalCapacity, minimumCount]);
+  }, [maxCapacity, memberCapacity, minimumCount]);
 
   const loadFundedCount = useCallback(async () => {
     const client = createClient();
@@ -57,7 +63,7 @@ export function GroupPlanMemberCountBadge({
 
   useEffect(() => {
     void loadFundedCount();
-  }, [loadFundedCount]);
+  }, [loadFundedCount, refreshKey]);
 
   useEffect(() => {
     const client = createClient();
@@ -77,7 +83,11 @@ export function GroupPlanMemberCountBadge({
             max_guests?: number;
             minimum_member_count?: number;
           };
-          if (row.max_guests != null) setCapacity(row.max_guests + 1);
+          if (row.accepted_guest_count != null) {
+            setCapacity(Math.max(1, row.accepted_guest_count + 1));
+          } else if (row.max_guests != null) {
+            setCapacity(Math.max(1, row.max_guests + 1));
+          }
           if (row.minimum_member_count != null) setMinimum(row.minimum_member_count);
           void loadRef.current();
         }

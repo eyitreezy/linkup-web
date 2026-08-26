@@ -16,10 +16,25 @@ export type GroupEscrowFundingRow = Pick<
   | 'guest_share_cents'
 >;
 
+const INACTIVE_ESCROW_STATUSES = new Set(['cancelled', 'refunded']);
+
+export function isActiveGroupEscrowRow(
+  escrow: Pick<GroupEscrowFundingRow, 'status'>
+): boolean {
+  return !INACTIVE_ESCROW_STATUSES.has(escrow.status);
+}
+
+export function activeGroupEscrowRows(
+  escrows: GroupEscrowFundingRow[]
+): GroupEscrowFundingRow[] {
+  return escrows.filter(isActiveGroupEscrowRow);
+}
+
 function memberHasFunded(
   escrow: GroupEscrowFundingRow,
   memberUserId: string
 ): boolean {
+  if (!isActiveGroupEscrowRow(escrow)) return false;
   return (
     userEscrowLegFunded(escrow, memberUserId) ||
     escrowRequiredLegsSatisfied(escrow)
@@ -31,13 +46,14 @@ export function countGroupFundedMembers(
   plan: Pick<DbPlan, 'creator_id' | 'host_escrow_id'>,
   escrows: GroupEscrowFundingRow[]
 ): number {
+  const activeEscrows = activeGroupEscrowRows(escrows);
   let count = 0;
 
   const hostEscrow =
     (plan.host_escrow_id
-      ? escrows.find((row) => row.id === plan.host_escrow_id)
+      ? activeEscrows.find((row) => row.id === plan.host_escrow_id)
       : null) ??
-    escrows.find(
+    activeEscrows.find(
       (row) =>
         row.guest_id == null &&
         (row.payer_id === plan.creator_id || row.host_id === plan.creator_id)
@@ -48,7 +64,7 @@ export function countGroupFundedMembers(
   }
 
   const guestIds = new Set<string>();
-  for (const row of escrows) {
+  for (const row of activeEscrows) {
     if (!row.guest_id || guestIds.has(row.guest_id)) continue;
     guestIds.add(row.guest_id);
     if (memberHasFunded(row, row.guest_id)) {
@@ -66,19 +82,26 @@ export function resolveGroupPlanDisplayStatus(
   >,
   escrows: GroupEscrowFundingRow[]
 ): PlanStatus {
-  if (plan.status !== 'awaiting_payment' || !plan.is_group_plan) {
+  if (!plan.is_group_plan) {
     return plan.status;
   }
 
-  if (escrows.length === 0) {
-    return plan.status;
+  const activeEscrows = activeGroupEscrowRows(escrows);
+  if (activeEscrows.length === 0) {
+    return plan.status === 'active' ? 'awaiting_payment' : plan.status;
   }
 
   const expectedMembers = Math.max(1, (plan.accepted_guest_count ?? 0) + 1);
-  const fundedMembers = countGroupFundedMembers(plan, escrows);
+  const fundedMembers = countGroupFundedMembers(plan, activeEscrows);
+  const allLegsSatisfied = activeEscrows.every((row) => escrowRequiredLegsSatisfied(row));
+  const fullyFunded = fundedMembers >= expectedMembers && allLegsSatisfied;
 
-  if (fundedMembers >= expectedMembers && escrows.every((row) => escrowRequiredLegsSatisfied(row))) {
+  if (fullyFunded) {
     return 'active';
+  }
+
+  if (plan.status === 'active' || plan.status === 'awaiting_payment') {
+    return 'awaiting_payment';
   }
 
   return plan.status;
