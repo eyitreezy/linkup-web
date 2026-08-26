@@ -48,6 +48,28 @@ export function groupPlanMemberCapacity(
   return Math.max(1, (plan.max_guests ?? 0) + 1);
 }
 
+/** Host-only escrow rows for the plan creator (primary leg + optional top-up). */
+function hostOnlyEscrowsForCreator(
+  plan: Pick<DbPlan, 'creator_id'>,
+  activeEscrows: GroupEscrowFundingRow[]
+): GroupEscrowFundingRow[] {
+  return activeEscrows.filter(
+    (row) =>
+      row.guest_id == null &&
+      (row.payer_id === plan.creator_id || row.host_id === plan.creator_id)
+  );
+}
+
+/** True when the host has completed at least one host-leg payment (ignores pending top-ups). */
+function creatorHostLegFunded(
+  plan: Pick<DbPlan, 'creator_id'>,
+  activeEscrows: GroupEscrowFundingRow[]
+): boolean {
+  return hostOnlyEscrowsForCreator(plan, activeEscrows).some((row) =>
+    memberHasFunded(row, plan.creator_id)
+  );
+}
+
 /** Count host + guests who have funded their share on a group plan. */
 export function countGroupFundedMembers(
   plan: Pick<DbPlan, 'creator_id' | 'host_escrow_id'>,
@@ -56,17 +78,7 @@ export function countGroupFundedMembers(
   const activeEscrows = activeGroupEscrowRows(escrows);
   let count = 0;
 
-  const hostEscrow =
-    (plan.host_escrow_id
-      ? activeEscrows.find((row) => row.id === plan.host_escrow_id)
-      : null) ??
-    activeEscrows.find(
-      (row) =>
-        row.guest_id == null &&
-        (row.payer_id === plan.creator_id || row.host_id === plan.creator_id)
-    );
-
-  if (hostEscrow && memberHasFunded(hostEscrow, plan.creator_id)) {
+  if (creatorHostLegFunded(plan, activeEscrows)) {
     count += 1;
   }
 
