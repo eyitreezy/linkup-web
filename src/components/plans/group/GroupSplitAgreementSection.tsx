@@ -182,7 +182,7 @@ export function GroupSplitAgreementSection({
   const isGroupHostBeforeClose = !groupClosed && !plan.host_escrow_id;
 
   const hostEscrowHref =
-    hostEscrow?.id && hostEscrow.status === 'pending_funding' && hostShareCents > 0
+    hostEscrow?.id && hostEscrow.status === 'pending_funding' && groupClosed && hostShareCents > 0
       ? resolveEscrowHref(hostEscrow.id, { planId, offerId })
       : null;
 

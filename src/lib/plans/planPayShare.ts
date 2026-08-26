@@ -60,6 +60,11 @@ export function resolvePlanPayShareState(
   };
 }
 
+export type ResolveHostGroupPayShareOptions = {
+  /** Group has an unfilled guest slot (e.g. after guest removal). */
+  hasOpenSlots?: boolean;
+};
+
 export function resolveHostGroupPayShareState(
   plan: Pick<
     DbPlan,
@@ -68,7 +73,8 @@ export function resolveHostGroupPayShareState(
   userId: string | undefined,
   hostEscrow: PlanGuestEscrowSnapshot | null | undefined,
   approvedGuestCount: number,
-  isHost: boolean
+  isHost: boolean,
+  opts?: ResolveHostGroupPayShareOptions
 ): HostGroupPayShareState {
   const idle: HostGroupPayShareState = {
     showPayShare: false,
@@ -96,7 +102,9 @@ export function resolveHostGroupPayShareState(
     };
   }
 
-  if (!plan.group_closed_at && !plan.host_escrow_id) {
+  // Close-group agreement flow — not when a slot reopened and the host may invite a replacement.
+  const hasOpenSlots = opts?.hasOpenSlots ?? false;
+  if (!hasOpenSlots && !plan.group_closed_at && !plan.host_escrow_id) {
     return {
       showPayShare: true,
       payShareEscrowId: null,
@@ -128,7 +136,17 @@ export async function fetchViewerGuestEscrow(
   return (data as PlanGuestEscrowSnapshot | null) ?? null;
 }
 
-/** Host leg escrow for a group plan (after close group). */
+function hostEscrowFundableForViewer(
+  escrow: PlanGuestEscrowSnapshot,
+  hostId: string
+): boolean {
+  return getEscrowFundingUiState(
+    escrow as Parameters<typeof getEscrowFundingUiState>[0],
+    hostId
+  ).canFund;
+}
+
+/** Pending host-leg escrow the host can fund (top-up after guest removal or initial host share). */
 export async function fetchHostGroupEscrow(
   client: SupabaseClient,
   plan: Pick<DbPlan, 'id' | 'creator_id' | 'host_escrow_id'>,
@@ -137,19 +155,20 @@ export async function fetchHostGroupEscrow(
   const select =
     'id, status, escrow_pattern, payer_id, host_id, guest_id, amount_cents, host_share_cents, guest_share_cents, host_funded_at, guest_funded_at';
 
-  // Outstanding host top-up after guest removal (do not rely on host_escrow_id alone).
-  const { data: pendingTopUp } = await client
+  const { data: pendingRows } = await client
     .from('escrow_transactions')
     .select(select)
     .eq('plan_id', plan.id)
-    .eq('payer_id', hostId)
     .is('guest_id', null)
     .eq('status', 'pending_funding')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .or(`host_id.eq.${hostId},payer_id.eq.${hostId}`)
+    .order('created_at', { ascending: false });
 
-  if (pendingTopUp) return pendingTopUp as PlanGuestEscrowSnapshot;
+  for (const row of (pendingRows ?? []) as PlanGuestEscrowSnapshot[]) {
+    if (hostEscrowFundableForViewer(row, hostId)) {
+      return row;
+    }
+  }
 
   if (plan.host_escrow_id) {
     const { data } = await client
@@ -157,18 +176,11 @@ export async function fetchHostGroupEscrow(
       .select(select)
       .eq('id', plan.host_escrow_id)
       .maybeSingle();
-    if (data) return data as PlanGuestEscrowSnapshot;
+    const primary = data as PlanGuestEscrowSnapshot | null;
+    if (primary && hostEscrowFundableForViewer(primary, hostId)) {
+      return primary;
+    }
   }
 
-  const { data } = await client
-    .from('escrow_transactions')
-    .select(select)
-    .eq('plan_id', plan.id)
-    .eq('payer_id', hostId)
-    .is('guest_id', null)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  return (data as PlanGuestEscrowSnapshot | null) ?? null;
+  return null;
 }

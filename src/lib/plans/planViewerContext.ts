@@ -240,8 +240,19 @@ export function derivePlanViewerContext(
     userId,
     opts?.myHostEscrow,
     acceptedCount,
-    isHost
+    isHost,
+    { hasOpenSlots }
   );
+
+  if (
+    isHost &&
+    isGroup &&
+    hostPayShare.showPayShare &&
+    !hostPayShare.viaAgreement &&
+    joinRequestFlow
+  ) {
+    showViewAgreement = false;
+  }
 
   return {
     isHost,
