@@ -50,6 +50,7 @@ type Props = {
     amountLabel?: string | null;
     onClick: () => void;
   };
+  onGuestRemoved?: () => void;
 };
 
 const cardHeaderPrimaryBtn =
@@ -142,6 +143,7 @@ export function PlanGroupGuestsPanel({
   offersReady = false,
   refreshKey,
   guestsHeaderAction,
+  onGuestRemoved,
 }: Props) {
   const [rows, setRows] = useState<GuestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -444,6 +446,7 @@ export function PlanGroupGuestsPanel({
           onRemoved={() => {
             setRemoveTarget(null);
             void loadRef.current();
+            onGuestRemoved?.();
           }}
         />
       ) : null}

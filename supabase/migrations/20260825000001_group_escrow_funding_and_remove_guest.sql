@@ -311,13 +311,13 @@ BEGIN
   _refund := public._refund_group_guest_escrow(p_plan_id, p_guest_user_id, false);
 
   UPDATE public.plan_invitations
-  SET status = 'declined', slot_held = FALSE, responded_at = NOW(), updated_at = NOW()
+  SET status = 'declined', slot_held = FALSE, responded_at = NOW()
   WHERE plan_id = p_plan_id
     AND invitee_user_id = p_guest_user_id
     AND status IN ('pending', 'accepted');
 
   UPDATE public.plan_join_requests
-  SET status = 'declined', updated_at = NOW()
+  SET status = 'declined', updated_at = NOW(), responded_at = NOW()
   WHERE plan_id = p_plan_id
     AND requester_id = p_guest_user_id
     AND status IN ('pending', 'approved');

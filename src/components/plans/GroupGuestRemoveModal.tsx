@@ -35,6 +35,9 @@ function formatRemoveError(message: string): string {
   if (m.includes('not_plan_host')) return 'Only the host can remove guests.';
   if (m.includes('guest_not_on_plan')) return 'This guest is no longer on the plan.';
   if (m.includes('plan_not_removable')) return 'Guests cannot be removed from this plan anymore.';
+  if (m.includes('does not exist') || m.includes('guest_remove_schema_mismatch')) {
+    return 'Guest removal is temporarily unavailable. Please try again shortly or contact support.';
+  }
   return message;
 }
 

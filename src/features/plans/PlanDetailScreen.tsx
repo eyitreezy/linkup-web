@@ -890,6 +890,9 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
               }
             : undefined
         }
+        onGuestRemoved={() => {
+          void detailQuery.refetch();
+        }}
       />
 
       {isAcceptedGuest && plan.is_group_plan ? (
