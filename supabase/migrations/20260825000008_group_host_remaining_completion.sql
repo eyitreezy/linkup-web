@@ -29,8 +29,8 @@ BEGIN
   FROM public.escrow_transactions e
   WHERE e.plan_id = p_plan_id
     AND e.guest_id IS NOT NULL
-    AND e.guest_funded_at IS NOT NULL
-    AND e.status NOT IN ('cancelled', 'refunded');
+    AND e.status NOT IN ('cancelled', 'refunded')
+    AND public.escrow_funding_complete(e);
 
   SELECT COALESCE(
     SUM(GREATEST(0, COALESCE(NULLIF(e.host_share_cents, 0), e.amount_cents, 0)::BIGINT)),
@@ -40,8 +40,8 @@ BEGIN
   FROM public.escrow_transactions e
   WHERE e.plan_id = p_plan_id
     AND e.guest_id IS NULL
-    AND e.host_funded_at IS NOT NULL
-    AND e.status NOT IN ('cancelled', 'refunded');
+    AND e.status NOT IN ('cancelled', 'refunded')
+    AND public.escrow_funding_complete(e);
 
   RETURN GREATEST(0, _guest + _host);
 END;

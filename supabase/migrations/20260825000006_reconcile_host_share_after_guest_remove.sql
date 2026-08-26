@@ -45,8 +45,8 @@ BEGIN
   FROM public.escrow_transactions e
   WHERE e.plan_id = p_plan_id
     AND e.guest_id IS NULL
-    AND e.host_funded_at IS NOT NULL
-    AND e.status NOT IN ('cancelled', 'refunded');
+    AND e.status NOT IN ('cancelled', 'refunded')
+    AND public.escrow_funding_complete(e);
 
   RETURN _paid;
 END;
