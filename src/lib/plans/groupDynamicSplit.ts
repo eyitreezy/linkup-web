@@ -206,10 +206,9 @@ export function isGroupHostCloseEscrowRow(
 /** Orphan host-only pending row that is not the plan primary leg or a guest-remove top-up. */
 export function isGhostHostEscrowRow(
   plan: Pick<DbPlan, 'host_escrow_id'>,
-  escrow: Pick<
-    DbEscrowTransaction,
-    'id' | 'guest_id' | 'status' | 'metadata'
-  >
+  escrow: Pick<DbEscrowTransaction, 'id' | 'guest_id' | 'status'> & {
+    metadata?: DbEscrowTransaction['metadata'];
+  }
 ): boolean {
   if (escrow.guest_id != null) return false;
   if (escrow.status !== 'pending_funding') return false;
