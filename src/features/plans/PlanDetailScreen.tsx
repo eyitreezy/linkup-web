@@ -447,8 +447,6 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
       bundle?.offers.find((o) => o.bidder_id === viewerUserId && o.status === 'accepted')?.id ??
       plan.accepted_offer_id ??
       bundle?.offers.find((o) => o.status === 'accepted')?.id;
-    console.log('DEBUG offerId', resolvedOfferId);
-    console.log('DEBUG viewer', viewerUserId);
     router.push(
       resolvePlanAgreementHref(plan, {
         offerId: resolvedOfferId,
@@ -1458,7 +1456,7 @@ function ActionRail({
 
       {ctx.showViewAgreement && !ctx.showMessage ? (
         <div className={planActionGrid}>
-          <button type="button" className={actionSecondary} onClick={onAgreement}>
+          <button type="button" className={actionSecondary} onClick={() => onAgreement()}>
           <span className="inline-flex items-center gap-2">
             <IoDocumentTextOutline size={18} />
             View agreement
@@ -1469,7 +1467,7 @@ function ActionRail({
 
       {ctx.showViewAgreement && ctx.showMessage ? (
         <div className={planActionGrid}>
-          <button type="button" className={actionSecondary} onClick={onAgreement}>
+          <button type="button" className={actionSecondary} onClick={() => onAgreement()}>
             <span className="inline-flex items-center gap-2">
               <IoDocumentTextOutline size={18} />
               View agreement
