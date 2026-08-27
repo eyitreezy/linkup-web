@@ -1,5 +1,6 @@
 import { userEscrowLegFunded } from '@/lib/escrow/splitEscrowFunding';
 import { escrowRequiredLegsSatisfied } from '@/lib/escrow/escrowFundingStatus';
+import { isGhostHostEscrowRow } from '@/lib/plans/groupDynamicSplit';
 import type { DbEscrowTransaction, DbPlan, PlanStatus } from '@/types/database';
 
 export type GroupEscrowFundingRow = Pick<
@@ -111,12 +112,15 @@ export function resolveGroupPlanDisplayStatus(
   }
 
   const activeEscrows = activeGroupEscrowRows(escrows);
+  const relevantEscrows = activeEscrows.filter(
+    (row) => !isGhostHostEscrowRow(plan, row)
+  );
   const planCapacity = groupPlanMemberCapacity(plan);
   const fundedMembers = countGroupFundedMembers(plan, escrows);
   const rosterFilled = (plan.accepted_guest_count ?? 0) >= (plan.max_guests ?? 0);
   const allLegsSatisfied =
-    activeEscrows.length > 0 &&
-    activeEscrows.every((row) => escrowRequiredLegsSatisfied(row));
+    relevantEscrows.length > 0 &&
+    relevantEscrows.every((row) => escrowRequiredLegsSatisfied(row));
 
   const fullyFunded =
     rosterFilled &&

@@ -43,6 +43,16 @@ export function GroupPlanMemberCountBadge({
 
   const loadFundedCount = useCallback(async () => {
     const client = createClient();
+    const { data: rpcCount, error: rpcError } = await client.rpc(
+      'count_group_plan_funded_members',
+      { p_plan_id: planId }
+    );
+
+    if (!rpcError && typeof rpcCount === 'number') {
+      setCount(rpcCount);
+      return;
+    }
+
     const { data } = await client
       .from('escrow_transactions')
       .select(ESCROW_SELECT)

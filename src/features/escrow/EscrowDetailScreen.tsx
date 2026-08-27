@@ -66,6 +66,7 @@ import {
 } from '@/lib/escrow/splitEscrowFunding';
 import { openPlanMeetupChatPathForPlanId } from '@/lib/messaging/openPlanMeetupChat';
 import {
+  isGhostHostEscrowRow,
   isGroupHostCloseEscrowRow,
   isGroupSplitPlan,
   resolveAcceptedGuestCommitmentCents,
@@ -267,10 +268,10 @@ function EscrowDetailContent({
       return;
     }
     if (user.id !== escrow.host_id) return;
-    // Host opened a guest's group-split escrow leg (e.g. from meetup details) — stay on this view.
     if (escrow.guest_id != null) return;
     const hostEscrowId = planMeta?.host_escrow_id;
-    if (!hostEscrowId || escrow.id === hostEscrowId || escrow.payer_id === user.id) return;
+    if (!hostEscrowId || escrow.id === hostEscrowId) return;
+    if (!isGhostHostEscrowRow(planMeta ?? {}, escrow)) return;
     router.replace(
       `/escrow/${hostEscrowId}${agreementPlanId ? `?planId=${agreementPlanId}${agreementOfferId ? `&offerId=${agreementOfferId}` : ''}` : ''}`
     );
@@ -553,6 +554,8 @@ function EscrowDetailContent({
   const fundingUi = getEscrowFundingUiState(escrow, user.id);
   const isGroupHostLegRow =
     isGroupSplit && isHost && plan ? isGroupHostCloseEscrowRow(plan, escrow) : false;
+  const isGhostHostRow =
+    isGroupSplit && isHost && plan ? isGhostHostEscrowRow(plan, escrow) : false;
   const groupSplitPlanInput: GroupSplitPlanSnapshot | null = plan
     ? {
         total_amount_cents: plan.total_amount_cents,
@@ -602,14 +605,15 @@ function EscrowDetailContent({
         : (groupHostShare?.paymentCents ?? escrow.host_share_cents ?? fundingUi.payAmountCents ?? 0)
       : myShareCents;
   const canFundThisLeg =
-    fundingUi.canFund ||
-    (isGroupSplit &&
-      isHost &&
-      groupHostShare != null &&
-      myPayShareCents > 0 &&
-      isGroupHostLegRow &&
-      !myLegFunded &&
-      escrow.status === 'pending_funding');
+    !isGhostHostRow &&
+    (fundingUi.canFund ||
+      (isGroupSplit &&
+        isHost &&
+        groupHostShare != null &&
+        myPayShareCents > 0 &&
+        isGroupHostLegRow &&
+        !myLegFunded &&
+        escrow.status === 'pending_funding'));
   const escrowFullyFunded = isEscrowFullyFundedForMeet(escrow);
   const escrowFunded =
     escrowFullyFunded || escrow.status === 'active' || escrow.status === 'released';

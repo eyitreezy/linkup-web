@@ -203,6 +203,26 @@ export function isGroupHostCloseEscrowRow(
   return true;
 }
 
+/** Orphan host-only pending row that is not the plan primary leg or a guest-remove top-up. */
+export function isGhostHostEscrowRow(
+  plan: Pick<DbPlan, 'host_escrow_id'>,
+  escrow: Pick<
+    DbEscrowTransaction,
+    'id' | 'guest_id' | 'status' | 'metadata'
+  >
+): boolean {
+  if (escrow.guest_id != null) return false;
+  if (escrow.status !== 'pending_funding') return false;
+  if (!plan.host_escrow_id || escrow.id === plan.host_escrow_id) return false;
+
+  const meta = escrow.metadata as { host_share_top_up?: boolean | string } | null | undefined;
+  if (meta?.host_share_top_up === true || meta?.host_share_top_up === 'true') {
+    return false;
+  }
+
+  return true;
+}
+
 export type GroupHostShareResolution = {
   displayCents: number;
   paymentCents: number;

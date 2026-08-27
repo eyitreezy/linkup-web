@@ -1,7 +1,27 @@
--- Host top-up after guest removal: outstanding = plan total minus all funded legs
--- (remaining amount to complete the group), not a duplicate charge of the host's prior share.
+-- Consolidated fix: host top-up was never rewritten because _host_share_paid returned 0
+-- (host_funded_at missing) and reconcile exited before updating the pending row.
 
-CREATE OR REPLACE FUNCTION public._group_plan_funded_total_cents(p_plan_id UUID)
+-- 1) Backfill leg timestamps on already-funded escrows
+UPDATE public.escrow_transactions e
+SET
+  host_funded_at = COALESCE(e.host_funded_at, e.funded_at, e.updated_at, NOW()),
+  updated_at = NOW()
+WHERE e.guest_id IS NULL
+  AND e.status IN ('funded', 'active', 'released')
+  AND e.host_funded_at IS NULL
+  AND GREATEST(0, COALESCE(e.host_share_cents, 0)::BIGINT) > 0;
+
+UPDATE public.escrow_transactions e
+SET
+  guest_funded_at = COALESCE(e.guest_funded_at, e.funded_at, e.updated_at, NOW()),
+  updated_at = NOW()
+WHERE e.guest_id IS NOT NULL
+  AND e.status IN ('funded', 'active', 'released')
+  AND e.guest_funded_at IS NULL
+  AND GREATEST(0, COALESCE(e.guest_share_cents, 0)::BIGINT) > 0;
+
+-- 2) Count host paid legs by funding completion (not timestamp-only)
+CREATE OR REPLACE FUNCTION public._group_host_share_paid_cents(p_plan_id UUID)
 RETURNS BIGINT
 LANGUAGE plpgsql
 STABLE
@@ -9,67 +29,24 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  _guest BIGINT := 0;
-  _host BIGINT := 0;
+  _paid BIGINT := 0;
 BEGIN
   SELECT COALESCE(
-    SUM(
-      GREATEST(
-        0,
-        COALESCE(
-          NULLIF(e.guest_share_cents, 0),
-          CASE WHEN e.guest_id IS NOT NULL THEN e.amount_cents ELSE 0 END,
-          0
-        )::BIGINT
-      )
-    ),
+    SUM(GREATEST(0, COALESCE(e.host_share_cents, 0)::BIGINT)),
     0
   )
-  INTO _guest
-  FROM public.escrow_transactions e
-  WHERE e.plan_id = p_plan_id
-    AND e.guest_id IS NOT NULL
-    AND e.status NOT IN ('cancelled', 'refunded')
-    AND public.escrow_funding_complete(e);
-
-  SELECT COALESCE(
-    SUM(GREATEST(0, COALESCE(NULLIF(e.host_share_cents, 0), e.amount_cents, 0)::BIGINT)),
-    0
-  )
-  INTO _host
+  INTO _paid
   FROM public.escrow_transactions e
   WHERE e.plan_id = p_plan_id
     AND e.guest_id IS NULL
     AND e.status NOT IN ('cancelled', 'refunded')
     AND public.escrow_funding_complete(e);
 
-  RETURN GREATEST(0, _guest + _host);
+  RETURN _paid;
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public._group_plan_remaining_completion_cents(p_plan_id UUID)
-RETURNS BIGINT
-LANGUAGE plpgsql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  _plan public.plans%ROWTYPE;
-  _total BIGINT;
-  _funded BIGINT;
-BEGIN
-  SELECT * INTO _plan FROM public.plans WHERE id = p_plan_id;
-  IF NOT FOUND THEN
-    RETURN 0;
-  END IF;
-
-  _total := public._group_plan_total_cents(_plan);
-  _funded := public._group_plan_funded_total_cents(p_plan_id);
-  RETURN GREATEST(0, _total - _funded);
-END;
-$$;
-
+-- 3) Reconcile: needed − paid; never skip updating an existing pending top-up when primary host funded
 CREATE OR REPLACE FUNCTION public.reconcile_group_host_share_after_guest_remove(p_plan_id UUID)
 RETURNS void
 LANGUAGE plpgsql
@@ -84,6 +61,7 @@ DECLARE
   _pending_host public.escrow_transactions%ROWTYPE;
   _primary_host public.escrow_transactions%ROWTYPE;
   _gross INT;
+  _primary_funded BOOLEAN := false;
 BEGIN
   SELECT * INTO _plan FROM public.plans WHERE id = p_plan_id FOR UPDATE;
   IF NOT FOUND OR NOT COALESCE(_plan.is_group_plan, false) THEN
@@ -113,8 +91,21 @@ BEGIN
   SET group_closed_at = NULL, updated_at = NOW()
   WHERE id = p_plan_id AND group_closed_at IS NOT NULL;
 
+  IF _plan.host_escrow_id IS NOT NULL THEN
+    SELECT * INTO _primary_host
+    FROM public.escrow_transactions
+    WHERE id = _plan.host_escrow_id;
+
+    _primary_funded := FOUND AND public.escrow_funding_complete(_primary_host);
+  END IF;
+
   _host_share_needed := public._group_host_share_needed_cents(_plan);
   _host_share_paid := public._group_host_share_paid_cents(p_plan_id);
+
+  IF _host_share_paid <= 0 AND _primary_funded THEN
+    _host_share_paid := GREATEST(0, COALESCE(_primary_host.host_share_cents, 0)::BIGINT);
+  END IF;
+
   _outstanding := GREATEST(0, _host_share_needed - _host_share_paid);
 
   SELECT * INTO _pending_host
@@ -143,7 +134,7 @@ BEGIN
     FOR UPDATE;
 
     IF FOUND
-      AND _primary_host.host_funded_at IS NULL
+      AND NOT _primary_funded
       AND _primary_host.status = 'pending_funding'
       AND _primary_host.guest_id IS NULL THEN
       _gross := public.gross_amount_cents(_host_share_needed::INT)::INT;
@@ -158,7 +149,7 @@ BEGIN
     END IF;
   END IF;
 
-  IF _host_share_paid <= 0 THEN
+  IF _host_share_paid <= 0 AND NOT _primary_funded THEN
     RETURN;
   END IF;
 
@@ -176,7 +167,7 @@ BEGIN
         'reason', 'guest_removed',
         'host_share_needed_cents', _host_share_needed,
         'host_share_paid_cents', _host_share_paid,
-        'remaining_completion_cents', _outstanding
+        'outstanding_budget_cents', _outstanding
       )
     WHERE id = _pending_host.id;
     RETURN;
@@ -217,15 +208,15 @@ BEGIN
       'reason', 'guest_removed',
       'host_share_needed_cents', _host_share_needed,
       'host_share_paid_cents', _host_share_paid,
-      'remaining_completion_cents', _outstanding
+      'outstanding_budget_cents', _outstanding
     )
   );
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public._group_plan_funded_total_cents(UUID) TO authenticated;
-GRANT EXECUTE ON FUNCTION public._group_plan_remaining_completion_cents(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public._group_host_share_paid_cents(UUID) TO authenticated;
 
+-- 4) Run reconcile directly (not only via revalidate)
 DO $$
 DECLARE
   _plan_id UUID;
@@ -236,15 +227,8 @@ BEGIN
     WHERE COALESCE(p.is_group_plan, false)
       AND COALESCE(p.accepted_guest_count, 0) < COALESCE(p.max_guests, 0)
       AND p.status IN ('active', 'awaiting_payment')
-      AND EXISTS (
-        SELECT 1
-        FROM public.escrow_transactions e
-        WHERE e.plan_id = p.id
-          AND e.guest_id IS NULL
-          AND e.host_funded_at IS NOT NULL
-          AND e.status NOT IN ('cancelled', 'refunded')
-      )
   LOOP
+    PERFORM public.reconcile_group_host_share_after_guest_remove(_plan_id);
     PERFORM public.revalidate_group_plan_activation(_plan_id);
   END LOOP;
 END;
