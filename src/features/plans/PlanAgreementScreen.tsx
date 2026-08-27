@@ -439,7 +439,11 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
         return;
       }
     }
-    if (!bothConfirmed && !(isGroupSplitPlan(plan) && user?.id === plan.creator_id)) {
+    const isGroupSplitParty =
+      isGroupSplitPlan(plan) &&
+      (user?.id === plan.creator_id || !isHost);
+
+    if (!bothConfirmed && !isGroupSplitParty) {
       showAgreementAlert('Both parties must review and confirm the agreement before secure payment.');
       return;
     }
@@ -596,6 +600,7 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
   const showSingleGroupCancel = showCancelPlan && !!plan.is_group_plan;
   const isGroupSplit = isGroupSplitPlan(plan);
   const isGroupSplitHost = isGroupSplit && isHost;
+  const groupSplitGuestCanPay = isGroupSplit && !isHost;
   const escrowCents = paymentRequired
     ? (plan.agreed_price_cents ?? offer.amount_cents ?? plan.starting_price_cents ?? null)
     : null;
@@ -680,7 +685,7 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
       }
       primaryDisabled = busy;
     } else if (userIsPayer) {
-      if (!bothConfirmed) {
+      if (!bothConfirmed && !groupSplitGuestCanPay) {
         if (!userConfirmed) {
           primaryLabel = 'Review terms & pay';
           onPrimary = () => openLegalGate('pay');
@@ -731,7 +736,7 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
         onPrimary = () => openLegalGate('ack');
       }
       primaryDisabled = busy;
-    } else if (!bothConfirmed) {
+    } else if (!bothConfirmed && !groupSplitGuestCanPay) {
       primaryLabel = `Waiting for ${otherName}`;
       primaryDisabled = true;
       onPrimary = () => {};
