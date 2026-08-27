@@ -444,6 +444,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
       offerId ??
       ctx?.userAcceptedOffer?.id ??
       (ctx?.myOffer?.status === 'accepted' ? ctx.myOffer.id : undefined) ??
+      bundle?.offers.find((o) => o.bidder_id === viewerUserId && o.status === 'accepted')?.id ??
       plan.accepted_offer_id ??
       bundle?.offers.find((o) => o.status === 'accepted')?.id;
     router.push(
