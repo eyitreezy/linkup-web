@@ -447,6 +447,8 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
       bundle?.offers.find((o) => o.bidder_id === viewerUserId && o.status === 'accepted')?.id ??
       plan.accepted_offer_id ??
       bundle?.offers.find((o) => o.status === 'accepted')?.id;
+    console.log('DEBUG offerId', resolvedOfferId);
+    console.log('DEBUG viewer', viewerUserId);
     router.push(
       resolvePlanAgreementHref(plan, {
         offerId: resolvedOfferId,
