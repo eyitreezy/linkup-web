@@ -1,5 +1,6 @@
 import { getEscrowFundingUiState } from '@/lib/escrow/escrowFundingUi';
 import { formatNGN } from '@/lib/escrow/escrowFormatters';
+import { isGhostHostEscrowRow } from '@/lib/plans/groupDynamicSplit';
 import type { DbPlan, DbEscrowTransaction } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -89,30 +90,53 @@ export function resolveHostGroupPayShareState(
   if (INACTIVE_PLAN_STATUSES.has(plan.status)) return idle;
   if (approvedGuestCount <= 0) return idle;
 
-  if (hostEscrow) {
+  const hostSharePaymentCents = Math.max(0, opts?.hostSharePaymentCents ?? 0);
+  const payShareAmountLabel =
+    hostSharePaymentCents > 0 ? formatNGN(hostSharePaymentCents) : null;
+
+  const ghostHostEscrow =
+    !!hostEscrow &&
+    isGhostHostEscrowRow(plan, {
+      id: hostEscrow.id,
+      guest_id: hostEscrow.guest_id,
+      status: hostEscrow.status,
+    });
+
+  const fundableHostEscrow =
+    hostEscrow && !ghostHostEscrow ? hostEscrow : null;
+
+  if (fundableHostEscrow) {
     const funding = getEscrowFundingUiState(
-      hostEscrow as Parameters<typeof getEscrowFundingUiState>[0],
+      fundableHostEscrow as Parameters<typeof getEscrowFundingUiState>[0],
       userId
     );
     if (!funding.canFund) return idle;
     return {
       showPayShare: true,
-      payShareEscrowId: hostEscrow.id,
+      payShareEscrowId: fundableHostEscrow.id,
       payShareAmountLabel:
-        funding.payAmountCents > 0 ? formatNGN(funding.payAmountCents) : null,
+        payShareAmountLabel ??
+        (funding.payAmountCents > 0 ? formatNGN(funding.payAmountCents) : null),
       viaAgreement: false,
     };
   }
 
   // Close-group agreement flow — not when a slot reopened and the host may invite a replacement.
   const hasOpenSlots = opts?.hasOpenSlots ?? false;
-  const hostSharePaymentCents = Math.max(0, opts?.hostSharePaymentCents ?? 0);
   if (!hasOpenSlots && !plan.group_closed_at && !plan.host_escrow_id) {
     return {
       showPayShare: true,
       payShareEscrowId: null,
-      payShareAmountLabel:
-        hostSharePaymentCents > 0 ? formatNGN(hostSharePaymentCents) : null,
+      payShareAmountLabel,
+      viaAgreement: true,
+    };
+  }
+
+  if (ghostHostEscrow && payShareAmountLabel) {
+    return {
+      showPayShare: true,
+      payShareEscrowId: null,
+      payShareAmountLabel,
       viaAgreement: true,
     };
   }
@@ -153,11 +177,11 @@ function hostEscrowFundableForViewer(
 /** Pending host-leg escrow the host can fund (top-up after guest removal or initial host share). */
 export async function fetchHostGroupEscrow(
   client: SupabaseClient,
-  plan: Pick<DbPlan, 'id' | 'creator_id' | 'host_escrow_id'>,
+  plan: Pick<DbPlan, 'id' | 'creator_id' | 'host_escrow_id' | 'group_closed_at'>,
   hostId: string
 ): Promise<PlanGuestEscrowSnapshot | null> {
   const select =
-    'id, status, escrow_pattern, payer_id, host_id, guest_id, amount_cents, host_share_cents, guest_share_cents, host_funded_at, guest_funded_at';
+    'id, status, escrow_pattern, payer_id, host_id, guest_id, amount_cents, host_share_cents, guest_share_cents, host_funded_at, guest_funded_at, metadata';
 
   const { data: pendingRows } = await client
     .from('escrow_transactions')
@@ -169,6 +193,7 @@ export async function fetchHostGroupEscrow(
     .order('created_at', { ascending: false });
 
   for (const row of (pendingRows ?? []) as PlanGuestEscrowSnapshot[]) {
+    if (isGhostHostEscrowRow(plan, row)) continue;
     if (hostEscrowFundableForViewer(row, hostId)) {
       return row;
     }

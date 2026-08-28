@@ -7,6 +7,7 @@ import { userEscrowLegFunded } from '@/lib/escrow/splitEscrowFunding';
 import {
   isGroupSplitPlan,
   resolveHostGroupContribution,
+  type GroupHostShareResolution,
 } from '@/lib/plans/groupDynamicSplit';
 import {
   resolveHostGroupPayShareState,
@@ -133,6 +134,8 @@ export function derivePlanViewerContext(
         'guest_id' | 'guest_share_cents' | 'amount_cents' | 'status' | 'guest_funded_at'
       >
     >;
+    /** Server RPC result when available (authoritative). */
+    hostGroupContribution?: GroupHostShareResolution | null;
   }
 ): PlanViewerContext {
   const listingExpired = opts?.listingExpired ?? opts?.moodClosed ?? false;
@@ -255,10 +258,11 @@ export function derivePlanViewerContext(
     }));
   const hostSharePaymentCents =
     isGroup && isGroupSplitPlan(plan)
-      ? resolveHostGroupContribution(plan, opts?.groupGuestEscrows ?? [], {
+      ? (opts?.hostGroupContribution?.paymentCents ??
+        resolveHostGroupContribution(plan, opts?.groupGuestEscrows ?? [], {
           acceptedOffers: acceptedOfferAmounts,
           hostEscrowRow: opts?.myHostEscrow ?? null,
-        }).paymentCents
+        }).paymentCents)
       : 0;
   const hostPayShare = resolveHostGroupPayShareState(
     plan,

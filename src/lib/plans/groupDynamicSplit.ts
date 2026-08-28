@@ -272,18 +272,24 @@ export function hostShareFromGuestCommitments(
 }
 
 export function isGroupHostCloseEscrowRow(
-  plan: Pick<DbPlan, 'host_escrow_id'>,
+  plan: Pick<DbPlan, 'host_escrow_id' | 'group_closed_at'>,
   escrow: Pick<
     DbEscrowTransaction,
     'id' | 'guest_id' | 'host_share_cents' | 'amount_cents'
   > & { metadata?: DbEscrowTransaction['metadata'] }
 ): boolean {
   if (escrow.guest_id != null) return false;
-  const hostShare = Math.max(0, escrow.host_share_cents ?? escrow.amount_cents ?? 0);
+  const hostShare = Math.max(0, escrow.host_share_cents ?? 0);
   if (hostShare <= 0) return false;
 
-  const meta = escrow.metadata as { host_share_top_up?: boolean | string } | null | undefined;
+  const meta = escrow.metadata as {
+    host_share_top_up?: boolean | string;
+    leg?: string;
+  } | null | undefined;
   if (meta?.host_share_top_up === true || meta?.host_share_top_up === 'true') {
+    return true;
+  }
+  if (meta?.leg === 'host_close') {
     return true;
   }
 
@@ -291,26 +297,39 @@ export function isGroupHostCloseEscrowRow(
     return escrow.id === plan.host_escrow_id;
   }
 
-  return true;
+  return false;
 }
 
 /** Orphan host-only pending row that is not the plan primary leg or a guest-remove top-up. */
 export function isGhostHostEscrowRow(
-  plan: Pick<DbPlan, 'host_escrow_id'>,
+  plan: Pick<DbPlan, 'host_escrow_id' | 'group_closed_at'>,
   escrow: Pick<DbEscrowTransaction, 'id' | 'guest_id' | 'status'> & {
     metadata?: DbEscrowTransaction['metadata'];
   }
 ): boolean {
   if (escrow.guest_id != null) return false;
   if (escrow.status !== 'pending_funding') return false;
-  if (!plan.host_escrow_id || escrow.id === plan.host_escrow_id) return false;
 
-  const meta = escrow.metadata as { host_share_top_up?: boolean | string } | null | undefined;
+  const meta = escrow.metadata as {
+    host_share_top_up?: boolean | string;
+    leg?: string;
+  } | null | undefined;
   if (meta?.host_share_top_up === true || meta?.host_share_top_up === 'true') {
     return false;
   }
+  if (meta?.leg === 'host_close') {
+    return false;
+  }
 
-  return true;
+  if (plan.host_escrow_id && escrow.id === plan.host_escrow_id) {
+    return false;
+  }
+
+  if (!plan.group_closed_at) {
+    return true;
+  }
+
+  return !plan.host_escrow_id || escrow.id !== plan.host_escrow_id;
 }
 
 export type GroupHostShareResolution = {
@@ -434,7 +453,7 @@ export function resolveGroupHostShareCents(
   if (live > 0) {
     return { displayCents: live, paymentCents: paymentFromLegs(live) };
   }
-  if (storedGross > 0) {
+  if (storedEscrow && storedGross > 0 && (plan.group_closed_at || isGroupHostCloseEscrowRow(plan, storedEscrow))) {
     return { displayCents: stored, paymentCents: storedGross };
   }
   if (projected > 0) {

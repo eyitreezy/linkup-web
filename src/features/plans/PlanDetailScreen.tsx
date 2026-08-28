@@ -251,6 +251,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     myGuestEscrow: bundle?.myGuestEscrow ?? null,
     myHostEscrow: bundle?.myHostEscrow ?? null,
     groupGuestEscrows: groupEscrowsQuery.data ?? [],
+    hostGroupContribution: bundle?.hostGroupContribution ?? null,
     approvedJoinRequestCount:
       plan?.is_negotiable === false
         ? (bundle?.approvedJoinRequestCount ?? approvedJoinRequests.length)

@@ -1,6 +1,8 @@
 import { isPlanSaved, recordPlanView } from '@/lib/plans/planEngagement';
 import type { JoinRequestWithRequester } from '@/lib/plans/joinRequests';
 import { ensureGroupHostShareReconciled } from '@/lib/plans/ensureGroupHostShareReconciled';
+import { fetchGroupHostContribution } from '@/lib/plans/fetchGroupHostContribution';
+import type { GroupHostShareResolution } from '@/lib/plans/groupDynamicSplit';
 import {
   fetchHostGroupEscrow,
   fetchViewerGuestEscrow,
@@ -32,6 +34,7 @@ export type PlanDetailBundle = {
   myJoinRequest: { id: string; status: JoinRequestStatus } | null;
   myGuestEscrow: PlanGuestEscrowSnapshot | null;
   myHostEscrow: PlanGuestEscrowSnapshot | null;
+  hostGroupContribution: GroupHostShareResolution | null;
   approvedJoinRequestCount: number;
   availableSlots: number;
   pendingInvitationCount: number;
@@ -137,6 +140,7 @@ export async function fetchPlanDetailBundle(
   let myJoinRequest: { id: string; status: JoinRequestStatus } | null = null;
   let myGuestEscrow: PlanGuestEscrowSnapshot | null = null;
   let myHostEscrow: PlanGuestEscrowSnapshot | null = null;
+  let hostGroupContribution: GroupHostShareResolution | null = null;
   let approvedJoinRequestCount = 0;
   let availableSlots = 0;
   let pendingInvitationCount = 0;
@@ -185,6 +189,7 @@ export async function fetchPlanDetailBundle(
       }
 
       myHostEscrow = await fetchHostGroupEscrow(client, feedPlan, viewerId);
+      hostGroupContribution = await fetchGroupHostContribution(client, planId);
     }
   }
 
@@ -225,6 +230,7 @@ export async function fetchPlanDetailBundle(
       myJoinRequest,
       myGuestEscrow,
       myHostEscrow,
+      hostGroupContribution,
       approvedJoinRequestCount,
       availableSlots,
       pendingInvitationCount,

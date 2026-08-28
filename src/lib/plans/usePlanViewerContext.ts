@@ -1,5 +1,6 @@
 import { derivePlanViewerContext, type PlanViewerContext } from '@/lib/plans/planViewerContext';
 import type { PlanGuestEscrowSnapshot } from '@/lib/plans/planPayShare';
+import type { GroupHostShareResolution } from '@/lib/plans/groupDynamicSplit';
 import type { DbPlan, DbPlanOffer, DbEscrowTransaction, JoinRequestStatus } from '@/types/database';
 import { useMemo } from 'react';
 
@@ -31,6 +32,7 @@ export function usePlanViewerContext(
         'guest_id' | 'guest_share_cents' | 'amount_cents' | 'status' | 'guest_funded_at'
       >
     >;
+    hostGroupContribution?: GroupHostShareResolution | null;
   }
 ): PlanViewerContext | null {
   return useMemo(() => {
@@ -48,5 +50,6 @@ export function usePlanViewerContext(
     opts?.myHostEscrow,
     opts?.approvedJoinRequestCount,
     opts?.groupGuestEscrows,
+    opts?.hostGroupContribution,
   ]);
 }
