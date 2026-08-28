@@ -13,6 +13,8 @@ import { escrowUserPaymentVerified } from '@/lib/escrow/escrowFundingStatus';
 import { subscribeEscrowRealtime } from '@/lib/escrow/subscribeEscrowRealtime';
 import {
   checkEscrowBankTransferFunded,
+  confirmSandboxBankTransfer,
+  fetchNigerianBanks,
   generateVirtualAccount,
   syncEscrowFromVirtualAccount,
 } from '@/lib/escrow/virtualAccountPayment';
@@ -60,6 +62,14 @@ function formatCountdown(ms: number): string {
   return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 
+const SANDBOX_TRANSFER_HINT =
+  'Test mode: Flutterwave Mock Bank does not detect real transfers. Use the button below to confirm your test payment after reviewing the amount.';
+
+function isSandboxBankName(bankName: string | null | undefined): boolean {
+  const name = (bankName ?? '').trim().toLowerCase();
+  return name.includes('mock') || name.includes('test') || name === 'virtual bank';
+}
+
 const ESCROW_FUNDING_SELECT =
   'id, status, escrow_pattern, host_id, guest_id, payer_id, host_funded_at, guest_funded_at, amount_cents, host_share_cents, guest_share_cents, metadata';
 
@@ -80,9 +90,12 @@ export function BankTransferClient({
   const [countdownMs, setCountdownMs] = useState(0);
   const [isExpired, setIsExpired] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [checkingPayment, setCheckingPayment] = useState(false);
+  const [manualCheckBusy, setManualCheckBusy] = useState(false);
+  const [sandboxMode, setSandboxMode] = useState(false);
   const fundedRef = useRef(false);
   const vaSessionIdRef = useRef<string | null>(null);
+
+  const isSandboxTransfer = sandboxMode || (va ? isSandboxBankName(va.bankName) : false);
 
   const payAmountCents = useMemo(
     () => resolveBankTransferPayAmountCents(escrow, currentUserId, escrowLeg),
@@ -126,25 +139,46 @@ export function BankTransferClient({
   }, [client, currentUserId, escrow.id, handleFunded]);
 
   const checkFundingStatus = useCallback(async () => {
-    setCheckingPayment(true);
-    try {
-      return await runFundingCheck();
-    } finally {
-      setCheckingPayment(false);
-    }
+    return runFundingCheck();
   }, [runFundingCheck]);
+
+  useEffect(() => {
+    void fetchNigerianBanks()
+      .then((result) => setSandboxMode(result.sandboxMode))
+      .catch(() => setSandboxMode(false));
+  }, []);
 
   async function onConfirmTransferSent() {
     setError(null);
-    setCheckingPayment(true);
+    setManualCheckBusy(true);
     try {
+      const sessionId = vaSessionIdRef.current;
+      if (!sessionId) {
+        setError('Payment session not found. Generate a new account and try again.');
+        return;
+      }
+
+      if (isSandboxTransfer) {
+        const confirmed = await confirmSandboxBankTransfer(client, escrow.id, sessionId);
+        if (confirmed) {
+          handleFunded();
+          return;
+        }
+        setError('Could not confirm your test payment. Try again.');
+        return;
+      }
+
       await syncEscrowFromVirtualAccount(client, escrow.id);
       const funded = await runFundingCheck();
       if (!funded) {
-        setError('Payment not detected yet. It can take a minute — we will keep checking automatically.');
+        setError(
+          'Payment not detected yet. It can take a minute. We will keep checking automatically.'
+        );
       }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not check payment status');
     } finally {
-      setCheckingPayment(false);
+      setManualCheckBusy(false);
     }
   }
 
@@ -170,16 +204,18 @@ export function BankTransferClient({
   }, [va?.sessionId]);
 
   useEffect(() => {
-    if (step !== 'virtual_account') return;
+    if (step !== 'virtual_account' || showSuccess) return;
 
     void checkFundingStatus();
 
+    if (isSandboxTransfer) return;
+
     const poll = setInterval(() => {
       void checkFundingStatus();
-    }, 2000);
+    }, 5000);
 
     return () => clearInterval(poll);
-  }, [checkFundingStatus, step]);
+  }, [checkFundingStatus, isSandboxTransfer, showSuccess, step]);
 
   useEffect(() => {
     if (step !== 'virtual_account') return;
@@ -336,6 +372,12 @@ export function BankTransferClient({
 
       {!showSuccess && va ? (
         <>
+          {isSandboxTransfer ? (
+            <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-[13px] font-semibold leading-relaxed text-amber-900">{SANDBOX_TRANSFER_HINT}</p>
+            </section>
+          ) : null}
+
           <section className="linkup-card space-y-4 p-5 sm:p-6">
             <p className="text-[12px] font-extrabold uppercase tracking-wide text-muted">Transfer payment to</p>
 
@@ -372,19 +414,11 @@ export function BankTransferClient({
                 ) : null}
               </div>
 
-              {!isExpired && !showSuccess ? (
+              {!isExpired && !showSuccess && !isSandboxTransfer ? (
                 <div className="flex items-center gap-2 rounded-xl border border-primary/10 bg-[#F8F7FF]/40 px-3 py-2.5">
-                  <span
-                    className={cn(
-                      'inline-block h-2 w-2 shrink-0 rounded-full',
-                      checkingPayment ? 'animate-pulse bg-primary' : 'bg-emerald-500'
-                    )}
-                    aria-hidden
-                  />
+                  <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-hidden />
                   <p className="text-[13px] font-semibold text-muted">
-                    {checkingPayment
-                      ? 'Checking for your payment…'
-                      : 'Waiting for your transfer — we check automatically every few seconds.'}
+                    Waiting for your transfer. We check automatically every few seconds.
                   </p>
                 </div>
               ) : null}
@@ -426,13 +460,19 @@ export function BankTransferClient({
             <button
               type="button"
               onClick={() => void onConfirmTransferSent()}
-              disabled={checkingPayment || busy}
+              disabled={manualCheckBusy || busy}
               className={cn(
                 'w-full rounded-full linkup-gradient-primary py-4 text-[16px] font-extrabold text-white transition',
-                (checkingPayment || busy) && 'opacity-70'
+                (manualCheckBusy || busy) && 'opacity-70'
               )}
             >
-              {checkingPayment ? 'Checking payment…' : "I've sent the transfer"}
+              {manualCheckBusy
+                ? isSandboxTransfer
+                  ? 'Confirming test payment...'
+                  : 'Checking payment...'
+                : isSandboxTransfer
+                  ? 'Confirm test payment'
+                  : "I've sent the transfer"}
             </button>
           )}
         </>

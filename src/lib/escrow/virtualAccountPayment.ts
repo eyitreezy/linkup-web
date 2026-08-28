@@ -71,12 +71,30 @@ export async function syncEscrowFromVirtualAccount(
   return data === true;
 }
 
+export async function confirmSandboxBankTransfer(
+  client: ReturnType<typeof createClient>,
+  escrowId: string,
+  sessionId: string
+): Promise<boolean> {
+  const { data, error } = await client.rpc('confirm_sandbox_bank_transfer', {
+    p_escrow_id: escrowId,
+    p_session_id: sessionId,
+  });
+  if (error) {
+    throw new Error(error.message);
+  }
+  return data === true;
+}
+
 export async function checkEscrowBankTransferFunded(
   client: ReturnType<typeof createClient>,
   escrowId: string,
-  sessionId?: string | null
+  sessionId?: string | null,
+  options?: { skipSync?: boolean }
 ): Promise<boolean> {
-  await syncEscrowFromVirtualAccount(client, escrowId);
+  if (!options?.skipSync) {
+    await syncEscrowFromVirtualAccount(client, escrowId);
+  }
 
   const { data: rpcFunded, error: rpcError } = await client.rpc('check_escrow_bank_transfer_funded', {
     p_escrow_id: escrowId,
@@ -148,6 +166,7 @@ export async function generateVirtualAccount(params: {
     bank_code: string;
     amount_cents: number;
     expires_at: string;
+    sandbox_mode?: boolean;
   };
 }
 
