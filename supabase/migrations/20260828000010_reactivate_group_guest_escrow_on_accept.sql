@@ -90,8 +90,8 @@ BEGIN
         funding_deadline = NOW() + INTERVAL '24 hours',
         payment_tx_ref = NULL,
         paystack_reference = NULL,
-        platform_fee_cents = NULL,
-        goodwill_applied_cents = NULL,
+        platform_fee_cents = 0,
+        goodwill_applied_cents = 0,
         metadata = _meta,
         updated_at = NOW()
       WHERE id = _escrow.id
