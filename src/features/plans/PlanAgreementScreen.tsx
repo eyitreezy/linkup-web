@@ -1091,16 +1091,16 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
 
           {showMutualCancel ? (
             <div className="flex flex-row gap-3 pt-2">
-              <button
-                type="button"
+        <button
+          type="button"
                 disabled={busy}
                 onClick={() => setMutualCancelOpen(true)}
                 className="flex min-h-[48px] flex-1 items-center justify-center rounded-full linkup-gradient-primary px-3 text-center text-[13px] font-extrabold leading-tight text-white transition hover:opacity-95 disabled:opacity-50 sm:px-4 sm:text-[14px]"
               >
                 Suggest mutual cancellation
-              </button>
-              <button
-                type="button"
+        </button>
+        <button
+          type="button"
                 disabled={busy}
                 onClick={() => (isGuest ? openGuestCancelFlow() : openHostCancelFlow())}
                 className="flex min-h-[48px] flex-1 items-center justify-center rounded-full border border-primary/25 bg-white px-3 text-center text-[13px] font-extrabold leading-tight text-primary transition hover:bg-[#EDE8FF]/50 disabled:opacity-50 sm:px-4 sm:text-[14px]"
@@ -1119,7 +1119,7 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
                 className="flex min-h-[48px] w-full items-center justify-center rounded-full border border-primary/25 bg-white px-4 text-center text-[14px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/50 disabled:opacity-50"
               >
                 {isHost ? 'Cancel group plan' : 'Cancel this plan'}
-              </button>
+        </button>
               {isHost ? (
                 <p className="mt-2 text-center text-[12px] font-semibold leading-relaxed text-muted">
                   Group plans use host cancellation with timing-based refunds and guest compensation.

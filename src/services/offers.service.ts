@@ -133,5 +133,19 @@ export async function acceptPlanOffer(
     p_offer_id: offer.id,
     p_action: 'accept',
   });
-  return { error: error?.message ?? null };
+  if (error) {
+    if (error.message.includes('escrow_transactions_plan_guest_unique')) {
+      return {
+        error:
+          'This guest already has an escrow slot on this plan. Refresh and try again, or contact support if the issue persists.',
+      };
+    }
+    if (error.message.includes('guest_escrow_already_funded')) {
+      return {
+        error: 'This guest has already funded their share on this plan.',
+      };
+    }
+    return { error: error.message };
+  }
+  return { error: null };
 }
