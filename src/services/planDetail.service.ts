@@ -2,6 +2,8 @@ import { isPlanSaved, recordPlanView } from '@/lib/plans/planEngagement';
 import type { JoinRequestWithRequester } from '@/lib/plans/joinRequests';
 import { ensureGroupHostShareReconciled } from '@/lib/plans/ensureGroupHostShareReconciled';
 import { fetchGroupHostContribution } from '@/lib/plans/fetchGroupHostContribution';
+import { refreshGroupHostCloseEscrowShare } from '@/lib/plans/refreshGroupHostCloseEscrow';
+import { reconcileGroupPlanGuestCommitments } from '@/lib/plans/reconcileGroupGuestCommitments';
 import type { GroupHostShareResolution } from '@/lib/plans/groupDynamicSplit';
 import {
   fetchHostGroupEscrow,
@@ -175,6 +177,8 @@ export async function fetchPlanDetailBundle(
     }
     if (feedPlan.creator_id === viewerId && feedPlan.is_paid && feedPlan.is_group_plan) {
       await ensureGroupHostShareReconciled(client, feedPlan, viewerId);
+      await reconcileGroupPlanGuestCommitments(client, planId);
+      await refreshGroupHostCloseEscrowShare(client, planId);
 
       const { data: refreshedPlan } = await client
         .from('plans')

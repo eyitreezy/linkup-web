@@ -115,8 +115,11 @@ export function resolveHostGroupPayShareState(
       showPayShare: true,
       payShareEscrowId: fundableHostEscrow.id,
       payShareAmountLabel:
-        payShareAmountLabel ??
-        (funding.payAmountCents > 0 ? formatNGN(funding.payAmountCents) : null),
+        hostSharePaymentCents > 0
+          ? formatNGN(hostSharePaymentCents)
+          : funding.payAmountCents > 0
+            ? formatNGN(funding.payAmountCents)
+            : null,
       viaAgreement: false,
     };
   }

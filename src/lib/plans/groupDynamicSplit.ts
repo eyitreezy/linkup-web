@@ -189,13 +189,17 @@ export function resolveAcceptedGuestCommitmentCents(
   const fromRows = sumAcceptedGuestEscrowCents(guestEscrows);
   const total = planTotalAmountCents(plan);
 
+  // Accepted offers are authoritative when present (plan columns can drift).
+  if (fromOffers > 0 && acceptedOffers.length > 0) {
+    return total > 0 ? Math.min(fromOffers, total) : fromOffers;
+  }
   if (fromPlan > 0) {
     return total > 0 ? Math.min(fromPlan, total) : fromPlan;
   }
-  if (fromOffers > 0) {
-    return total > 0 ? Math.min(fromOffers, total) : fromOffers;
+  if (fromRows > 0) {
+    return total > 0 ? Math.min(fromRows, total) : fromRows;
   }
-  return total > 0 ? Math.min(fromRows, total) : fromRows;
+  return 0;
 }
 
 export type ResolveGroupPlanTotalOptions = {
@@ -345,6 +349,8 @@ export const EMPTY_GROUP_HOST_ESCROW = {
   guest_id: null,
   host_share_cents: 0,
   amount_cents: 0,
+  host_funded_at: null,
+  status: 'pending_funding' as const,
   metadata: null,
 } as const;
 
@@ -368,7 +374,12 @@ export type ResolveGroupHostShareOptions = {
   hostEscrowRow?: Pick<
     DbEscrowTransaction,
     'id' | 'host_share_cents' | 'amount_cents' | 'guest_id'
-  > & { guest_share_cents?: number | null; metadata?: DbEscrowTransaction['metadata'] } | null;
+  > & {
+    guest_share_cents?: number | null;
+    host_funded_at?: string | null;
+    status?: DbEscrowTransaction['status'];
+    metadata?: DbEscrowTransaction['metadata'];
+  } | null;
 };
 
 function storedHostBudgetCents(
@@ -403,6 +414,18 @@ export type GroupSplitPlanSnapshot = Pick<
   | 'group_closed_at'
 >;
 
+function hostCloseEscrowFunded(
+  escrow: { host_funded_at?: string | null; status?: string | null } | null | undefined
+): boolean {
+  if (!escrow) return false;
+  return (
+    escrow.host_funded_at != null ||
+    escrow.status === 'funded' ||
+    escrow.status === 'active' ||
+    escrow.status === 'released'
+  );
+}
+
 export function resolveGroupHostShareCents(
   plan: GroupSplitPlanSnapshot,
   escrow: Pick<
@@ -410,6 +433,8 @@ export function resolveGroupHostShareCents(
     'id' | 'host_share_cents' | 'amount_cents' | 'guest_id'
   > & {
     guest_share_cents?: number | null;
+    host_funded_at?: string | null;
+    status?: DbEscrowTransaction['status'];
     metadata?: DbEscrowTransaction['metadata'] | null;
   },
   guestEscrows: GuestEscrowLeg[] = [],
@@ -430,17 +455,14 @@ export function resolveGroupHostShareCents(
       : null;
   const stored = storedEscrow ? storedHostBudgetCents(storedEscrow) : 0;
   const storedGross = storedEscrow ? storedHostGrossCents(storedEscrow) : 0;
+  const hostEscrowFundingRow = options.hostEscrowRow ?? storedEscrow;
+  const hostClosePending =
+    !!storedEscrow &&
+    storedEscrow.guest_id == null &&
+    !hostCloseEscrowFunded(hostEscrowFundingRow);
   const topUpMeta = storedEscrow?.metadata as { host_share_top_up?: boolean | string } | null | undefined;
   const isHostTopUpEscrow =
     topUpMeta?.host_share_top_up === true || topUpMeta?.host_share_top_up === 'true';
-
-  if (isHostTopUpEscrow && storedGross > 0) {
-    return { displayCents: stored, paymentCents: storedGross };
-  }
-
-  if (plan.group_closed_at && storedGross > 0) {
-    return { displayCents: stored, paymentCents: storedGross };
-  }
 
   const guestCheckoutGross = listAcceptedGuestCheckoutGrossCents(guestEscrows, acceptedOffers);
   const paymentFromLegs = (hostBudget: number) =>
@@ -449,11 +471,32 @@ export function resolveGroupHostShareCents(
       hostBudget,
       guestCheckoutGross
     );
+  const calculatedBudget = live > 0 ? live : projected;
+  const calculatedPayment =
+    calculatedBudget > 0 ? paymentFromLegs(calculatedBudget) : 0;
 
-  if (live > 0) {
-    return { displayCents: live, paymentCents: paymentFromLegs(live) };
+  if (calculatedPayment > 0 && (hostClosePending || !plan.group_closed_at)) {
+    return { displayCents: calculatedBudget, paymentCents: calculatedPayment };
   }
-  if (storedEscrow && storedGross > 0 && (plan.group_closed_at || isGroupHostCloseEscrowRow(plan, storedEscrow))) {
+
+  if (isHostTopUpEscrow && storedGross > 0) {
+    return { displayCents: stored, paymentCents: storedGross };
+  }
+
+  if (
+    plan.group_closed_at &&
+    storedGross > 0 &&
+    !hostClosePending &&
+    (calculatedPayment <= 0 || Math.abs(storedGross - calculatedPayment) <= 1)
+  ) {
+    return { displayCents: stored, paymentCents: storedGross };
+  }
+
+  if (calculatedPayment > 0) {
+    return { displayCents: calculatedBudget, paymentCents: calculatedPayment };
+  }
+
+  if (storedEscrow && storedGross > 0 && hostCloseEscrowFunded(storedEscrow)) {
     return { displayCents: stored, paymentCents: storedGross };
   }
   if (projected > 0) {
