@@ -20,6 +20,22 @@ export function escrowStatusFullyFunded(status: string | null | undefined): bool
 }
 
 /** Pattern B escrows with a zero share only require the paying leg. */
+/** Group guest-slot or host-close rows fund a single leg per escrow row. */
+export function isSingleLegEscrowRow(
+  escrow:
+    | Pick<
+        EscrowFundingRow,
+        'escrow_pattern' | 'host_share_cents' | 'guest_share_cents'
+      >
+    | null
+    | undefined
+): boolean {
+  if (!escrow || escrow.escrow_pattern !== 'B') return false;
+  const hostShare = Math.max(0, escrow.host_share_cents ?? 0);
+  const guestShare = Math.max(0, escrow.guest_share_cents ?? 0);
+  return hostShare <= 0 || guestShare <= 0;
+}
+
 export function escrowRequiredLegsSatisfied(
   escrow:
     | Pick<
@@ -57,9 +73,17 @@ export function escrowUserPaymentVerified(
   escrow: EscrowFundingRow | null | undefined,
   userId: string | null | undefined
 ): boolean {
-  if (!escrow || !userId) return false;
+  if (!escrow) return false;
+
+  // Group guest-slot / host-close rows: one funded leg completes this escrow row.
+  if (isSingleLegEscrowRow(escrow) && escrowRequiredLegsSatisfied(escrow)) {
+    return true;
+  }
+
+  if (!userId) return false;
+  if (userEscrowLegFunded(escrow, userId)) return true;
   if (escrowRequiredLegsSatisfied(escrow)) return true;
-  return userEscrowLegFunded(escrow, userId);
+  return false;
 }
 
 export function escrowCheckoutInitiator(

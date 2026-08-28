@@ -1,9 +1,11 @@
 'use client';
 
 import { EscrowPaymentSuccessModal } from '@/components/escrow/EscrowPaymentSuccessModal';
-import { useEscrowConfirmation } from '@/hooks/useEscrowConfirmation';
+import { markEscrowPaymentAck } from '@/lib/escrow/escrowPaymentAck';
 import { recordEscrowCheckoutReturned } from '@/lib/escrow/escrowActions';
 import { createClient } from '@/lib/supabase/client';
+import { useAuthStore } from '@/stores/auth-store';
+import { useEscrowConfirmation } from '@/hooks/useEscrowConfirmation';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
@@ -24,6 +26,7 @@ function parseEscrowId(searchParams: URLSearchParams): string | null {
 function EscrowCallbackContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const userId = useAuthStore((s) => s.user?.id);
   const status = searchParams.get('status');
   const txRef = searchParams.get('tx_ref');
   const escrowId = parseEscrowId(searchParams);
@@ -36,8 +39,9 @@ function EscrowCallbackContent() {
   const confirmEnabled = status === 'successful' && !!escrowId;
 
   const onVerified = useCallback(() => {
+    if (escrowId) markEscrowPaymentAck(escrowId);
     setShowSuccess(true);
-  }, []);
+  }, [escrowId]);
 
   const { status: confirmationStatus, secondsElapsed, retryVerify } = useEscrowConfirmation(
     client,
@@ -45,6 +49,7 @@ function EscrowCallbackContent() {
     {
       enabled: confirmEnabled,
       txRef,
+      viewerUserId: userId,
       onVerified,
     }
   );
@@ -89,6 +94,7 @@ function EscrowCallbackContent() {
     try {
       const funded = await retryVerify();
       if (funded) {
+        markEscrowPaymentAck(escrowId);
         setShowSuccess(true);
       }
     } finally {
@@ -97,6 +103,10 @@ function EscrowCallbackContent() {
   }
 
   function handleSuccessContinue() {
+    if (planId) {
+      router.replace(`/plan/${planId}/agreement`);
+      return;
+    }
     if (escrowId) router.replace(`/escrow/${escrowId}`);
   }
 
@@ -104,7 +114,7 @@ function EscrowCallbackContent() {
     return (
       <EscrowPaymentSuccessModal
         message="Your payment has been verified and your escrow is now funded."
-        continueLabel="View agreement"
+        continueLabel="Continue"
         onContinue={handleSuccessContinue}
       />
     );
@@ -136,7 +146,7 @@ function EscrowCallbackContent() {
     return (
       <EscrowPaymentSuccessModal
         message="Your payment has been verified and your escrow is now funded."
-        continueLabel="View agreement"
+        continueLabel="Continue"
         onContinue={handleSuccessContinue}
       />
     );
@@ -173,7 +183,7 @@ function EscrowCallbackContent() {
             {planId ? (
               <button
                 type="button"
-                onClick={() => router.replace(`/plan/${planId}`)}
+                onClick={() => router.replace(`/plan/${planId}/agreement`)}
                 className="text-[14px] font-semibold text-muted hover:text-foreground"
               >
                 Return to plan
@@ -193,7 +203,7 @@ function EscrowCallbackContent() {
           aria-hidden
         />
         <div className="relative">
-            <div className="mx-auto h-14 w-14 animate-spin rounded-full border-4 border-primary/15 border-t-primary" />
+          <div className="mx-auto h-14 w-14 animate-spin rounded-full border-4 border-primary/15 border-t-primary" />
           <p className="mt-4 text-[11px] font-extrabold uppercase tracking-wide text-secondary">
             Secure payment
           </p>
@@ -229,9 +239,9 @@ function CallbackShell({
           aria-hidden
         />
         <div className="relative">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EDE8FF]/80">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EDE8FF]/80">
             <IoHourglassOutline size={40} className="text-amber-500" />
-            </div>
+          </div>
           <p className="mt-4 text-[11px] font-extrabold uppercase tracking-wide text-secondary">
             Secure payment
           </p>

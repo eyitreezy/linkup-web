@@ -37,6 +37,7 @@ import {
   escrowCheckoutReturned,
   escrowPaymentInitiated,
 } from '@/lib/escrow/escrowCheckoutMetadata';
+import { hasEscrowPaymentAck, markEscrowPaymentAck } from '@/lib/escrow/escrowPaymentAck';
 import {
   confirmMeetupComplete,
   openEscrowDisputeWithTicket,
@@ -294,6 +295,8 @@ function EscrowDetailContent({
 
   const confirmPaymentEnabled = useMemo(() => {
     if (!escrow || !user?.id || hostViewingGuestLeg) return false;
+    if (hasEscrowPaymentAck(escrowId)) return false;
+    if (userEscrowLegFunded(escrow, user.id)) return false;
     if (
       escrow.status === 'funded' ||
       escrow.status === 'active' ||
@@ -308,9 +311,10 @@ function EscrowDetailContent({
       initiator === user.id ||
       (!initiator && getEscrowFundingUiState(escrow, user.id).canFund)
     );
-  }, [escrow, hostViewingGuestLeg, user?.id]);
+  }, [escrow, escrowId, hostViewingGuestLeg, user?.id]);
 
   const onVerified = useCallback(() => {
+    markEscrowPaymentAck(escrowId);
     void queryClient.invalidateQueries({ queryKey: ['escrow', escrowId] });
     setShowPaymentSuccess(true);
   }, [escrowId, queryClient]);
@@ -477,6 +481,7 @@ function EscrowDetailContent({
     try {
       const funded = await retryVerify();
       if (funded) {
+        markEscrowPaymentAck(escrowId);
         void queryClient.invalidateQueries({ queryKey: ['escrow', escrowId] });
         setShowPaymentSuccess(true);
       }

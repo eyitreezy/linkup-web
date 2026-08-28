@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  fetchEscrowFundingRow,
+  fetchEscrowFundingVerified,
+} from '@/lib/escrow/fetchEscrowFundingStatus';
+import {
   escrowCheckoutInitiator,
   escrowUserPaymentVerified,
   type EscrowFundingRow,
@@ -10,11 +14,8 @@ import { invokeVerifyEscrowPayment } from '@/lib/escrow/verifyEscrowPayment';
 export type EscrowConfirmationStatus = 'idle' | 'polling' | 'verified' | 'timeout';
 
 const POLL_INTERVAL_MS = 2000;
-const VERIFY_AFTER_MS = 3000;
+const VERIFY_RETRY_MS = 8000;
 const TIMEOUT_MS = 90000;
-
-const ESCROW_FUNDING_SELECT =
-  'status, escrow_pattern, host_id, guest_id, payer_id, host_funded_at, guest_funded_at, host_share_cents, guest_share_cents, metadata';
 
 type Options = {
   enabled?: boolean;
@@ -38,9 +39,9 @@ export function useEscrowConfirmation(
   const [secondsElapsed, setSecondsElapsed] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const verifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const verifyRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const verifyInFlightRef = useRef(false);
+  const verifiedRef = useRef(false);
   const onVerifiedRef = useRef(onVerified);
   onVerifiedRef.current = onVerified;
 
@@ -53,51 +54,48 @@ export function useEscrowConfirmation(
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
-    if (verifyTimerRef.current) {
-      clearTimeout(verifyTimerRef.current);
-      verifyTimerRef.current = null;
-    }
     if (verifyRetryTimerRef.current) {
       clearTimeout(verifyRetryTimerRef.current);
       verifyRetryTimerRef.current = null;
     }
   }, []);
 
-  const resolveViewerUserId = useCallback(
-    (escrow: EscrowFundingRow | null | undefined): string | null => {
-      if (viewerUserId) return viewerUserId;
-      return escrowCheckoutInitiator(escrow);
-    },
-    [viewerUserId]
-  );
-
-  const isPaymentVerified = useCallback(
-    (escrow: EscrowFundingRow | null | undefined): boolean => {
-      if (!escrow) return false;
-      const userId = resolveViewerUserId(escrow);
-      return escrowUserPaymentVerified(escrow, userId);
-    },
-    [resolveViewerUserId]
-  );
-
-  const fetchEscrowFunding = useCallback(async (): Promise<EscrowFundingRow | null> => {
-    if (!escrowId) return null;
-    const { data } = await client
-      .from('escrow_transactions')
-      .select(ESCROW_FUNDING_SELECT)
-      .eq('id', escrowId)
-      .maybeSingle();
-    return (data as EscrowFundingRow | null) ?? null;
-  }, [client, escrowId]);
-
   const markVerified = useCallback(() => {
+    if (verifiedRef.current) return;
+    verifiedRef.current = true;
     cleanup();
     setStatus('verified');
     onVerifiedRef.current?.();
   }, [cleanup]);
 
+  const isPaymentVerified = useCallback(
+    (escrow: EscrowFundingRow | null | undefined, userId: string | null): boolean => {
+      return escrowUserPaymentVerified(escrow, userId);
+    },
+    []
+  );
+
+  const checkFundingState = useCallback(async (): Promise<boolean> => {
+    if (!escrowId || verifiedRef.current) return false;
+
+    const userId = viewerUserId ?? null;
+    const verified = await fetchEscrowFundingVerified(client, escrowId, userId);
+    if (verified) {
+      markVerified();
+      return true;
+    }
+
+    const escrow = await fetchEscrowFundingRow(client, escrowId);
+    const resolvedUserId = userId ?? escrowCheckoutInitiator(escrow);
+    if (isPaymentVerified(escrow, resolvedUserId)) {
+      markVerified();
+      return true;
+    }
+    return false;
+  }, [client, escrowId, isPaymentVerified, markVerified, viewerUserId]);
+
   const callVerifyEndpoint = useCallback(async (): Promise<boolean> => {
-    if (!escrowId || verifyInFlightRef.current) return false;
+    if (!escrowId || verifyInFlightRef.current || verifiedRef.current) return false;
     verifyInFlightRef.current = true;
     try {
       const result = await invokeVerifyEscrowPayment(client, escrowId, txRef ?? undefined);
@@ -105,34 +103,24 @@ export function useEscrowConfirmation(
         markVerified();
         return true;
       }
-      const escrow = await fetchEscrowFunding();
-      if (isPaymentVerified(escrow)) {
-        markVerified();
-        return true;
-      }
-      return false;
+      return await checkFundingState();
     } catch (err) {
       console.error('[escrow-confirm] verify endpoint error:', err);
-      const escrow = await fetchEscrowFunding();
-      if (isPaymentVerified(escrow)) {
-        markVerified();
-        return true;
-      }
-      return false;
+      return await checkFundingState();
     } finally {
       verifyInFlightRef.current = false;
     }
-  }, [client, escrowId, fetchEscrowFunding, isPaymentVerified, markVerified, txRef]);
+  }, [checkFundingState, client, escrowId, markVerified, txRef]);
 
   const retryVerify = useCallback(async (): Promise<boolean> => {
     if (!escrowId) return false;
 
+    verifiedRef.current = false;
+    setStatus('polling');
+
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      const escrow = await fetchEscrowFunding();
-      if (isPaymentVerified(escrow)) {
-        markVerified();
-        return true;
-      }
+      const funded = await checkFundingState();
+      if (funded) return true;
 
       const verified = await callVerifyEndpoint();
       if (verified) return true;
@@ -142,65 +130,71 @@ export function useEscrowConfirmation(
       }
     }
 
+    setStatus('timeout');
     return false;
-  }, [callVerifyEndpoint, escrowId, fetchEscrowFunding, isPaymentVerified, markVerified]);
+  }, [callVerifyEndpoint, checkFundingState, escrowId]);
 
   useEffect(() => {
     if (!enabled || !escrowId) {
       cleanup();
+      verifiedRef.current = false;
       setStatus('idle');
       setSecondsElapsed(0);
       return;
     }
 
+    verifiedRef.current = false;
     setStatus('polling');
     setSecondsElapsed(0);
 
-    void fetchEscrowFunding().then((escrow) => {
-      if (isPaymentVerified(escrow)) markVerified();
-    });
+    void checkFundingState();
+    void callVerifyEndpoint();
 
     pollRef.current = setInterval(() => {
-      void fetchEscrowFunding().then((escrow) => {
-        if (isPaymentVerified(escrow)) markVerified();
-      });
+      void checkFundingState();
     }, POLL_INTERVAL_MS);
-
-    verifyTimerRef.current = setTimeout(() => {
-      void callVerifyEndpoint();
-    }, VERIFY_AFTER_MS);
 
     const scheduleVerifyRetry = () => {
       verifyRetryTimerRef.current = setTimeout(() => {
         void callVerifyEndpoint().finally(() => {
-          verifyRetryTimerRef.current = setTimeout(scheduleVerifyRetry, 15000);
+          if (!verifiedRef.current) scheduleVerifyRetry();
         });
-      }, 15000);
+      }, VERIFY_RETRY_MS);
     };
     scheduleVerifyRetry();
 
     timeoutRef.current = setTimeout(() => {
+      if (verifiedRef.current) return;
       cleanup();
-      setStatus((current) => (current === 'verified' ? 'verified' : 'timeout'));
+      setStatus('timeout');
     }, TIMEOUT_MS);
 
     const ticker = setInterval(() => {
       setSecondsElapsed((s) => s + 1);
     }, 1000);
 
+    const channel = client
+      .channel(`escrow-confirm-${escrowId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'escrow_transactions',
+          filter: `id=eq.${escrowId}`,
+        },
+        () => {
+          void checkFundingState();
+        }
+      )
+      .subscribe();
+
     return () => {
       cleanup();
       clearInterval(ticker);
+      void client.removeChannel(channel);
     };
-  }, [
-    callVerifyEndpoint,
-    cleanup,
-    enabled,
-    escrowId,
-    fetchEscrowFunding,
-    isPaymentVerified,
-    markVerified,
-  ]);
+  }, [callVerifyEndpoint, checkFundingState, cleanup, client, enabled, escrowId]);
 
   return { status, secondsElapsed, retryVerify, callVerifyEndpoint };
 }
