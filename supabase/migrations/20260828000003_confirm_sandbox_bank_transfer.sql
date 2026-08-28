@@ -66,7 +66,8 @@ BEGIN
     RAISE EXCEPTION 'not_escrow_party';
   END IF;
 
-  IF public.check_escrow_bank_transfer_funded(p_escrow_id) THEN
+  IF _escrow.status IN ('funded', 'active', 'released')
+    OR public.escrow_funding_complete(_escrow) THEN
     RETURN TRUE;
   END IF;
 
@@ -153,7 +154,10 @@ BEGIN
     PERFORM public.check_plan_escrow_fully_funded(_escrow.plan_id);
   END IF;
 
-  RETURN public.check_escrow_bank_transfer_funded(p_escrow_id);
+  SELECT * INTO _escrow FROM public.escrow_transactions WHERE id = p_escrow_id;
+
+  RETURN _escrow.status IN ('funded', 'active', 'released')
+    OR public.escrow_funding_complete(_escrow);
 END;
 $$;
 

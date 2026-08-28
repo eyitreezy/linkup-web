@@ -12,7 +12,6 @@ import {
 import { escrowUserPaymentVerified } from '@/lib/escrow/escrowFundingStatus';
 import { subscribeEscrowRealtime } from '@/lib/escrow/subscribeEscrowRealtime';
 import {
-  checkEscrowBankTransferFunded,
   confirmSandboxBankTransfer,
   fetchNigerianBanks,
   generateVirtualAccount,
@@ -119,13 +118,6 @@ export function BankTransferClient({
   }, []);
 
   const runFundingCheck = useCallback(async () => {
-    const sessionId = vaSessionIdRef.current;
-    const bankTransferFunded = await checkEscrowBankTransferFunded(client, escrow.id, sessionId);
-    if (bankTransferFunded) {
-      handleFunded();
-      return true;
-    }
-
     const { data } = await client
       .from('escrow_transactions')
       .select(ESCROW_FUNDING_SELECT)
@@ -164,6 +156,8 @@ export function BankTransferClient({
           handleFunded();
           return;
         }
+        const funded = await runFundingCheck();
+        if (funded) return;
         setError('Could not confirm your test payment. Try again.');
         return;
       }

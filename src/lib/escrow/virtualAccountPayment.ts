@@ -81,7 +81,8 @@ export async function confirmSandboxBankTransfer(
     p_session_id: sessionId,
   });
   if (error) {
-    throw new Error(error.message);
+    console.warn('[confirmSandboxBankTransfer]', error.message);
+    return false;
   }
   return data === true;
 }
