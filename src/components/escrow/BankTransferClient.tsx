@@ -6,8 +6,10 @@ import { RefundAccountForm, type RefundAccountResult } from '@/components/escrow
 import { formatNGN } from '@/lib/escrow/escrowFormatters';
 import { escrowUserPaymentVerified } from '@/lib/escrow/escrowFundingStatus';
 import { subscribeEscrowRealtime } from '@/lib/escrow/subscribeEscrowRealtime';
-import { invokeVerifyEscrowPayment } from '@/lib/escrow/verifyEscrowPayment';
-import { generateVirtualAccount } from '@/lib/escrow/virtualAccountPayment';
+import {
+  checkEscrowBankTransferFunded,
+  generateVirtualAccount,
+} from '@/lib/escrow/virtualAccountPayment';
 import { createClient } from '@/lib/supabase/client';
 import type { DbEscrowTransaction, DbUserPaymentAccount } from '@/types/database';
 import { cn } from '@/utils/cn';
@@ -73,6 +75,7 @@ export function BankTransferClient({
   const [isExpired, setIsExpired] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const fundedRef = useRef(false);
+  const vaSessionIdRef = useRef<string | null>(null);
 
   const backHref = agreementPlanId ? `/escrow/${escrow.id}?planId=${agreementPlanId}` : `/escrow/${escrow.id}`;
   const successHref = agreementPlanId
@@ -86,14 +89,19 @@ export function BankTransferClient({
   }, []);
 
   const checkFundingStatus = useCallback(async () => {
+    const sessionId = vaSessionIdRef.current;
+    const bankTransferFunded = await checkEscrowBankTransferFunded(client, escrow.id, sessionId);
+    if (bankTransferFunded) {
+      handleFunded();
+      return true;
+    }
+
     const { data } = await client
       .from('escrow_transactions')
       .select(ESCROW_FUNDING_SELECT)
       .eq('id', escrow.id)
       .maybeSingle();
-    if (!data) return false;
-    const row = data as DbEscrowTransaction;
-    if (escrowUserPaymentVerified(row, currentUserId)) {
+    if (data && escrowUserPaymentVerified(data as DbEscrowTransaction, currentUserId)) {
       handleFunded();
       return true;
     }
@@ -118,34 +126,20 @@ export function BankTransferClient({
   }, [step, va]);
 
   useEffect(() => {
+    vaSessionIdRef.current = va?.sessionId ?? null;
+  }, [va?.sessionId]);
+
+  useEffect(() => {
     if (step !== 'virtual_account') return;
 
     void checkFundingStatus();
 
     const poll = setInterval(() => {
       void checkFundingStatus();
-    }, 3000);
+    }, 2000);
 
-    const verifyTimer = setTimeout(() => {
-      void invokeVerifyEscrowPayment(client, escrow.id).then((result) => {
-        if (result.funded) handleFunded();
-        else void checkFundingStatus();
-      });
-    }, 5000);
-
-    const verifyRetry = setInterval(() => {
-      void invokeVerifyEscrowPayment(client, escrow.id).then((result) => {
-        if (result.funded) handleFunded();
-        else void checkFundingStatus();
-      });
-    }, 15000);
-
-    return () => {
-      clearInterval(poll);
-      clearTimeout(verifyTimer);
-      clearInterval(verifyRetry);
-    };
-  }, [checkFundingStatus, client, escrow.id, handleFunded, step]);
+    return () => clearInterval(poll);
+  }, [checkFundingStatus, step]);
 
   useEffect(() => {
     if (step !== 'virtual_account') return;
@@ -174,9 +168,6 @@ export function BankTransferClient({
         },
         () => {
           void checkFundingStatus();
-          void invokeVerifyEscrowPayment(client, escrow.id).then((result) => {
-            if (result.funded) handleFunded();
-          });
         }
       )
       .subscribe();
@@ -184,7 +175,7 @@ export function BankTransferClient({
     return () => {
       void client.removeChannel(channel);
     };
-  }, [checkFundingStatus, client, escrow.id, handleFunded, step]);
+  }, [checkFundingStatus, client, escrow.id, step]);
 
   async function onRefundComplete(result: RefundAccountResult) {
     setBusy(true);
@@ -201,6 +192,7 @@ export function BankTransferClient({
               oneTimeRefundAccountName: result.accountName,
             };
       const session = await generateVirtualAccount(params);
+      vaSessionIdRef.current = session.session_id;
       setVa({
         sessionId: session.session_id,
         accountNumber: session.account_number,
@@ -217,7 +209,10 @@ export function BankTransferClient({
   }
 
   async function onRegenerate() {
+    fundedRef.current = false;
+    setShowSuccess(false);
     setVa(null);
+    vaSessionIdRef.current = null;
     setStep('refund_account');
     setIsExpired(false);
   }
@@ -242,12 +237,14 @@ export function BankTransferClient({
         <div className="pl-4">
           <p className="text-[11px] font-extrabold uppercase tracking-wide text-secondary">Bank transfer</p>
           <h1 className="mt-1 font-display text-xl font-extrabold tracking-tight text-foreground sm:text-2xl">
-            {step === 'refund_account' ? 'Refund account' : 'Transfer payment'}
+            {showSuccess ? 'Payment received' : step === 'refund_account' ? 'Refund account' : 'Transfer payment'}
           </h1>
           <p className="mt-2 text-[14px] font-semibold leading-relaxed text-muted">
-            {step === 'refund_account'
-              ? 'We need your bank details in case a refund is required.'
-              : 'Send the exact amount to the account below. Your escrow confirms automatically once received.'}
+            {showSuccess
+              ? 'Your transfer was received. Continue to view your updated agreement status.'
+              : step === 'refund_account'
+                ? 'We need your bank details in case a refund is required.'
+                : 'Send the exact amount to the account below. Your escrow confirms automatically once received.'}
           </p>
         </div>
       </section>
@@ -265,14 +262,37 @@ export function BankTransferClient({
         </div>
       ) : null}
 
-      {step === 'refund_account' ? (
+      {showSuccess ? (
+        <section className="linkup-card space-y-4 border-emerald-200 bg-emerald-50/80 p-5 sm:p-6">
+          <div className="flex items-start gap-3">
+            <IoCheckmarkCircle size={28} className="shrink-0 text-emerald-600" aria-hidden />
+            <div>
+              <p className="font-display text-lg font-extrabold text-emerald-900">Payment confirmed</p>
+              <p className="mt-1 text-[14px] font-semibold leading-relaxed text-emerald-800">
+                Your bank transfer has been received and your escrow leg is funded.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleSuccessContinue}
+            className="w-full rounded-full linkup-gradient-primary py-3.5 text-[15px] font-extrabold text-white"
+          >
+            Continue
+          </button>
+        </section>
+      ) : null}
+
+      {!showSuccess && step === 'refund_account' ? (
         <RefundAccountForm
           userId={currentUserId}
           savedAccount={savedAccount}
           onComplete={onRefundComplete}
           busy={busy}
         />
-      ) : va ? (
+      ) : null}
+
+      {!showSuccess && va ? (
         <>
           <section className="linkup-card space-y-4 p-5 sm:p-6">
             <p className="text-[12px] font-extrabold uppercase tracking-wide text-muted">Transfer payment to</p>

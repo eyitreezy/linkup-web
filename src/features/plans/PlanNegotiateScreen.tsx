@@ -27,6 +27,7 @@ import {
 import { formatNegotiationRpcError } from '@/lib/plans/negotiationRpcErrors';
 import { deriveNegotiationContext, isOfferLive } from '@/lib/plans/negotiationState';
 import { isGroupSplitPlan } from '@/lib/plans/groupDynamicSplit';
+import { resolveDefaultGroupGuestOfferAmountCents } from '@/lib/plans/joinRequestSlotDisplay';
 import {
   resolvePlanAgreementHref,
   shouldRedirectFromNegotiate,
@@ -164,7 +165,6 @@ export function PlanNegotiateScreen({ planId, offerId, openAction }: Props) {
       null);
 
   const counterOpenedRef = useRef(false);
-  const amountPrefilledRef = useRef(false);
 
   useEffect(() => {
     if (counterOpenedRef.current || openAction !== 'counter' || !focusOffer || !user?.id || !plan) return;
@@ -194,13 +194,29 @@ export function PlanNegotiateScreen({ planId, offerId, openAction }: Props) {
   const showActionPanel = Boolean(panelOffer && (canNegotiate || panelOffer.status === 'accepted'));
 
   useEffect(() => {
-    if (!plan || !isGroupSplit || amountPrefilledRef.current || counterTarget) return;
-    const suggested = plan.current_suggested_share_cents;
-    if (suggested != null && suggested > 0) {
-      setAmount(String(suggested / 100));
-      amountPrefilledRef.current = true;
+    if (!plan || isCreator || !plan.is_group_plan) return;
+
+    if (counterTarget) {
+      const counterAmount = counterTarget.current_amount_cents ?? counterTarget.amount_cents ?? 0;
+      if (counterAmount > 0) {
+        setAmount(String(counterAmount / 100));
+      }
+      return;
     }
-  }, [plan, isGroupSplit, counterTarget]);
+
+    const defaultCents = resolveDefaultGroupGuestOfferAmountCents(plan);
+    if (defaultCents > 0) {
+      setAmount(String(defaultCents / 100));
+    }
+  }, [
+    plan,
+    isCreator,
+    counterTarget,
+    plan?.current_suggested_share_cents,
+    plan?.accepted_guest_count,
+    plan?.starting_price_cents,
+    plan?.total_amount_cents,
+  ]);
 
   const bidderNamesQuery = useQuery({
     queryKey: ['offer-bidders', planId, offers.map((o) => o.bidder_id).join(',')],
@@ -566,7 +582,7 @@ export function PlanNegotiateScreen({ planId, offerId, openAction }: Props) {
               The host countered your offer. Submitting below sends your counter, or use Accept / Decline above.
             </p>
           ) : null}
-          {isGroupSplit ? <GroupSuggestedShareAnchor plan={plan} /> : null}
+          {plan.is_group_plan ? <GroupSuggestedShareAnchor plan={plan} /> : null}
           <label className="block space-y-1">
             <span className="text-[12px] font-extrabold text-muted">Amount (₦, optional)</span>
             <input

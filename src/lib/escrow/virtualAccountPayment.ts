@@ -44,6 +44,45 @@ export async function verifyBankAccount(
   return data as { account_name: string; account_number: string; bank_code: string };
 }
 
+export async function checkEscrowBankTransferFunded(
+  client: ReturnType<typeof createClient>,
+  escrowId: string,
+  sessionId?: string | null
+): Promise<boolean> {
+  const { data: rpcFunded, error: rpcError } = await client.rpc('check_escrow_bank_transfer_funded', {
+    p_escrow_id: escrowId,
+  });
+  if (!rpcError && rpcFunded === true) {
+    return true;
+  }
+
+  if (sessionId) {
+    const { data: session } = await client
+      .from('virtual_account_sessions')
+      .select('status')
+      .eq('id', sessionId)
+      .maybeSingle();
+    const status = (session?.status as string | undefined)?.toLowerCase() ?? '';
+    if (status === 'funded' || status === 'completed' || status === 'paid' || status === 'successful') {
+      return true;
+    }
+  }
+
+  const { data: sessions } = await client
+    .from('virtual_account_sessions')
+    .select('status')
+    .eq('escrow_id', escrowId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  const latestStatus = (sessions?.[0]?.status as string | undefined)?.toLowerCase() ?? '';
+  return (
+    latestStatus === 'funded' ||
+    latestStatus === 'completed' ||
+    latestStatus === 'paid' ||
+    latestStatus === 'successful'
+  );
+}
+
 export async function generateVirtualAccount(params: {
   escrowId: string;
   escrowLeg?: 'host' | 'guest';
