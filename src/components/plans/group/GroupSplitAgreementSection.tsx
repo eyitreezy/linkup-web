@@ -10,6 +10,7 @@ import {
   offerAgreedAmountCents,
   planTotalAmountCents,
   projectedHostShareCents,
+  resolveHostGroupContribution,
 } from '@/lib/plans/groupDynamicSplit';
 import { resolveEscrowHref } from '@/lib/plans/planAgreementRoute';
 import { createClient } from '@/lib/supabase/client';
@@ -71,6 +72,16 @@ export function GroupSplitAgreementSection({
   const projected = projectedHostShareCents(plan);
   const total = planTotalAmountCents(plan);
   const offerId = myOffer?.id ?? null;
+  const hostContribution = resolveHostGroupContribution(plan, guestEscrows, {
+    acceptedOffers: acceptedOffers.map((o) => ({
+      bidder_id: o.bidder_id,
+      current_amount_cents: o.current_amount_cents,
+      amount_cents: o.amount_cents,
+    })),
+    hostEscrowRow: hostEscrow,
+  });
+  const hostShareBudgetCents = groupClosed ? hostContribution.displayCents : projected;
+  const hostSharePaymentCents = hostContribution.paymentCents;
 
   const profileMap = useMemo(() => {
     const map = new Map<string, ProfileSummary>();
@@ -177,12 +188,11 @@ export function GroupSplitAgreementSection({
     );
   }
 
-  const hostShareCents = hostEscrow?.amount_cents ?? projected;
   const hostSharePaid = hostEscrow?.status === 'funded' || hostEscrow?.status === 'active';
   const isGroupHostBeforeClose = !groupClosed && !plan.host_escrow_id;
 
   const hostEscrowHref =
-    hostEscrow?.id && hostEscrow.status === 'pending_funding' && groupClosed && hostShareCents > 0
+    hostEscrow?.id && hostEscrow.status === 'pending_funding' && groupClosed && hostSharePaymentCents > 0
       ? resolveEscrowHref(hostEscrow.id, { planId, offerId })
       : null;
 
@@ -229,6 +239,9 @@ export function GroupSplitAgreementSection({
               {formatNGN(projected)} <span className="font-semibold">(projected)</span>
             </p>
           </div>
+          <p className="mt-1 text-[12px] font-semibold text-muted">
+            Checkout: {formatNGN(hostSharePaymentCents)} incl. fee
+          </p>
         </div>
 
         <div className="flex items-center justify-between px-1">
@@ -249,7 +262,7 @@ export function GroupSplitAgreementSection({
         <ConfirmDialog
           open={closeOpen}
           title="Close group?"
-          message={`You have ${acceptedOffers.length} guest${acceptedOffers.length === 1 ? '' : 's'} confirmed. Your share will be ${formatNGN(projected)}. No more guests can join after you close. This cannot be undone.`}
+          message={`You have ${acceptedOffers.length} guest${acceptedOffers.length === 1 ? '' : 's'} confirmed. Your share will be ${formatNGN(hostSharePaymentCents)} at checkout (${formatNGN(projected)} contribution). No more guests can join after you close. This cannot be undone.`}
           cancelLabel="Cancel"
           confirmLabel={closing ? 'Processing…' : 'Close and pay'}
           busy={closing}
@@ -284,7 +297,7 @@ export function GroupSplitAgreementSection({
 
         <div className="rounded-xl border border-border/80 px-3 py-2">
           <p className="text-[11px] font-extrabold uppercase text-muted">Your host share</p>
-          <p className="font-extrabold">{formatNGN(groupClosed ? hostShareCents : projected)}</p>
+          <p className="font-extrabold">{formatNGN(groupClosed ? hostShareBudgetCents : projected)}</p>
           {!groupClosed ? (
             <p className="text-[12px] font-semibold text-muted">Projected until you close the group.</p>
           ) : null}
@@ -298,7 +311,7 @@ export function GroupSplitAgreementSection({
             href={hostEscrowHref}
             className="inline-flex w-full items-center justify-center gap-2 rounded-full linkup-gradient-primary px-5 py-3 text-[14px] font-extrabold text-white"
           >
-            Pay your share · {formatNGN(hostShareCents)}
+            Pay your share · {formatNGN(hostSharePaymentCents)}
           </Link>
         ) : null}
 
@@ -336,7 +349,7 @@ export function GroupSplitAgreementSection({
         <div className="flex items-center justify-between gap-3">
           <p className="text-[14px] font-semibold text-muted">Your share</p>
           {groupClosed ? (
-            <p className="text-[14px] font-extrabold text-foreground">{formatNGN(hostShareCents)}</p>
+            <p className="text-[14px] font-extrabold text-foreground">{formatNGN(hostShareBudgetCents)}</p>
           ) : (
             <p className="text-[14px] font-extrabold text-muted">
               {formatNGN(projected)} <span className="font-semibold">(projected)</span>

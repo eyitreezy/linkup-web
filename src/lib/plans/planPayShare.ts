@@ -63,6 +63,8 @@ export function resolvePlanPayShareState(
 export type ResolveHostGroupPayShareOptions = {
   /** Group has an unfilled guest slot (e.g. after guest removal). */
   hasOpenSlots?: boolean;
+  /** Gross checkout cents for the host share (from resolveHostGroupContribution). */
+  hostSharePaymentCents?: number;
 };
 
 export function resolveHostGroupPayShareState(
@@ -104,11 +106,13 @@ export function resolveHostGroupPayShareState(
 
   // Close-group agreement flow — not when a slot reopened and the host may invite a replacement.
   const hasOpenSlots = opts?.hasOpenSlots ?? false;
+  const hostSharePaymentCents = Math.max(0, opts?.hostSharePaymentCents ?? 0);
   if (!hasOpenSlots && !plan.group_closed_at && !plan.host_escrow_id) {
     return {
       showPayShare: true,
       payShareEscrowId: null,
-      payShareAmountLabel: null,
+      payShareAmountLabel:
+        hostSharePaymentCents > 0 ? formatNGN(hostSharePaymentCents) : null,
       viaAgreement: true,
     };
   }

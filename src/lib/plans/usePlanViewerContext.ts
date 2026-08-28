@@ -1,6 +1,6 @@
 import { derivePlanViewerContext, type PlanViewerContext } from '@/lib/plans/planViewerContext';
 import type { PlanGuestEscrowSnapshot } from '@/lib/plans/planPayShare';
-import type { DbPlan, DbPlanOffer, JoinRequestStatus } from '@/types/database';
+import type { DbPlan, DbPlanOffer, DbEscrowTransaction, JoinRequestStatus } from '@/types/database';
 import { useMemo } from 'react';
 
 export type { PlanViewerContext, PlanLockState, AcceptedGuestRef } from '@/lib/plans/planViewerContext';
@@ -25,6 +25,12 @@ export function usePlanViewerContext(
     myGuestEscrow?: PlanGuestEscrowSnapshot | null;
     myHostEscrow?: PlanGuestEscrowSnapshot | null;
     approvedJoinRequestCount?: number;
+    groupGuestEscrows?: Array<
+      Pick<
+        DbEscrowTransaction,
+        'guest_id' | 'guest_share_cents' | 'amount_cents' | 'status' | 'guest_funded_at'
+      >
+    >;
   }
 ): PlanViewerContext | null {
   return useMemo(() => {
@@ -41,5 +47,6 @@ export function usePlanViewerContext(
     opts?.myGuestEscrow,
     opts?.myHostEscrow,
     opts?.approvedJoinRequestCount,
+    opts?.groupGuestEscrows,
   ]);
 }

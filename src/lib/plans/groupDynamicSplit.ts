@@ -55,12 +55,25 @@ export function offerAgreedAmountCents(offer: {
   return offer.current_amount_cents ?? offer.amount_cents ?? 0;
 }
 
-type GuestEscrowLeg = Pick<DbEscrowTransaction, 'guest_id' | 'guest_share_cents' | 'amount_cents'>;
+type GuestEscrowLeg = Pick<
+  DbEscrowTransaction,
+  'guest_id' | 'guest_share_cents' | 'amount_cents' | 'status' | 'guest_funded_at'
+>;
 
 type AcceptedOfferAmount = {
+  bidder_id?: string;
   current_amount_cents?: number | null;
   amount_cents?: number | null;
 };
+
+function isGuestEscrowLegFunded(escrow: GuestEscrowLeg): boolean {
+  return (
+    escrow.guest_funded_at != null ||
+    escrow.status === 'funded' ||
+    escrow.status === 'active' ||
+    escrow.status === 'released'
+  );
+}
 
 export function sumAcceptedOfferAmountsCents(offers: AcceptedOfferAmount[]): number {
   return offers.reduce(
@@ -73,11 +86,89 @@ export function sumAcceptedGuestEscrowCents(escrows: GuestEscrowLeg[]): number {
   const byGuest = new Map<string, number>();
   for (const e of escrows) {
     if (e.guest_id == null) continue;
-    const amt = Math.max(0, e.guest_share_cents ?? e.amount_cents ?? 0);
+    const amt = Math.max(0, e.guest_share_cents ?? 0);
     const prev = byGuest.get(e.guest_id) ?? 0;
     byGuest.set(e.guest_id, Math.max(prev, amt));
   }
   return [...byGuest.values()].reduce((sum, v) => sum + v, 0);
+}
+
+/** Per-guest checkout gross: funded escrow amount when paid, else gross(commitment). */
+export function listAcceptedGuestCheckoutGrossCents(
+  guestEscrows: GuestEscrowLeg[] = [],
+  acceptedOffers: AcceptedOfferAmount[] = []
+): number[] {
+  const escrowByGuest = new Map<string, GuestEscrowLeg>();
+  for (const escrow of guestEscrows) {
+    if (!escrow.guest_id) continue;
+    const prev = escrowByGuest.get(escrow.guest_id);
+    if (!prev || (isGuestEscrowLegFunded(escrow) && !isGuestEscrowLegFunded(prev))) {
+      escrowByGuest.set(escrow.guest_id, escrow);
+    }
+  }
+
+  if (acceptedOffers.length > 0) {
+    return acceptedOffers
+      .map((offer) => {
+        const budget = Math.max(0, offer.current_amount_cents ?? offer.amount_cents ?? 0);
+        const escrow = offer.bidder_id ? escrowByGuest.get(offer.bidder_id) : undefined;
+        if (escrow && isGuestEscrowLegFunded(escrow)) {
+          const paidGross = Math.max(0, escrow.amount_cents ?? 0);
+          if (paidGross > 0) return paidGross;
+        }
+        return budget > 0 ? grossAmountCents(budget) : 0;
+      })
+      .filter((amount) => amount > 0);
+  }
+
+  return [...escrowByGuest.values()]
+    .map((escrow) => {
+      if (isGuestEscrowLegFunded(escrow)) {
+        const paidGross = Math.max(0, escrow.amount_cents ?? 0);
+        if (paidGross > 0) return paidGross;
+      }
+      const budget = Math.max(0, escrow.guest_share_cents ?? 0);
+      return budget > 0 ? grossAmountCents(budget) : 0;
+    })
+    .filter((amount) => amount > 0);
+}
+
+/** Per-guest budget commitments (one entry per accepted guest leg). */
+export function listAcceptedGuestBudgetCents(
+  guestEscrows: GuestEscrowLeg[] = [],
+  acceptedOffers: AcceptedOfferAmount[] = []
+): number[] {
+  const fromOffers = acceptedOffers
+    .map((o) => Math.max(0, o.current_amount_cents ?? o.amount_cents ?? 0))
+    .filter((amount) => amount > 0);
+  if (fromOffers.length > 0) return fromOffers;
+
+  const byGuest = new Map<string, number>();
+  for (const e of guestEscrows) {
+    if (e.guest_id == null) continue;
+    const amt = Math.max(0, e.guest_share_cents ?? 0);
+    if (amt <= 0) continue;
+    const prev = byGuest.get(e.guest_id) ?? 0;
+    byGuest.set(e.guest_id, Math.max(prev, amt));
+  }
+  return [...byGuest.values()];
+}
+
+/**
+ * Host checkout gross: plan gross total minus per-guest gross checkouts.
+ * Matches pool subtraction and avoids per-leg fee rounding drift on the host leg alone.
+ */
+export function resolveHostShareGrossCheckoutCents(
+  totalBudget: number,
+  hostBudget: number,
+  guestCheckoutGrossCents: number[]
+): number {
+  if (hostBudget <= 0) return 0;
+  if (totalBudget > 0 && guestCheckoutGrossCents.length > 0) {
+    const guestGrossSum = guestCheckoutGrossCents.reduce((sum, gross) => sum + gross, 0);
+    return Math.max(0, grossAmountCents(totalBudget) - guestGrossSum);
+  }
+  return grossAmountCents(hostBudget);
 }
 
 export function resolveAcceptedGuestCommitmentCents(
@@ -223,9 +314,35 @@ export function isGhostHostEscrowRow(
 }
 
 export type GroupHostShareResolution = {
+  /** Host share budget (excludes platform fee). */
   displayCents: number;
+  /** Gross checkout amount (budget + platform fee). */
   paymentCents: number;
 };
+
+/** Placeholder escrow row when resolving host share before a host leg exists. */
+export const EMPTY_GROUP_HOST_ESCROW = {
+  id: '',
+  guest_id: null,
+  host_share_cents: 0,
+  amount_cents: 0,
+  metadata: null,
+} as const;
+
+/**
+ * Authoritative host contribution for group split plans.
+ * Budget remainder = plan total − accepted guest commitments; checkout = grossAmountCents(budget).
+ */
+export function resolveHostGroupContribution(
+  plan: GroupSplitPlanSnapshot,
+  guestEscrows: GuestEscrowLeg[] = [],
+  options: ResolveGroupHostShareOptions = {}
+): GroupHostShareResolution {
+  const escrowRow =
+    options.hostEscrowRow ??
+    (EMPTY_GROUP_HOST_ESCROW as Parameters<typeof resolveGroupHostShareCents>[1]);
+  return resolveGroupHostShareCents(plan, escrowRow, guestEscrows, options);
+}
 
 export type ResolveGroupHostShareOptions = {
   acceptedOffers?: AcceptedOfferAmount[];
@@ -271,9 +388,10 @@ export function resolveGroupHostShareCents(
   plan: GroupSplitPlanSnapshot,
   escrow: Pick<
     DbEscrowTransaction,
-    'id' | 'host_share_cents' | 'amount_cents' | 'guest_id' | 'metadata'
+    'id' | 'host_share_cents' | 'amount_cents' | 'guest_id'
   > & {
     guest_share_cents?: number | null;
+    metadata?: DbEscrowTransaction['metadata'] | null;
   },
   guestEscrows: GuestEscrowLeg[] = [],
   options: ResolveGroupHostShareOptions = {}
@@ -305,14 +423,22 @@ export function resolveGroupHostShareCents(
     return { displayCents: stored, paymentCents: storedGross };
   }
 
+  const guestCheckoutGross = listAcceptedGuestCheckoutGrossCents(guestEscrows, acceptedOffers);
+  const paymentFromLegs = (hostBudget: number) =>
+    resolveHostShareGrossCheckoutCents(
+      resolveGroupPlanTotalCents(plan, guestEscrows, resolveOpts),
+      hostBudget,
+      guestCheckoutGross
+    );
+
   if (live > 0) {
-    return { displayCents: live, paymentCents: grossAmountCents(live) };
+    return { displayCents: live, paymentCents: paymentFromLegs(live) };
   }
   if (storedGross > 0) {
     return { displayCents: stored, paymentCents: storedGross };
   }
   if (projected > 0) {
-    return { displayCents: projected, paymentCents: grossAmountCents(projected) };
+    return { displayCents: projected, paymentCents: paymentFromLegs(projected) };
   }
 
   return { displayCents: 0, paymentCents: 0 };

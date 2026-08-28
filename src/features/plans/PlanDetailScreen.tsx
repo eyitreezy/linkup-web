@@ -198,7 +198,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
       const { data } = await client
         .from('escrow_transactions')
         .select(
-          'id, guest_id, host_id, payer_id, status, escrow_pattern, host_funded_at, guest_funded_at, host_share_cents, guest_share_cents'
+          'id, guest_id, host_id, payer_id, status, escrow_pattern, host_funded_at, guest_funded_at, host_share_cents, guest_share_cents, amount_cents'
         )
         .eq('plan_id', planId);
       return data ?? [];
@@ -250,6 +250,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     myJoinRequest: bundle?.myJoinRequest ?? null,
     myGuestEscrow: bundle?.myGuestEscrow ?? null,
     myHostEscrow: bundle?.myHostEscrow ?? null,
+    groupGuestEscrows: groupEscrowsQuery.data ?? [],
     approvedJoinRequestCount:
       plan?.is_negotiable === false
         ? (bundle?.approvedJoinRequestCount ?? approvedJoinRequests.length)

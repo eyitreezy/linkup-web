@@ -76,6 +76,7 @@ import {
 } from '@/lib/plans/groupDynamicSplit';
 import {
   feeFromGrossAmountCents,
+  grossAmountCents,
   patternBLegGrossCents,
   resolveEscrowLegFeeBreakdown,
 } from '@/lib/plans/planFinancialConfig';
@@ -584,26 +585,28 @@ function EscrowDetailContent({
           groupHostShareResolveOpts
         )
       : null;
-  const resolvedHostShareCents = Math.max(
-    groupHostShare?.displayCents ?? 0,
-    groupHostShare?.paymentCents ?? 0
-  );
+  const resolvedHostShareDisplayCents = groupHostShare?.displayCents ?? 0;
+  const resolvedHostSharePaymentCents = groupHostShare?.paymentCents ?? 0;
   const myShareCents =
     isGroupSplit && isHost
       ? hostViewingGuestLeg
         ? Math.max(0, escrow.guest_share_cents ?? escrow.amount_cents ?? 0)
-        : resolvedHostShareCents > 0
-          ? resolvedHostShareCents
-          : (escrow.host_share_cents ?? fundingUi.payAmountCents ?? 0)
+        : resolvedHostShareDisplayCents > 0
+          ? resolvedHostShareDisplayCents
+          : (escrow.host_share_cents ?? 0)
       : isHost
         ? (escrow.host_share_cents ?? fundingUi.payAmountCents ?? 0)
         : (escrow.guest_share_cents ?? fundingUi.payAmountCents ?? 0);
   const myPayShareCents =
     isGroupSplit && isHost && !hostViewingGuestLeg
-      ? resolvedHostShareCents > 0
-        ? resolvedHostShareCents
-        : (groupHostShare?.paymentCents ?? escrow.host_share_cents ?? fundingUi.payAmountCents ?? 0)
-      : myShareCents;
+      ? resolvedHostSharePaymentCents > 0
+        ? resolvedHostSharePaymentCents
+        : (fundingUi.payAmountCents ?? grossAmountCents(escrow.host_share_cents ?? 0))
+      : isGroupSplit && !isHost
+        ? (fundingUi.payAmountCents > 0
+            ? fundingUi.payAmountCents
+            : grossAmountCents(escrow.guest_share_cents ?? 0))
+        : myShareCents;
   const canFundThisLeg =
     !isGhostHostRow &&
     (fundingUi.canFund ||

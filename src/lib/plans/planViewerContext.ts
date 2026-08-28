@@ -5,11 +5,15 @@ import { planIsPastNegotiation } from '@/lib/plans/planAgreementRoute';
 import { isOfferLive } from '@/lib/plans/negotiationState';
 import { userEscrowLegFunded } from '@/lib/escrow/splitEscrowFunding';
 import {
+  isGroupSplitPlan,
+  resolveHostGroupContribution,
+} from '@/lib/plans/groupDynamicSplit';
+import {
   resolveHostGroupPayShareState,
   resolvePlanPayShareState,
   type PlanGuestEscrowSnapshot,
 } from '@/lib/plans/planPayShare';
-import type { DbPlan, DbPlanOffer, JoinRequestStatus } from '@/types/database';
+import type { DbPlan, DbPlanOffer, DbEscrowTransaction, JoinRequestStatus } from '@/types/database';
 
 export type PlanLockState = 'open' | 'partial' | 'full';
 
@@ -122,6 +126,13 @@ export function derivePlanViewerContext(
     myGuestEscrow?: PlanGuestEscrowSnapshot | null;
     myHostEscrow?: PlanGuestEscrowSnapshot | null;
     approvedJoinRequestCount?: number;
+    /** Guest escrow legs for group host share (funded gross when available). */
+    groupGuestEscrows?: Array<
+      Pick<
+        DbEscrowTransaction,
+        'guest_id' | 'guest_share_cents' | 'amount_cents' | 'status' | 'guest_funded_at'
+      >
+    >;
   }
 ): PlanViewerContext {
   const listingExpired = opts?.listingExpired ?? opts?.moodClosed ?? false;
@@ -235,13 +246,27 @@ export function derivePlanViewerContext(
     isMatchedGuest && plan.status === 'completed' && !completionSelfAcked && !!userId;
 
   const payShare = resolvePlanPayShareState(plan, userId, opts?.myGuestEscrow, isHost);
+  const acceptedOfferAmounts = offers
+    .filter((o) => o.status === 'accepted')
+    .map((o) => ({
+      bidder_id: o.bidder_id,
+      current_amount_cents: o.current_amount_cents,
+      amount_cents: o.amount_cents,
+    }));
+  const hostSharePaymentCents =
+    isGroup && isGroupSplitPlan(plan)
+      ? resolveHostGroupContribution(plan, opts?.groupGuestEscrows ?? [], {
+          acceptedOffers: acceptedOfferAmounts,
+          hostEscrowRow: opts?.myHostEscrow ?? null,
+        }).paymentCents
+      : 0;
   const hostPayShare = resolveHostGroupPayShareState(
     plan,
     userId,
     opts?.myHostEscrow,
     acceptedCount,
     isHost,
-    { hasOpenSlots }
+    { hasOpenSlots, hostSharePaymentCents }
   );
 
   if (
