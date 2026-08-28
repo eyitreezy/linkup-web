@@ -105,7 +105,16 @@ export function PlanNegotiateScreen({ planId, offerId, openAction }: Props) {
   const isCreator = !!user?.id && plan?.creator_id === user.id;
   const isGroupSplit = plan ? isGroupSplitPlan(plan) : false;
   const planListingExpired = plan ? isPlanListingExpired(plan) : false;
-  const canNegotiate = plan?.status === 'negotiating' && !planListingExpired;
+  const groupHasOpenSlots =
+    !!plan?.is_group_plan &&
+    (plan.accepted_guest_count ?? 0) < (plan.max_guests ?? 0);
+  const canNegotiate =
+    !planListingExpired &&
+    (plan?.status === 'negotiating' ||
+      (groupHasOpenSlots &&
+        plan?.status !== 'cancelled' &&
+        plan?.status !== 'completed' &&
+        plan?.status !== 'draft'));
   const dbUser = profileQuery.data?.dbUser ?? null;
 
   const sortedOffers = useMemo(

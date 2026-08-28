@@ -4,13 +4,15 @@ import { EscrowPaymentSuccessModal } from '@/components/escrow/EscrowPaymentSucc
 import { EscrowScreenHeader } from '@/components/escrow/EscrowScreenHeader';
 import { RefundAccountForm, type RefundAccountResult } from '@/components/escrow/RefundAccountForm';
 import { formatNGN } from '@/lib/escrow/escrowFormatters';
+import { escrowUserPaymentVerified } from '@/lib/escrow/escrowFundingStatus';
+import { subscribeEscrowRealtime } from '@/lib/escrow/subscribeEscrowRealtime';
+import { invokeVerifyEscrowPayment } from '@/lib/escrow/verifyEscrowPayment';
 import { generateVirtualAccount } from '@/lib/escrow/virtualAccountPayment';
 import { createClient } from '@/lib/supabase/client';
-import { userEscrowLegFunded } from '@/lib/escrow/splitEscrowFunding';
 import type { DbEscrowTransaction, DbUserPaymentAccount } from '@/types/database';
 import { cn } from '@/utils/cn';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IoCheckmarkCircle, IoCopyOutline, IoTimeOutline } from 'react-icons/io5';
 
 type VirtualAccountState = {
@@ -22,7 +24,21 @@ type VirtualAccountState = {
 };
 
 type Props = {
-  escrow: Pick<DbEscrowTransaction, 'id' | 'amount_cents' | 'plan_id' | 'status' | 'escrow_pattern' | 'host_id' | 'guest_id' | 'host_funded_at' | 'guest_funded_at' | 'host_share_cents' | 'guest_share_cents'>;
+  escrow: Pick<
+    DbEscrowTransaction,
+    | 'id'
+    | 'amount_cents'
+    | 'plan_id'
+    | 'status'
+    | 'escrow_pattern'
+    | 'host_id'
+    | 'guest_id'
+    | 'payer_id'
+    | 'host_funded_at'
+    | 'guest_funded_at'
+    | 'host_share_cents'
+    | 'guest_share_cents'
+  >;
   savedAccount: DbUserPaymentAccount | null;
   currentUserId: string;
   escrowLeg?: 'host' | 'guest';
@@ -35,6 +51,9 @@ function formatCountdown(ms: number): string {
   const sec = totalSec % 60;
   return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
+
+const ESCROW_FUNDING_SELECT =
+  'id, status, escrow_pattern, host_id, guest_id, payer_id, host_funded_at, guest_funded_at, amount_cents, host_share_cents, guest_share_cents, metadata';
 
 export function BankTransferClient({
   escrow,
@@ -53,6 +72,7 @@ export function BankTransferClient({
   const [countdownMs, setCountdownMs] = useState(0);
   const [isExpired, setIsExpired] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const fundedRef = useRef(false);
 
   const backHref = agreementPlanId ? `/escrow/${escrow.id}?planId=${agreementPlanId}` : `/escrow/${escrow.id}`;
   const successHref = agreementPlanId
@@ -60,8 +80,25 @@ export function BankTransferClient({
     : `/plan/${escrow.plan_id}/agreement`;
 
   const handleFunded = useCallback(() => {
+    if (fundedRef.current) return;
+    fundedRef.current = true;
     setShowSuccess(true);
   }, []);
+
+  const checkFundingStatus = useCallback(async () => {
+    const { data } = await client
+      .from('escrow_transactions')
+      .select(ESCROW_FUNDING_SELECT)
+      .eq('id', escrow.id)
+      .maybeSingle();
+    if (!data) return false;
+    const row = data as DbEscrowTransaction;
+    if (escrowUserPaymentVerified(row, currentUserId)) {
+      handleFunded();
+      return true;
+    }
+    return false;
+  }, [client, currentUserId, escrow.id, handleFunded]);
 
   function handleSuccessContinue() {
     router.replace(successHref);
@@ -83,29 +120,44 @@ export function BankTransferClient({
   useEffect(() => {
     if (step !== 'virtual_account') return;
 
+    void checkFundingStatus();
+
     const poll = setInterval(() => {
-      void (async () => {
-        const { data } = await client
-          .from('escrow_transactions')
-          .select(
-            'id, status, escrow_pattern, host_id, guest_id, host_funded_at, guest_funded_at, amount_cents, host_share_cents, guest_share_cents'
-          )
-          .eq('id', escrow.id)
-          .maybeSingle();
-        if (!data) return;
-        const row = data as DbEscrowTransaction;
-        if (
-          row.status === 'funded' ||
-          row.status === 'active' ||
-          userEscrowLegFunded(row, currentUserId)
-        ) {
-          handleFunded();
-        }
-      })();
+      void checkFundingStatus();
     }, 3000);
 
-    return () => clearInterval(poll);
-  }, [client, currentUserId, escrow.id, handleFunded, step]);
+    const verifyTimer = setTimeout(() => {
+      void invokeVerifyEscrowPayment(client, escrow.id).then((result) => {
+        if (result.funded) handleFunded();
+        else void checkFundingStatus();
+      });
+    }, 5000);
+
+    const verifyRetry = setInterval(() => {
+      void invokeVerifyEscrowPayment(client, escrow.id).then((result) => {
+        if (result.funded) handleFunded();
+        else void checkFundingStatus();
+      });
+    }, 15000);
+
+    return () => {
+      clearInterval(poll);
+      clearTimeout(verifyTimer);
+      clearInterval(verifyRetry);
+    };
+  }, [checkFundingStatus, client, escrow.id, handleFunded, step]);
+
+  useEffect(() => {
+    if (step !== 'virtual_account') return;
+
+    return subscribeEscrowRealtime({
+      escrowId: escrow.id,
+      planId: escrow.plan_id,
+      onRefresh: () => {
+        void checkFundingStatus();
+      },
+    });
+  }, [checkFundingStatus, escrow.id, escrow.plan_id, step]);
 
   useEffect(() => {
     if (step !== 'virtual_account') return;
@@ -120,9 +172,11 @@ export function BankTransferClient({
           table: 'virtual_account_sessions',
           filter: `escrow_id=eq.${escrow.id}`,
         },
-        (payload) => {
-          const next = payload.new as { status?: string };
-          if (next.status === 'funded') handleFunded();
+        () => {
+          void checkFundingStatus();
+          void invokeVerifyEscrowPayment(client, escrow.id).then((result) => {
+            if (result.funded) handleFunded();
+          });
         }
       )
       .subscribe();
@@ -130,7 +184,7 @@ export function BankTransferClient({
     return () => {
       void client.removeChannel(channel);
     };
-  }, [client, escrow.id, handleFunded, step]);
+  }, [checkFundingStatus, client, escrow.id, handleFunded, step]);
 
   async function onRefundComplete(result: RefundAccountResult) {
     setBusy(true);
