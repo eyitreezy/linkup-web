@@ -69,9 +69,7 @@ import {
   isGhostHostEscrowRow,
   isGroupHostCloseEscrowRow,
   isGroupSplitPlan,
-  resolveAcceptedGuestCommitmentCents,
-  resolveGroupHostShareCents,
-  resolveGroupPlanTotalCents,
+  resolveGroupHostShareBreakdown,
   type GroupSplitPlanSnapshot,
 } from '@/lib/plans/groupDynamicSplit';
 import {
@@ -576,15 +574,16 @@ function EscrowDetailContent({
     acceptedOffers,
     hostEscrowRow,
   };
-  const groupHostShare =
+  const groupHostShareBreakdown =
     isGroupSplit && isHost && groupSplitPlanInput
-      ? resolveGroupHostShareCents(
+      ? resolveGroupHostShareBreakdown(
           groupSplitPlanInput,
           escrow,
           guestEscrowRows,
           groupHostShareResolveOpts
         )
       : null;
+  const groupHostShare = groupHostShareBreakdown;
   const resolvedHostShareDisplayCents = groupHostShare?.displayCents ?? 0;
   const resolvedHostSharePaymentCents = groupHostShare?.paymentCents ?? 0;
   const myShareCents =
@@ -745,17 +744,11 @@ function EscrowDetailContent({
     .filter((offer) => !!offer.bidder_id)
     .map((offer) => ({ bidderId: offer.bidder_id, key: offer.id }));
   const groupSplitTotalOpts = { acceptedOffers, hostEscrowRow };
-  const planTotalCents = groupSplitPlanInput
-    ? resolveGroupPlanTotalCents(groupSplitPlanInput, guestEscrowRows, groupSplitTotalOpts)
-    : 0;
-  const guestsCommittedCents = groupSplitPlanInput
-    ? resolveAcceptedGuestCommitmentCents(groupSplitPlanInput, guestEscrowRows, acceptedOffers)
-    : 0;
-  const hostShareDisplayCents =
-    groupHostShare?.displayCents ?? Math.max(0, hostEscrowRow?.host_share_cents ?? 0);
-  const hostSharePayGrossCents =
-    groupHostShare?.paymentCents ??
-    (hostEscrowRow ? patternBLegGrossCents(hostEscrowRow, 'host') : 0);
+  const planTotalCents = groupHostShareBreakdown?.planTotalCents ?? 0;
+  const guestsCommittedCents = groupHostShareBreakdown?.guestsCommittedCents ?? 0;
+  const hostShareDisplayCents = groupHostShareBreakdown?.displayCents ?? 0;
+  const hostSharePayGrossCents = groupHostShareBreakdown?.paymentCents ?? 0;
+  const hostSharePlatformFeeCents = groupHostShareBreakdown?.platformFeeCents ?? 0;
   const groupClosed = !!plan?.group_closed_at;
   const hostShareFunded =
     !!hostEscrowRow?.host_funded_at ||
@@ -1123,6 +1116,7 @@ function EscrowDetailContent({
             guestsCommittedCents={guestsCommittedCents}
             hostShareCents={hostShareDisplayCents}
             hostPayGrossCents={hostSharePayGrossCents}
+            platformFeeCents={hostSharePlatformFeeCents}
             currency={escrow.currency}
             groupClosed={groupClosed}
             hostShareFunded={hostShareFunded}

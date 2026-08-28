@@ -10,6 +10,7 @@ type Props = {
   guestsCommittedCents: number;
   hostShareCents: number;
   hostPayGrossCents?: number;
+  platformFeeCents?: number;
   currency: string;
   groupClosed: boolean;
   hostShareFunded: boolean;
@@ -21,6 +22,7 @@ export function EscrowGroupHostShareBreakdownCard({
   guestsCommittedCents,
   hostShareCents,
   hostPayGrossCents,
+  platformFeeCents,
   currency,
   groupClosed,
   hostShareFunded,
@@ -31,6 +33,11 @@ export function EscrowGroupHostShareBreakdownCard({
     hostPayGrossCents != null && hostPayGrossCents > 0
       ? hostPayGrossCents
       : grossAmountCents(hostShareCents);
+  const feeCents =
+    platformFeeCents != null && platformFeeCents > 0
+      ? platformFeeCents
+      : Math.max(0, hostCheckoutCents - hostShareCents);
+  const showCheckoutBreakdown = feeCents > 0 && hostCheckoutCents !== hostShareCents;
 
   return (
     <section className="linkup-card relative space-y-4 overflow-hidden p-5 sm:p-6">
@@ -83,11 +90,11 @@ export function EscrowGroupHostShareBreakdownCard({
             </p>
             {!groupClosed ? (
               <p className="mt-1 text-[12px] font-semibold text-muted">
-                Projected. Updates as more guests join.
+                Your contribution (excl. fee). Updates as more guests join.
               </p>
             ) : (
               <p className="mt-1 text-[12px] font-semibold text-muted">
-                Final after closing the group
+                Your contribution (excl. fee) after closing the group
               </p>
             )}
           </div>
@@ -106,6 +113,22 @@ export function EscrowGroupHostShareBreakdownCard({
             )}
           </div>
         </div>
+        {showCheckoutBreakdown ? (
+          <>
+            <div className="flex items-center justify-between gap-3 border-t border-border/50 px-4 py-3.5 sm:px-5">
+              <span className="text-[13px] font-semibold text-muted">Platform fee (5%)</span>
+              <span className="font-display text-base font-extrabold text-muted sm:text-lg">
+                + {fmt(feeCents)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3 bg-[#F8F7FC] px-4 py-3.5 sm:px-5">
+              <span className="text-[13px] font-extrabold text-foreground">Total at checkout</span>
+              <span className="font-display text-base font-extrabold text-foreground sm:text-lg">
+                {fmt(hostCheckoutCents)}
+              </span>
+            </div>
+          </>
+        ) : null}
       </div>
 
       <p

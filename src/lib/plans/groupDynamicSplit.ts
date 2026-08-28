@@ -1,5 +1,8 @@
 import type { DbEscrowTransaction, DbPlan } from '@/types/database';
-import { grossAmountCents } from '@/lib/plans/planFinancialConfig';
+import {
+  budgetFromGrossAmountCents,
+  grossAmountCents,
+} from '@/lib/plans/planFinancialConfig';
 export function isGroupSplitPlan(
   plan: Pick<DbPlan, 'is_group_plan' | 'escrow_pattern'> | null | undefined
 ): boolean {
@@ -75,6 +78,33 @@ function isGuestEscrowLegFunded(escrow: GuestEscrowLeg): boolean {
   );
 }
 
+function guestEscrowByGuestId(guestEscrows: GuestEscrowLeg[]): Map<string, GuestEscrowLeg> {
+  const escrowByGuest = new Map<string, GuestEscrowLeg>();
+  for (const escrow of guestEscrows) {
+    if (!escrow.guest_id) continue;
+    const prev = escrowByGuest.get(escrow.guest_id);
+    if (!prev || (isGuestEscrowLegFunded(escrow) && !isGuestEscrowLegFunded(prev))) {
+      escrowByGuest.set(escrow.guest_id, escrow);
+    }
+  }
+  return escrowByGuest;
+}
+
+function guestBudgetFromOfferLeg(
+  offer: AcceptedOfferAmount,
+  escrowByGuest: Map<string, GuestEscrowLeg>
+): number {
+  const budget = Math.max(0, offer.current_amount_cents ?? offer.amount_cents ?? 0);
+  const escrow = offer.bidder_id ? escrowByGuest.get(offer.bidder_id) : undefined;
+  if (escrow && isGuestEscrowLegFunded(escrow)) {
+    const fromLeg = Math.max(0, escrow.guest_share_cents ?? 0);
+    if (fromLeg > 0) return fromLeg;
+    const paidGross = Math.max(0, escrow.amount_cents ?? 0);
+    if (paidGross > 0) return budgetFromGrossAmountCents(paidGross);
+  }
+  return budget;
+}
+
 export function sumAcceptedOfferAmountsCents(offers: AcceptedOfferAmount[]): number {
   return offers.reduce(
     (sum, o) => sum + Math.max(0, o.current_amount_cents ?? o.amount_cents ?? 0),
@@ -98,19 +128,12 @@ export function listAcceptedGuestCheckoutGrossCents(
   guestEscrows: GuestEscrowLeg[] = [],
   acceptedOffers: AcceptedOfferAmount[] = []
 ): number[] {
-  const escrowByGuest = new Map<string, GuestEscrowLeg>();
-  for (const escrow of guestEscrows) {
-    if (!escrow.guest_id) continue;
-    const prev = escrowByGuest.get(escrow.guest_id);
-    if (!prev || (isGuestEscrowLegFunded(escrow) && !isGuestEscrowLegFunded(prev))) {
-      escrowByGuest.set(escrow.guest_id, escrow);
-    }
-  }
+  const escrowByGuest = guestEscrowByGuestId(guestEscrows);
 
   if (acceptedOffers.length > 0) {
     return acceptedOffers
       .map((offer) => {
-        const budget = Math.max(0, offer.current_amount_cents ?? offer.amount_cents ?? 0);
+        const budget = guestBudgetFromOfferLeg(offer, escrowByGuest);
         const escrow = offer.bidder_id ? escrowByGuest.get(offer.bidder_id) : undefined;
         if (escrow && isGuestEscrowLegFunded(escrow)) {
           const paidGross = Math.max(0, escrow.amount_cents ?? 0);
@@ -133,25 +156,32 @@ export function listAcceptedGuestCheckoutGrossCents(
     .filter((amount) => amount > 0);
 }
 
-/** Per-guest budget commitments (one entry per accepted guest leg). */
+/** Per-guest budget commitments aligned with checkout gross legs. */
 export function listAcceptedGuestBudgetCents(
   guestEscrows: GuestEscrowLeg[] = [],
   acceptedOffers: AcceptedOfferAmount[] = []
 ): number[] {
-  const fromOffers = acceptedOffers
-    .map((o) => Math.max(0, o.current_amount_cents ?? o.amount_cents ?? 0))
-    .filter((amount) => amount > 0);
-  if (fromOffers.length > 0) return fromOffers;
+  const escrowByGuest = guestEscrowByGuestId(guestEscrows);
 
-  const byGuest = new Map<string, number>();
-  for (const e of guestEscrows) {
-    if (e.guest_id == null) continue;
-    const amt = Math.max(0, e.guest_share_cents ?? 0);
-    if (amt <= 0) continue;
-    const prev = byGuest.get(e.guest_id) ?? 0;
-    byGuest.set(e.guest_id, Math.max(prev, amt));
+  if (acceptedOffers.length > 0) {
+    return acceptedOffers
+      .map((offer) => guestBudgetFromOfferLeg(offer, escrowByGuest))
+      .filter((amount) => amount > 0);
   }
-  return [...byGuest.values()];
+
+  return [...escrowByGuest.values()]
+    .map((escrow) => Math.max(0, escrow.guest_share_cents ?? 0))
+    .filter((amount) => amount > 0);
+}
+
+export function sumAcceptedGuestBudgetCents(
+  guestEscrows: GuestEscrowLeg[] = [],
+  acceptedOffers: AcceptedOfferAmount[] = []
+): number {
+  return listAcceptedGuestBudgetCents(guestEscrows, acceptedOffers).reduce(
+    (sum, budget) => sum + budget,
+    0
+  );
 }
 
 /**
@@ -426,6 +456,37 @@ function hostCloseEscrowFunded(
   );
 }
 
+export type GroupHostShareBreakdown = GroupHostShareResolution & {
+  planTotalCents: number;
+  guestsCommittedCents: number;
+  platformFeeCents: number;
+};
+
+/** Single authoritative breakdown for group host share UI (budget lines + gross checkout). */
+export function resolveGroupHostShareBreakdown(
+  plan: GroupSplitPlanSnapshot,
+  escrow: Parameters<typeof resolveGroupHostShareCents>[1],
+  guestEscrows: GuestEscrowLeg[] = [],
+  options: ResolveGroupHostShareOptions = {}
+): GroupHostShareBreakdown {
+  const acceptedOffers = options.acceptedOffers ?? [];
+  const resolveOpts: ResolveGroupPlanTotalOptions = {
+    acceptedOffers,
+    hostEscrowRow: options.hostEscrowRow,
+  };
+  const share = resolveGroupHostShareCents(plan, escrow, guestEscrows, options);
+  const planTotalCents = resolveGroupPlanTotalCents(plan, guestEscrows, resolveOpts);
+  const guestsCommittedCents = Math.max(0, planTotalCents - share.displayCents);
+  const platformFeeCents = Math.max(0, share.paymentCents - share.displayCents);
+
+  return {
+    ...share,
+    planTotalCents,
+    guestsCommittedCents,
+    platformFeeCents,
+  };
+}
+
 export function resolveGroupHostShareCents(
   plan: GroupSplitPlanSnapshot,
   escrow: Pick<
@@ -465,15 +526,21 @@ export function resolveGroupHostShareCents(
     topUpMeta?.host_share_top_up === true || topUpMeta?.host_share_top_up === 'true';
 
   const guestCheckoutGross = listAcceptedGuestCheckoutGrossCents(guestEscrows, acceptedOffers);
-  const paymentFromLegs = (hostBudget: number) =>
-    resolveHostShareGrossCheckoutCents(
-      resolveGroupPlanTotalCents(plan, guestEscrows, resolveOpts),
-      hostBudget,
-      guestCheckoutGross
-    );
-  const calculatedBudget = live > 0 ? live : projected;
-  const calculatedPayment =
-    calculatedBudget > 0 ? paymentFromLegs(calculatedBudget) : 0;
+  const totalBudget = resolveGroupPlanTotalCents(plan, guestEscrows, resolveOpts);
+  const guestBudgetFromLegs = sumAcceptedGuestBudgetCents(guestEscrows, acceptedOffers);
+  const guestBudgetSum =
+    guestBudgetFromLegs > 0
+      ? totalBudget > 0
+        ? Math.min(guestBudgetFromLegs, totalBudget)
+        : guestBudgetFromLegs
+      : resolveAcceptedGuestCommitmentCents(plan, guestEscrows, acceptedOffers);
+  const hostBudget = Math.max(0, totalBudget - guestBudgetSum);
+  const calculatedPayment = resolveHostShareGrossCheckoutCents(
+    totalBudget,
+    hostBudget,
+    guestCheckoutGross
+  );
+  const calculatedBudget = hostBudget > 0 ? hostBudget : live > 0 ? live : projected;
 
   if (calculatedPayment > 0 && (hostClosePending || !plan.group_closed_at)) {
     return { displayCents: calculatedBudget, paymentCents: calculatedPayment };
@@ -500,7 +567,22 @@ export function resolveGroupHostShareCents(
     return { displayCents: stored, paymentCents: storedGross };
   }
   if (projected > 0) {
-    return { displayCents: projected, paymentCents: paymentFromLegs(projected) };
+    const projectedTotal = resolveGroupPlanTotalCents(plan, guestEscrows, resolveOpts);
+    const projectedGuestBudget =
+      guestBudgetFromLegs > 0
+        ? projectedTotal > 0
+          ? Math.min(guestBudgetFromLegs, projectedTotal)
+          : guestBudgetFromLegs
+        : resolveAcceptedGuestCommitmentCents(plan, guestEscrows, acceptedOffers);
+    const projectedHostBudget = Math.max(0, projectedTotal - projectedGuestBudget);
+    return {
+      displayCents: projectedHostBudget > 0 ? projectedHostBudget : projected,
+      paymentCents: resolveHostShareGrossCheckoutCents(
+        projectedTotal,
+        projectedHostBudget > 0 ? projectedHostBudget : projected,
+        guestCheckoutGross
+      ),
+    };
   }
 
   return { displayCents: 0, paymentCents: 0 };
