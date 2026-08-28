@@ -75,9 +75,9 @@ import {
   type GroupSplitPlanSnapshot,
 } from '@/lib/plans/groupDynamicSplit';
 import {
-  budgetFromGrossAmountCents,
   feeFromGrossAmountCents,
   patternBLegGrossCents,
+  resolveEscrowLegFeeBreakdown,
 } from '@/lib/plans/planFinancialConfig';
 import { formatIsoDateTime } from '@/lib/plans/formatPlanMeta';
 import {
@@ -702,6 +702,7 @@ function EscrowDetailContent({
   });
   const userPayGrossCents =
     fundingUi.payAmountCents > 0 ? fundingUi.payAmountCents : currentUserPayCents;
+  const checkoutBreakdown = resolveEscrowLegFeeBreakdown(escrow, user.id);
   const yourShareLabel =
     userPayGrossCents > 0 ? formatEscrowMoney(userPayGrossCents, escrow.currency) : null;
   const fundConfirmAmountLabel = yourShareLabel ?? formatEscrowMoney(escrow.amount_cents, escrow.currency);
@@ -967,23 +968,23 @@ function EscrowDetailContent({
         yourShareLabel={yourShareLabel}
       />
 
-      {plan?.is_paid && escrow.amount_cents > 0 ? (
+      {plan?.is_paid && checkoutBreakdown.grossCents > 0 ? (
         <div className="linkup-card space-y-2 p-4">
           <div className="flex items-center justify-between text-[13px]">
             <span className="font-semibold text-muted">Plan contribution</span>
             <span className="font-extrabold text-foreground">
-              {formatNGN(budgetFromGrossAmountCents(escrow.amount_cents))}
+              {formatNGN(checkoutBreakdown.budgetCents)}
             </span>
           </div>
           <div className="flex items-center justify-between text-[13px]">
             <span className="font-semibold text-muted">Platform fee (5%)</span>
             <span className="font-extrabold text-[#059669]">
-              {formatNGN(feeFromGrossAmountCents(escrow.amount_cents))}
+              {formatNGN(checkoutBreakdown.feeCents)}
             </span>
           </div>
           <div className="flex items-center justify-between border-t border-border/60 pt-2 text-[14px]">
             <span className="font-extrabold text-foreground">Total you pay</span>
-            <span className="font-extrabold text-foreground">{formatNGN(escrow.amount_cents)}</span>
+            <span className="font-extrabold text-foreground">{formatNGN(checkoutBreakdown.grossCents)}</span>
           </div>
         </div>
       ) : null}
@@ -994,7 +995,7 @@ function EscrowDetailContent({
           <div className="flex items-center justify-between text-[14px]">
             <span className="font-semibold text-muted">Platform fee</span>
             <span className="font-semibold text-muted line-through">
-              {formatNGN(feeFromGrossAmountCents(escrow.amount_cents))}
+              {formatNGN(checkoutBreakdown.feeCents > 0 ? checkoutBreakdown.feeCents : feeFromGrossAmountCents(escrow.amount_cents))}
             </span>
           </div>
           <div className="flex items-center justify-between text-[14px]">
@@ -1097,7 +1098,10 @@ function EscrowDetailContent({
               <div>
                 <p className="text-[12px] font-semibold text-muted">Guest agreed share</p>
                 <p className="font-display text-xl font-extrabold text-primary">
-                  {formatEscrowMoney(escrow.amount_cents, escrow.currency)}
+                  {formatEscrowMoney(
+                    Math.max(0, escrow.guest_share_cents ?? escrow.amount_cents ?? 0),
+                    escrow.currency
+                  )}
                 </p>
               </div>
               {escrow.guest_funded_at ? (

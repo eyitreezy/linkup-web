@@ -54,7 +54,7 @@ import { confirmFreePlan, proceedToSecurePayment } from '@/lib/plans/planAgreeme
 import { resolveAgreementEscrowId, resolveEscrowHref } from '@/lib/plans/planAgreementRoute';
 import { agreementAlertMeta, formatAgreementAlertMessage } from '@/lib/plans/agreementAlertMeta';
 import { formatIsoDateTime } from '@/lib/plans/formatPlanMeta';
-import { MAX_ESCROW_TIER1_CENTS } from '@/lib/plans/planFinancialConfig';
+import { MAX_ESCROW_TIER1_CENTS, resolveEscrowLegGrossCents } from '@/lib/plans/planFinancialConfig';
 import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import type { SubscriptionTier } from '@/lib/subscription/types';
 import { requiresVerificationGate } from '@/lib/verification/access';
@@ -631,8 +631,8 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
       ? getAgreementPaymentPreview(plan, offer.bidder_id, escrowCents, user.id)
       : null;
   const userPayGrossCents =
-    viewerEscrow?.amount_cents != null && viewerEscrow.amount_cents > 0
-      ? viewerEscrow.amount_cents
+    viewerEscrow && user?.id
+      ? resolveEscrowLegGrossCents(viewerEscrow, user.id) || null
       : null;
   const isSplitPlan = plan.escrow_pattern === 'B' && !isGroupSplit;
   const userIsPayer = paymentPreview?.userIsPayer ?? false;

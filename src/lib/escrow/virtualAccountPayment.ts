@@ -44,11 +44,40 @@ export async function verifyBankAccount(
   return data as { account_name: string; account_number: string; bank_code: string };
 }
 
+export async function prepareEscrowForBankTransfer(
+  client: ReturnType<typeof createClient>,
+  escrowId: string
+): Promise<number> {
+  const { data, error } = await client.rpc('ensure_escrow_bank_transfer_gross_amount', {
+    p_escrow_id: escrowId,
+  });
+  if (error) {
+    console.warn('[prepareEscrowForBankTransfer]', error.message);
+    return 0;
+  }
+  return typeof data === 'number' ? data : 0;
+}
+
+export async function syncEscrowFromVirtualAccount(
+  client: ReturnType<typeof createClient>,
+  escrowId: string
+): Promise<boolean> {
+  const { data, error } = await client.rpc('sync_escrow_from_virtual_account', {
+    p_escrow_id: escrowId,
+  });
+  if (error) {
+    return false;
+  }
+  return data === true;
+}
+
 export async function checkEscrowBankTransferFunded(
   client: ReturnType<typeof createClient>,
   escrowId: string,
   sessionId?: string | null
 ): Promise<boolean> {
+  await syncEscrowFromVirtualAccount(client, escrowId);
+
   const { data: rpcFunded, error: rpcError } = await client.rpc('check_escrow_bank_transfer_funded', {
     p_escrow_id: escrowId,
   });
@@ -90,8 +119,11 @@ export async function generateVirtualAccount(params: {
   oneTimeRefundBankCode?: string;
   oneTimeRefundAccountNumber?: string;
   oneTimeRefundAccountName?: string;
+  expectedAmountCents?: number;
 }) {
   const supabase = createClient();
+  await prepareEscrowForBankTransfer(supabase, params.escrowId);
+
   const { data, error } = await supabase.functions.invoke('generate-virtual-account', {
     body: {
       escrow_id: params.escrowId,
@@ -100,6 +132,7 @@ export async function generateVirtualAccount(params: {
       one_time_refund_bank_code: params.oneTimeRefundBankCode ?? null,
       one_time_refund_account_number: params.oneTimeRefundAccountNumber ?? null,
       one_time_refund_account_name: params.oneTimeRefundAccountName ?? null,
+      expected_amount_cents: params.expectedAmountCents ?? null,
     },
   });
   if (error) {

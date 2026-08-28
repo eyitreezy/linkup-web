@@ -3,12 +3,18 @@
 import { EscrowPaymentSuccessModal } from '@/components/escrow/EscrowPaymentSuccessModal';
 import { EscrowScreenHeader } from '@/components/escrow/EscrowScreenHeader';
 import { RefundAccountForm, type RefundAccountResult } from '@/components/escrow/RefundAccountForm';
+import { OfferFeeBreakdown } from '@/components/plans/OfferFeeBreakdown';
 import { formatNGN } from '@/lib/escrow/escrowFormatters';
+import {
+  resolveBankTransferBudgetCents,
+  resolveBankTransferPayAmountCents,
+} from '@/lib/escrow/escrowFundingUi';
 import { escrowUserPaymentVerified } from '@/lib/escrow/escrowFundingStatus';
 import { subscribeEscrowRealtime } from '@/lib/escrow/subscribeEscrowRealtime';
 import {
   checkEscrowBankTransferFunded,
   generateVirtualAccount,
+  syncEscrowFromVirtualAccount,
 } from '@/lib/escrow/virtualAccountPayment';
 import { createClient } from '@/lib/supabase/client';
 import type { DbEscrowTransaction, DbUserPaymentAccount } from '@/types/database';
@@ -74,8 +80,19 @@ export function BankTransferClient({
   const [countdownMs, setCountdownMs] = useState(0);
   const [isExpired, setIsExpired] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [checkingPayment, setCheckingPayment] = useState(false);
   const fundedRef = useRef(false);
   const vaSessionIdRef = useRef<string | null>(null);
+
+  const payAmountCents = useMemo(
+    () => resolveBankTransferPayAmountCents(escrow, currentUserId, escrowLeg),
+    [escrow, currentUserId, escrowLeg]
+  );
+  const budgetCents = useMemo(
+    () => resolveBankTransferBudgetCents(escrow, currentUserId, escrowLeg),
+    [escrow, currentUserId, escrowLeg]
+  );
+  const displayAmountCents = payAmountCents > 0 ? payAmountCents : (va?.amountCents ?? 0);
 
   const backHref = agreementPlanId ? `/escrow/${escrow.id}?planId=${agreementPlanId}` : `/escrow/${escrow.id}`;
   const successHref = agreementPlanId
@@ -88,7 +105,7 @@ export function BankTransferClient({
     setShowSuccess(true);
   }, []);
 
-  const checkFundingStatus = useCallback(async () => {
+  const runFundingCheck = useCallback(async () => {
     const sessionId = vaSessionIdRef.current;
     const bankTransferFunded = await checkEscrowBankTransferFunded(client, escrow.id, sessionId);
     if (bankTransferFunded) {
@@ -107,6 +124,29 @@ export function BankTransferClient({
     }
     return false;
   }, [client, currentUserId, escrow.id, handleFunded]);
+
+  const checkFundingStatus = useCallback(async () => {
+    setCheckingPayment(true);
+    try {
+      return await runFundingCheck();
+    } finally {
+      setCheckingPayment(false);
+    }
+  }, [runFundingCheck]);
+
+  async function onConfirmTransferSent() {
+    setError(null);
+    setCheckingPayment(true);
+    try {
+      await syncEscrowFromVirtualAccount(client, escrow.id);
+      const funded = await runFundingCheck();
+      if (!funded) {
+        setError('Payment not detected yet. It can take a minute — we will keep checking automatically.');
+      }
+    } finally {
+      setCheckingPayment(false);
+    }
+  }
 
   function handleSuccessContinue() {
     router.replace(successHref);
@@ -183,21 +223,23 @@ export function BankTransferClient({
     try {
       const params =
         result.mode === 'saved'
-          ? { escrowId: escrow.id, escrowLeg, refundAccountId: result.accountId }
+          ? { escrowId: escrow.id, escrowLeg, refundAccountId: result.accountId, expectedAmountCents: payAmountCents }
           : {
               escrowId: escrow.id,
               escrowLeg,
               oneTimeRefundBankCode: result.bankCode,
               oneTimeRefundAccountNumber: result.accountNumber,
               oneTimeRefundAccountName: result.accountName,
+              expectedAmountCents: payAmountCents,
             };
       const session = await generateVirtualAccount(params);
       vaSessionIdRef.current = session.session_id;
+      const grossCents = payAmountCents > 0 ? payAmountCents : session.amount_cents;
       setVa({
         sessionId: session.session_id,
         accountNumber: session.account_number,
         bankName: session.bank_name,
-        amountCents: session.amount_cents,
+        amountCents: grossCents,
         expiresAt: session.expires_at,
       });
       setStep('virtual_account');
@@ -322,8 +364,30 @@ export function BankTransferClient({
 
               <div>
                 <p className="text-[12px] font-semibold text-muted">Exact amount</p>
-                <p className="font-display text-lg font-extrabold text-primary">{formatNGN(va.amountCents)}</p>
+                <p className="font-display text-lg font-extrabold text-primary">{formatNGN(displayAmountCents)}</p>
+                {budgetCents > 0 ? (
+                  <div className="mt-3 rounded-xl border border-primary/10 bg-[#F8F7FF]/60 p-3">
+                    <OfferFeeBreakdown budgetCents={budgetCents} />
+                  </div>
+                ) : null}
               </div>
+
+              {!isExpired && !showSuccess ? (
+                <div className="flex items-center gap-2 rounded-xl border border-primary/10 bg-[#F8F7FF]/40 px-3 py-2.5">
+                  <span
+                    className={cn(
+                      'inline-block h-2 w-2 shrink-0 rounded-full',
+                      checkingPayment ? 'animate-pulse bg-primary' : 'bg-emerald-500'
+                    )}
+                    aria-hidden
+                  />
+                  <p className="text-[13px] font-semibold text-muted">
+                    {checkingPayment
+                      ? 'Checking for your payment…'
+                      : 'Waiting for your transfer — we check automatically every few seconds.'}
+                  </p>
+                </div>
+              ) : null}
 
               <div className="flex items-center gap-2">
                 <IoTimeOutline size={18} className={isExpired ? 'text-[#EF4444]' : 'text-muted'} />
@@ -358,7 +422,19 @@ export function BankTransferClient({
             >
               Generate new account
             </button>
-          ) : null}
+          ) : (
+            <button
+              type="button"
+              onClick={() => void onConfirmTransferSent()}
+              disabled={checkingPayment || busy}
+              className={cn(
+                'w-full rounded-full linkup-gradient-primary py-4 text-[16px] font-extrabold text-white transition',
+                (checkingPayment || busy) && 'opacity-70'
+              )}
+            >
+              {checkingPayment ? 'Checking payment…' : "I've sent the transfer"}
+            </button>
+          )}
         </>
       ) : null}
 

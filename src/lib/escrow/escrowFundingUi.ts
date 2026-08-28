@@ -1,4 +1,8 @@
-import { grossAmountCents } from '@/lib/plans/planFinancialConfig';
+import {
+  grossAmountCents,
+  resolveEscrowLegBudgetCents,
+  resolveEscrowLegGrossCents,
+} from '@/lib/plans/planFinancialConfig';
 import type { DbEscrowTransaction, EscrowPattern } from '@/types/database';
 
 export type EscrowFundingUiState = {
@@ -160,4 +164,45 @@ export function getEscrowFundingUiState(escrow: EscrowFundingFields, userId: str
   }
 
   return idle;
+}
+
+/** Gross bank-transfer checkout amount for the current user on this escrow leg. */
+export function resolveBankTransferPayAmountCents(
+  escrow: EscrowFundingFields,
+  userId: string,
+  escrowLeg?: 'host' | 'guest'
+): number {
+  const funding = getEscrowFundingUiState(escrow, userId);
+  if (funding.payAmountCents > 0) {
+    return funding.payAmountCents;
+  }
+
+  if (escrowLeg === 'guest') {
+    const guestShare = Math.max(0, escrow.guest_share_cents ?? 0);
+    if (guestShare > 0) return grossAmountCents(guestShare);
+  }
+  if (escrowLeg === 'host') {
+    const hostShare = Math.max(0, escrow.host_share_cents ?? 0);
+    if (hostShare > 0) return grossAmountCents(hostShare);
+  }
+
+  return resolveEscrowLegGrossCents(escrow, userId);
+}
+
+/** Budget cents (excluding fee) for the bank-transfer leg being paid. */
+export function resolveBankTransferBudgetCents(
+  escrow: EscrowFundingFields,
+  userId: string,
+  escrowLeg?: 'host' | 'guest'
+): number {
+  if (escrowLeg === 'guest') {
+    const guestShare = Math.max(0, escrow.guest_share_cents ?? 0);
+    if (guestShare > 0) return guestShare;
+  }
+  if (escrowLeg === 'host') {
+    const hostShare = Math.max(0, escrow.host_share_cents ?? 0);
+    if (hostShare > 0) return hostShare;
+  }
+
+  return resolveEscrowLegBudgetCents(escrow, userId);
 }
