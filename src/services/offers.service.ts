@@ -1,4 +1,5 @@
 import { isOfferExpired } from '@/lib/plans/offerRules';
+import { formatGroupParticipationError } from '@/lib/plans/groupParticipationErrors';
 import type { DbPlan, DbPlanOffer } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -144,6 +145,13 @@ export async function acceptPlanOffer(
       return {
         error: 'This guest has already funded their share on this plan.',
       };
+    }
+    if (
+      error.message.includes('already_group_guest') ||
+      error.message.includes('group_full') ||
+      error.message.includes('no_slots_available')
+    ) {
+      return { error: formatGroupParticipationError(error.message) };
     }
     return { error: error.message };
   }

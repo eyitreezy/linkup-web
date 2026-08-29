@@ -3,6 +3,7 @@
 import { AppStatusDialog } from '@/components/ui/AppStatusDialog';
 import { formatEscrowMoney } from '@/lib/escrow/escrowPaymentPreview';
 import { submitJoinRequest } from '@/lib/plans/joinRequests';
+import { formatGroupParticipationError } from '@/lib/plans/groupParticipationErrors';
 import { planExpiredDialogContent } from '@/lib/plans/planExpiredDialog';
 import { cn } from '@/utils/cn';
 import { useState } from 'react';
@@ -74,7 +75,7 @@ export function RequestToJoinButton({
         onPlanExpired?.();
         return;
       }
-      setError('Could not send your request. Please try again.');
+      setError(formatGroupParticipationError(raw || 'Could not send your request. Please try again.'));
     } finally {
       setIsSubmitting(false);
     }

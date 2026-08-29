@@ -1,5 +1,6 @@
 import { isPlanSaved, recordPlanView } from '@/lib/plans/planEngagement';
 import type { JoinRequestWithRequester } from '@/lib/plans/joinRequests';
+import { fetchActiveGroupAcceptedOffers } from '@/lib/plans/groupAcceptedGuests';
 import { ensureGroupHostShareReconciled } from '@/lib/plans/ensureGroupHostShareReconciled';
 import { fetchGroupHostContribution } from '@/lib/plans/fetchGroupHostContribution';
 import { refreshGroupHostCloseEscrowShare } from '@/lib/plans/refreshGroupHostCloseEscrow';
@@ -37,6 +38,8 @@ export type PlanDetailBundle = {
   myGuestEscrow: PlanGuestEscrowSnapshot | null;
   myHostEscrow: PlanGuestEscrowSnapshot | null;
   hostGroupContribution: GroupHostShareResolution | null;
+  activeAcceptedRoster: DbPlanOffer[];
+  myInvitation: { id: string; status: string } | null;
   approvedJoinRequestCount: number;
   availableSlots: number;
   pendingInvitationCount: number;
@@ -143,9 +146,15 @@ export async function fetchPlanDetailBundle(
   let myGuestEscrow: PlanGuestEscrowSnapshot | null = null;
   let myHostEscrow: PlanGuestEscrowSnapshot | null = null;
   let hostGroupContribution: GroupHostShareResolution | null = null;
+  let activeAcceptedRoster: DbPlanOffer[] = [];
+  let myInvitation: { id: string; status: string } | null = null;
   let approvedJoinRequestCount = 0;
   let availableSlots = 0;
   let pendingInvitationCount = 0;
+
+  if (feedPlan.is_group_plan) {
+    activeAcceptedRoster = await fetchActiveGroupAcceptedOffers(client, feedPlan);
+  }
 
   if (viewerId) {
     saved = await isPlanSaved(client, planId, viewerId);
@@ -171,6 +180,21 @@ export async function fetchPlanDetailBundle(
       .limit(1)
       .maybeSingle();
     myJoinRequest = joinReq as { id: string; status: JoinRequestStatus } | null;
+
+    const { data: invitationRow } = await client
+      .from('plan_invitations')
+      .select('id, status')
+      .eq('plan_id', planId)
+      .eq('invitee_user_id', viewerId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    myInvitation = invitationRow as { id: string; status: string } | null;
+
+    if (feedPlan.is_group_plan) {
+      const { data: slotsRaw } = await client.rpc('get_plan_available_slots', { p_plan_id: planId });
+      availableSlots = typeof slotsRaw === 'number' ? slotsRaw : 0;
+    }
 
     if (feedPlan.creator_id !== viewerId && feedPlan.is_paid) {
       myGuestEscrow = await fetchViewerGuestEscrow(client, planId, viewerId);
@@ -198,28 +222,20 @@ export async function fetchPlanDetailBundle(
   }
 
   if (feedPlan.is_negotiable === false) {
-    if (joinRequests.length > 0) {
-      approvedJoinRequestCount = joinRequests.filter((r) => r.status === 'approved').length;
-    } else if (viewerId && feedPlan.creator_id === viewerId) {
-      const { count } = await client
-        .from('plan_join_requests')
-        .select('*', { count: 'exact', head: true })
-        .eq('plan_id', planId)
-        .eq('status', 'approved');
-      approvedJoinRequestCount = count ?? 0;
-    }
+    const { count } = await client
+      .from('plan_join_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('plan_id', planId)
+      .eq('status', 'approved');
+    approvedJoinRequestCount = count ?? 0;
   }
 
   if (viewerId && feedPlan.creator_id === viewerId && feedPlan.is_group_plan) {
-    const [{ data: slotsRaw }, { count: pendingCount }] = await Promise.all([
-      client.rpc('get_plan_available_slots', { p_plan_id: planId }),
-      client
-        .from('plan_invitations')
-        .select('*', { count: 'exact', head: true })
-        .eq('plan_id', planId)
-        .eq('status', 'pending'),
-    ]);
-    availableSlots = typeof slotsRaw === 'number' ? slotsRaw : 0;
+    const { count: pendingCount } = await client
+      .from('plan_invitations')
+      .select('*', { count: 'exact', head: true })
+      .eq('plan_id', planId)
+      .eq('status', 'pending');
     pendingInvitationCount = pendingCount ?? 0;
   }
 
@@ -235,6 +251,8 @@ export async function fetchPlanDetailBundle(
       myGuestEscrow,
       myHostEscrow,
       hostGroupContribution,
+      activeAcceptedRoster,
+      myInvitation,
       approvedJoinRequestCount,
       availableSlots,
       pendingInvitationCount,

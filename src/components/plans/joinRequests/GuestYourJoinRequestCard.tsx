@@ -156,6 +156,26 @@ export function GuestYourJoinRequestCard({
           </div>
         ) : null}
 
+        {phase === 'already_guest' ? (
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-4">
+            <p className="font-extrabold text-foreground">You are already a guest</p>
+            <p className="mt-2 text-[13px] font-semibold leading-relaxed text-muted">
+              You are confirmed on this group plan. View your agreement or message the group from the actions
+              above.
+            </p>
+          </div>
+        ) : null}
+
+        {phase === 'group_full' ? (
+          <AppEmptyState
+            variant="compact"
+            emoji="👥"
+            title="Group filled"
+            description="This group plan has no guest slots available."
+            className="border-0 bg-[#FAFAFF]/80 shadow-none"
+          />
+        ) : null}
+
         {phase === 'declined' ? (
           <div className="space-y-4">
             <div className="rounded-xl border border-red-500/15 bg-red-500/[0.03] px-4 py-4">

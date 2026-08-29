@@ -18,7 +18,7 @@ export async function submitOfferOrCounter(
     p_proposed_scheduled_at: params.proposedScheduledAt ?? null,
     p_offer_id: params.offerId ?? null,
   });
-  if (error) return { offerId: null, error: error.message };
+  if (error) return { offerId: null, error: formatGroupParticipationError(error.message) };
   return { offerId: typeof data === 'string' ? data : null, error: null };
 }
 

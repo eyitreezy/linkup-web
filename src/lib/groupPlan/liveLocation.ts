@@ -146,6 +146,20 @@ export type CancellationTerms = {
   requires_admin_review: boolean;
 };
 
+export async function fetchGuestOptOutTerms(planId: string): Promise<{
+  terms?: CancellationTerms;
+  error?: string;
+}> {
+  const client = createClient();
+  const { data, error } = await client.rpc('get_cancellation_terms', {
+    p_plan_id: planId,
+    p_cancelling_party: 'guest',
+    p_no_show: false,
+  });
+  if (error) return { error: error.message };
+  return { terms: data as CancellationTerms };
+}
+
 export async function fetchCancellationTerms(planId: string): Promise<{
   terms?: CancellationTerms;
   error?: string;

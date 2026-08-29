@@ -595,9 +595,19 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
   const locationLabel = plan.agreed_location ?? plan.location_label;
   const notes = plan.agreed_notes ?? offer.message ?? null;
   const priceLabel = agreedPriceLabel(plan, offer);
-  const showCancelPlan = (needsConfirm || awaitingPay) && showPaymentFlow;
+  const showCancelPlan =
+    !plan.is_group_plan && (needsConfirm || awaitingPay) && showPaymentFlow;
   const showMutualCancel = showCancelPlan && !plan.is_group_plan;
-  const showSingleGroupCancel = showCancelPlan && !!plan.is_group_plan;
+  const showHostGroupCancel =
+    isHost &&
+    !!plan.is_group_plan &&
+    !['cancelled', 'completed'].includes(plan.status ?? '');
+  const showGuestGroupCancel =
+    isGuest &&
+    !!plan.is_group_plan &&
+    (needsConfirm || awaitingPay) &&
+    showPaymentFlow;
+  const showSingleGroupCancel = showHostGroupCancel || showGuestGroupCancel;
   const isGroupSplit = isGroupSplitPlan(plan);
   const isGroupSplitHost = isGroupSplit && isHost;
   const groupSplitGuestCanPay = isGroupSplit && !isHost;

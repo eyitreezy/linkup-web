@@ -23,9 +23,12 @@ export function usePlanViewerContext(
     moodClosed?: boolean;
     completionSelfAcked?: boolean;
     myJoinRequest?: { id: string; status: JoinRequestStatus } | null;
+    myInvitation?: { status: string } | null;
+    activeAcceptedRoster?: DbPlanOffer[];
     myGuestEscrow?: PlanGuestEscrowSnapshot | null;
     myHostEscrow?: PlanGuestEscrowSnapshot | null;
     approvedJoinRequestCount?: number;
+    availableSlots?: number;
     groupGuestEscrows?: Array<
       Pick<
         DbEscrowTransaction,
@@ -46,9 +49,12 @@ export function usePlanViewerContext(
     opts?.moodClosed,
     opts?.completionSelfAcked,
     opts?.myJoinRequest,
+    opts?.myInvitation,
+    opts?.activeAcceptedRoster,
     opts?.myGuestEscrow,
     opts?.myHostEscrow,
     opts?.approvedJoinRequestCount,
+    opts?.availableSlots,
     opts?.groupGuestEscrows,
     opts?.hostGroupContribution,
   ]);

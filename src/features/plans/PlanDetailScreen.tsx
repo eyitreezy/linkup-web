@@ -236,8 +236,11 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
   const boosted = plan ? isPlanBoostActive(plan.boosted_until) : false;
 
   const acceptedGuestOffers = useMemo(
-    () => (bundle?.offers ?? []).filter((o) => o.status === 'accepted'),
-    [bundle?.offers]
+    () =>
+      bundle?.activeAcceptedRoster?.length
+        ? bundle.activeAcceptedRoster
+        : (bundle?.offers ?? []).filter((o) => o.status === 'accepted'),
+    [bundle?.activeAcceptedRoster, bundle?.offers]
   );
   const approvedJoinRequests = useMemo(
     () => (bundle?.joinRequests ?? []).filter((r) => r.status === 'approved'),
@@ -248,14 +251,14 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     listingExpired: planListingExpired,
     completionSelfAcked: bundle?.completionSelfAcked ?? false,
     myJoinRequest: bundle?.myJoinRequest ?? null,
+    myInvitation: bundle?.myInvitation ?? null,
+    activeAcceptedRoster: bundle?.activeAcceptedRoster ?? [],
     myGuestEscrow: bundle?.myGuestEscrow ?? null,
     myHostEscrow: bundle?.myHostEscrow ?? null,
     groupGuestEscrows: groupEscrowsQuery.data ?? [],
     hostGroupContribution: bundle?.hostGroupContribution ?? null,
-    approvedJoinRequestCount:
-      plan?.is_negotiable === false
-        ? (bundle?.approvedJoinRequestCount ?? approvedJoinRequests.length)
-        : acceptedGuestOffers.length,
+    approvedJoinRequestCount: bundle?.approvedJoinRequestCount ?? approvedJoinRequests.length,
+    availableSlots: bundle?.availableSlots,
   });
   const actionContextReady = isPlanDetailActionReady(bundle);
   const [actionButtonsReady, setActionButtonsReady] = useState(() =>
@@ -274,10 +277,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
     isCreator &&
     (ctx?.showGroupGuestAgreements ||
       (plan?.is_negotiable === false && approvedJoinRequests.length > 0));
-  const isAcceptedGuest =
-    !!viewerUserId &&
-    isGroupPlan &&
-    acceptedGuestOffers.some((o) => o.bidder_id === viewerUserId);
+  const isAcceptedGuest = !!ctx?.isConfirmedGuest;
   const guestsPanelRefreshKey = useMemo(
     () =>
       [
@@ -884,27 +884,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
           planId={plan.id}
           scheduledAt={plan.scheduled_at}
           isGuest={isAcceptedGuest}
-        />
-      ) : null}
-
-      {isCreator && plan.is_group_plan && ['active', 'agreed', 'awaiting_payment'].includes(plan.status) ? (
-        <button
-          type="button"
-          onClick={() => setHostCancelOpen(true)}
-          className="flex w-full items-center justify-center rounded-xl border-2 border-[#EF4444]/40 px-4 py-2.5 text-[14px] font-extrabold text-[#EF4444] transition hover:bg-red-50 sm:w-auto"
-        >
-          Cancel Group Plan
-        </button>
-      ) : null}
-
-      {hostCancelOpen ? (
-        <GroupHostCancellationModal
-          planId={plan.id}
-          onDismiss={() => setHostCancelOpen(false)}
-          onCancelled={() => {
-            setHostCancelOpen(false);
-            router.push('/discover');
-          }}
+          onOptedOut={refreshGroupPlanState}
         />
       ) : null}
 
@@ -1034,15 +1014,28 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
           <div className="flex items-center justify-between gap-3">
             <h3 className="font-display text-base font-extrabold text-foreground">Accepted guests</h3>
             {plan.is_group_plan ? (
-              <button
-                type="button"
-                onClick={() => void openHostMessage()}
-                disabled={groupChatBusy}
-                className="inline-flex min-h-[36px] shrink-0 items-center justify-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-[12px] font-extrabold text-foreground shadow-sm transition hover:bg-[#F8F7FF] disabled:opacity-50"
-              >
-                <IoChatbubbleEllipsesOutline size={16} aria-hidden />
-                {groupChatBusy ? 'Opening…' : 'Message group'}
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                {isCreator &&
+                !resolvePlanMeetupInactive(plan, planListingExpired).inactive &&
+                ['active', 'agreed', 'awaiting_payment', 'negotiating'].includes(plan.status) ? (
+                  <button
+                    type="button"
+                    onClick={() => setHostCancelOpen(true)}
+                    className="inline-flex min-h-[36px] items-center justify-center rounded-full bg-[#EF4444] px-4 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:bg-[#DC2626] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#EF4444] disabled:opacity-50"
+                  >
+                    Cancel plan
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void openHostMessage()}
+                  disabled={groupChatBusy}
+                  className="inline-flex min-h-[36px] shrink-0 items-center justify-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-[12px] font-extrabold text-foreground shadow-sm transition hover:bg-[#F8F7FF] disabled:opacity-50"
+                >
+                  <IoChatbubbleEllipsesOutline size={16} aria-hidden />
+                  {groupChatBusy ? 'Opening…' : 'Message group'}
+                </button>
+              </div>
             ) : null}
           </div>
           <ul className="space-y-2">
@@ -1332,6 +1325,17 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         longitude={meetupPin?.lng ?? null}
         locationLabel={plan.location_label}
       />
+
+      {hostCancelOpen ? (
+        <GroupHostCancellationModal
+          planId={plan.id}
+          onDismiss={() => setHostCancelOpen(false)}
+          onCancelled={() => {
+            setHostCancelOpen(false);
+            router.push('/discover');
+          }}
+        />
+      ) : null}
     </div>
     </GroupPlanPolicyGate>
   );
@@ -1411,6 +1415,12 @@ function ActionRail({
           <button type="button" className={actionPrimary} onClick={onNegotiate} disabled={listingExpired}>
             Make offer
           </button>
+        </div>
+      ) : null}
+
+      {ctx.guestActionBlockLabel ? (
+        <div className="flex min-h-[44px] w-full items-center justify-center rounded-full border border-border/70 bg-[#F5F6FA] px-5 py-2.5 text-[14px] font-extrabold text-muted">
+          {ctx.guestActionBlockLabel}
         </div>
       ) : null}
 

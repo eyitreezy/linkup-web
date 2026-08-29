@@ -7,19 +7,30 @@ export type GuestJoinRequestCardPhase =
   | 'approved_pay'
   | 'approved_done'
   | 'declined'
-  | 'closed';
+  | 'closed'
+  | 'already_guest'
+  | 'group_full';
 
 export function deriveGuestJoinRequestCardPhase(
   ctx: Pick<
     PlanViewerContext,
-    'showRequestToJoin' | 'showViewRequest' | 'showPayShare' | 'payShareEscrowId'
+    | 'showRequestToJoin'
+    | 'showViewRequest'
+    | 'showPayShare'
+    | 'payShareEscrowId'
+    | 'isConfirmedGuest'
+    | 'guestActionBlockReason'
   >,
   myJoinRequest: { status: JoinRequestStatus } | null | undefined
 ): GuestJoinRequestCardPhase {
+  if (ctx.isConfirmedGuest || ctx.guestActionBlockReason === 'already_guest') {
+    return 'already_guest';
+  }
   if (ctx.showPayShare && ctx.payShareEscrowId) return 'approved_pay';
   if (myJoinRequest?.status === 'approved') return 'approved_done';
   if (myJoinRequest?.status === 'declined') return 'declined';
   if (myJoinRequest?.status === 'pending' || ctx.showViewRequest) return 'pending';
+  if (ctx.guestActionBlockReason === 'group_full') return 'group_full';
   if (ctx.showRequestToJoin) return 'can_request';
   return 'closed';
 }

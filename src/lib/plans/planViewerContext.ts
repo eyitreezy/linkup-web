@@ -18,6 +18,8 @@ import type { DbPlan, DbPlanOffer, DbEscrowTransaction, JoinRequestStatus } from
 
 export type PlanLockState = 'open' | 'partial' | 'full';
 
+export type GuestActionBlockReason = 'already_guest' | 'group_full';
+
 export type AcceptedGuestRef = {
   userId: string;
   offerId: string;
@@ -25,6 +27,8 @@ export type AcceptedGuestRef = {
 
 export type PlanViewerContext = {
   isHost: boolean;
+  /** Confirmed on the roster (accepted offer, approved join request, or accepted invitation). */
+  isConfirmedGuest: boolean;
   isMatchedGuest: boolean;
   isNegotiatingGuest: boolean;
   isBrowsingGuest: boolean;
@@ -48,6 +52,8 @@ export type PlanViewerContext = {
   showManageRequests: boolean;
   showRequestToJoin: boolean;
   showViewRequest: boolean;
+  guestActionBlockReason: GuestActionBlockReason | null;
+  guestActionBlockLabel: string | null;
   showConfirmAttendance: boolean;
   showPayShare: boolean;
   payShareEscrowId: string | null;
@@ -113,6 +119,14 @@ export function computePlanLockState(
   };
 }
 
+export function isUserOnGroupAcceptedRoster(
+  userId: string | undefined,
+  rosterOffers: DbPlanOffer[]
+): boolean {
+  if (!userId) return false;
+  return rosterOffers.some((o) => o.bidder_id === userId && o.status === 'accepted');
+}
+
 export function derivePlanViewerContext(
   plan: DbPlan,
   userId: string | undefined,
@@ -124,9 +138,13 @@ export function derivePlanViewerContext(
     moodClosed?: boolean;
     completionSelfAcked?: boolean;
     myJoinRequest?: { id: string; status: JoinRequestStatus } | null;
+    myInvitation?: { status: string } | null;
+    /** Join requests + invitations + accepted offers for group capacity and guest state. */
+    activeAcceptedRoster?: DbPlanOffer[];
     myGuestEscrow?: PlanGuestEscrowSnapshot | null;
     myHostEscrow?: PlanGuestEscrowSnapshot | null;
     approvedJoinRequestCount?: number;
+    availableSlots?: number;
     /** Guest escrow legs for group host share (funded gross when available). */
     groupGuestEscrows?: Array<
       Pick<
@@ -152,9 +170,16 @@ export function derivePlanViewerContext(
   const isMood = !!plan.is_mood_plan;
   const isStandard = !isGroup && !isMood;
 
+  const rosterOffers = opts?.activeAcceptedRoster?.length ? opts.activeAcceptedRoster : offers;
   const myOffer = findMyLatestOffer(offers, userId);
   const myOfferIsActive = !!myOffer && isOfferLive(myOffer);
   const isJoinApprovedGuest = !isHost && myJoinRequest?.status === 'approved';
+  const isInvitationGuest = !isHost && opts?.myInvitation?.status === 'accepted';
+  const isRosterGuest = isUserOnGroupAcceptedRoster(userId, rosterOffers);
+  const isConfirmedGuest =
+    !isHost &&
+    !!userId &&
+    (myOffer?.status === 'accepted' || isJoinApprovedGuest || isInvitationGuest || isRosterGuest);
   const guestEscrowFunded =
     !!opts?.myGuestEscrow &&
     !!userId &&
@@ -162,15 +187,40 @@ export function derivePlanViewerContext(
       opts.myGuestEscrow.status === 'funded' ||
       opts.myGuestEscrow.status === 'active' ||
       userEscrowLegFunded(opts.myGuestEscrow, userId));
-  const isMatchedGuest =
-    !isHost && (myOffer?.status === 'accepted' || isJoinApprovedGuest);
-  const isNegotiatingGuest = !isHost && myOfferIsActive && isNegotiable;
+  const isMatchedGuest = isConfirmedGuest;
+  const isNegotiatingGuest = !isHost && !isConfirmedGuest && myOfferIsActive && isNegotiable;
   const isBrowsingGuest = !isHost && !isMatchedGuest && !isNegotiatingGuest;
 
-  const acceptedGuests = listAcceptedGuests(offers);
+  const acceptedGuests = listAcceptedGuests(rosterOffers);
   const approvedJoinCount = opts?.approvedJoinRequestCount ?? 0;
-  const acceptedCount = Math.max(acceptedGuestCount(plan, offers), approvedJoinCount);
+  const rosterAcceptedCount = rosterOffers.filter((o) => o.status === 'accepted').length;
+  const acceptedCount = Math.max(
+    acceptedGuestCount(plan, rosterOffers),
+    approvedJoinCount,
+    rosterAcceptedCount
+  );
+  const slotsFromRpc = opts?.availableSlots;
+  const hasOpenSlotsFromRpc = slotsFromRpc != null ? slotsFromRpc > 0 : null;
   const { lockState, hasOpenSlots } = computePlanLockState(plan, acceptedCount);
+  const effectiveHasOpenSlots = hasOpenSlotsFromRpc ?? hasOpenSlots;
+  const effectiveLockState: PlanLockState =
+    isGroup && !effectiveHasOpenSlots && acceptedCount > 0
+      ? 'full'
+      : isGroup && acceptedCount > 0 && effectiveHasOpenSlots
+        ? 'partial'
+        : lockState;
+
+  let guestActionBlockReason: GuestActionBlockReason | null = null;
+  let guestActionBlockLabel: string | null = null;
+  if (!isHost && userId) {
+    if (isConfirmedGuest) {
+      guestActionBlockReason = 'already_guest';
+      guestActionBlockLabel = 'You are already a guest';
+    } else if (isGroup && !effectiveHasOpenSlots) {
+      guestActionBlockReason = 'group_full';
+      guestActionBlockLabel = 'Group filled';
+    }
+  }
 
   let showSave = false;
   let showMakeOffer = false;
@@ -206,23 +256,31 @@ export function derivePlanViewerContext(
         }
       } else if (myJoinRequest?.status === 'declined') {
         // Save only
+      } else if (guestActionBlockReason) {
+        // Informational state only; no request modal.
       } else {
         const canRequest =
-          !listingExpired && (lockState === 'open' || (isGroup && lockState === 'partial'));
+          !listingExpired &&
+          (effectiveLockState === 'open' || (isGroup && effectiveLockState === 'partial'));
         showRequestToJoin = canRequest;
       }
     } else if (isNegotiatingGuest) {
       showViewOffer = true;
     } else if (isBrowsingGuest) {
-      const canOffer =
-        !listingExpired && (lockState === 'open' || (isGroup && lockState === 'partial'));
-      showMakeOffer = canOffer && isNegotiable;
+      if (guestActionBlockReason) {
+        // Informational state only; no offer modal.
+      } else {
+        const canOffer =
+          !listingExpired &&
+          (effectiveLockState === 'open' || (isGroup && effectiveLockState === 'partial'));
+        showMakeOffer = canOffer && isNegotiable;
+      }
     }
   }
 
   if (isHost) {
-    const hostNegotiating = lockState === 'open';
-    const hostGroupPartial = isGroup && lockState === 'partial';
+    const hostNegotiating = effectiveLockState === 'open';
+    const hostGroupPartial = isGroup && effectiveLockState === 'partial';
 
     showBoost = hostNegotiating || hostGroupPartial;
     showInterest = hostNegotiating || hostGroupPartial;
@@ -234,13 +292,13 @@ export function derivePlanViewerContext(
     }
 
     showMessage =
-      (!isGroup && lockState === 'full') ||
-      (isGroup && (lockState === 'partial' || lockState === 'full'));
+      (!isGroup && effectiveLockState === 'full') ||
+      (isGroup && (effectiveLockState === 'partial' || effectiveLockState === 'full'));
 
-    if (isGroup && (acceptedGuests.length > 0 || approvedJoinCount > 0) && lockState !== 'open') {
+    if (isGroup && (acceptedGuests.length > 0 || approvedJoinCount > 0) && effectiveLockState !== 'open') {
       showGroupGuestAgreements = true;
       showViewAgreement = joinRequestFlow;
-    } else if (!isGroup && lockState === 'full') {
+    } else if (!isGroup && effectiveLockState === 'full') {
       showViewAgreement = true;
     }
   }
@@ -270,7 +328,7 @@ export function derivePlanViewerContext(
     opts?.myHostEscrow,
     acceptedCount,
     isHost,
-    { hasOpenSlots, hostSharePaymentCents }
+    { hasOpenSlots: effectiveHasOpenSlots, hostSharePaymentCents }
   );
 
   if (
@@ -285,14 +343,15 @@ export function derivePlanViewerContext(
 
   return {
     isHost,
+    isConfirmedGuest,
     isMatchedGuest,
     isNegotiatingGuest,
     isBrowsingGuest,
     isStandard,
     isMood,
     isGroup,
-    lockState,
-    hasOpenSlots,
+    lockState: effectiveLockState,
+    hasOpenSlots: effectiveHasOpenSlots,
     myOffer,
     myOfferIsActive,
     showSave,
@@ -308,6 +367,8 @@ export function derivePlanViewerContext(
     showManageRequests,
     showRequestToJoin,
     showViewRequest,
+    guestActionBlockReason,
+    guestActionBlockLabel,
     showConfirmAttendance,
     showPayShare: payShare.showPayShare,
     payShareEscrowId: payShare.payShareEscrowId,
@@ -317,7 +378,7 @@ export function derivePlanViewerContext(
     hostPayShareAmountLabel: hostPayShare.payShareAmountLabel,
     hostPayShareViaAgreement: hostPayShare.viaAgreement,
     acceptedGuests,
-    isMatchParty: isMatchedGuest || (isHost && lockState !== 'open'),
+    isMatchParty: isMatchedGuest || (isHost && effectiveLockState !== 'open'),
     userAcceptedOffer: isMatchedGuest ? myOffer : null,
   };
 }
