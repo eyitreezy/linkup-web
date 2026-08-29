@@ -5,6 +5,7 @@ import { GroupSplitGuestSlotRow } from '@/components/plans/group/GroupSplitGuest
 import { formatNGN } from '@/lib/escrow/escrowFormatters';
 import { isEscrowFullyFundedForMeet } from '@/lib/escrow/splitEscrowFunding';
 import { isGroupSplitPlan } from '@/lib/plans/groupDynamicSplit';
+import { resolveGroupGuestPaymentProgress, latestActiveGuestEscrowByUserId } from '@/lib/plans/groupPlanCapacity';
 import type { AgreementEscrowRow, AgreementProfile } from '@/services/planAgreement.service';
 import type { DbPlan, DbPlanOffer } from '@/types/database';
 import Link from 'next/link';
@@ -36,9 +37,7 @@ export function AgreementEscrowStateCard({
   const isGroupSplit = isGroupSplitPlan(plan);
   const amountCents = viewerEscrow?.amount_cents ?? 0;
   const profileMap = new Map(guestProfiles.map((p) => [p.user_id, p]));
-  const escrowByGuest = new Map(
-    guestEscrows.filter((e) => e.guest_id).map((e) => [e.guest_id as string, e])
-  );
+  const escrowByGuest = latestActiveGuestEscrowByUserId(guestEscrows);
 
   if (variant === 'confirmed') {
     return (
@@ -71,8 +70,11 @@ export function AgreementEscrowStateCard({
     );
   }
 
-  if (isHost && isGroupSplit && guestEscrows.length > 0) {
-    const fundedCount = guestEscrows.filter((e) => e.status === 'funded' || e.status === 'active').length;
+  if (isHost && isGroupSplit && acceptedOffers.length > 0) {
+    const rosterGuestIds = acceptedOffers.map((o) => o.bidder_id);
+    const paymentProgress = resolveGroupGuestPaymentProgress(plan, guestEscrows, rosterGuestIds);
+    const { fundedGuestCount, capacity, pendingGuestCount } = paymentProgress;
+    const guestSlotTotal = Math.max(capacity.maxGuestSlots, rosterGuestIds.length);
 
     return (
       <div className="space-y-4">
@@ -88,7 +90,11 @@ export function AgreementEscrowStateCard({
 
         <section className="linkup-card space-y-3 border-primary/10 p-5 shadow-[0_8px_18px_rgba(42,31,85,0.09)]">
           <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted">
-            Guest payments · {fundedCount} of {guestEscrows.length} complete
+            Guest payments · {fundedGuestCount} of {guestSlotTotal} guest slots complete
+          </p>
+          <p className="text-[11px] font-semibold text-muted">
+            Group capacity: {Math.min(rosterGuestIds.length + 1, capacity.maxTotalMembers)} of{' '}
+            {capacity.maxTotalMembers} members (host + guests)
           </p>
           <div className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60">
             {acceptedOffers.map((slotOffer) => {
@@ -104,10 +110,10 @@ export function AgreementEscrowStateCard({
               );
             })}
           </div>
-          {fundedCount < guestEscrows.length ? (
+          {pendingGuestCount > 0 ? (
             <p className="text-[12px] font-semibold text-muted">
-              {guestEscrows.length - fundedCount} guest
-              {guestEscrows.length - fundedCount === 1 ? ' has' : 's have'} been notified to complete their payment.
+              {pendingGuestCount} guest
+              {pendingGuestCount === 1 ? ' has' : 's have'} been notified to complete their payment.
             </p>
           ) : null}
         </section>

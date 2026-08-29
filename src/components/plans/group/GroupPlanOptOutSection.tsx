@@ -60,15 +60,7 @@ export function GroupPlanOptOutSection({ planId, scheduledAt, isGuest, onOptedOu
     }
     setModalOpen(false);
     onOptedOut?.();
-    if (result.triggered_minimum_cancel) {
-      setMessage(
-        'You have opted out. Your opt-out caused the group to fall below the minimum required members. The plan has been cancelled and all remaining members have been refunded.'
-      );
-      setTimeout(() => router.push('/discover'), 2500);
-      return;
-    }
-    setMessage('You have opted out. Any applicable refund has been processed to your wallet.');
-    setTimeout(() => router.push('/discover'), 2500);
+    router.replace('/discover');
   }
 
   if (message) {

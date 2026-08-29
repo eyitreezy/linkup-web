@@ -237,7 +237,12 @@ export async function fetchPlanAgreementBundle(
   const groupSplitQueries = groupSplit
     ? (async () => {
         const [guestEscrowsRes, hostEscrowRes] = await Promise.all([
-          client.from('escrow_transactions').select(escrowSelect).eq('plan_id', planId),
+          client
+            .from('escrow_transactions')
+            .select(escrowSelect)
+            .eq('plan_id', planId)
+            .not('guest_id', 'is', null)
+            .not('status', 'in', '("cancelled","refunded")'),
           planRow.host_escrow_id
             ? client
                 .from('escrow_transactions')

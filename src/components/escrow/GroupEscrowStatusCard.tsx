@@ -3,10 +3,14 @@
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { EscrowStatusBadge } from '@/components/escrow/EscrowStatusBadge';
 import { TierBadge } from '@/components/subscription/TierBadge';
+import {
+  latestActiveGuestEscrowByUserId,
+  resolveGroupGuestPaymentProgress,
+} from '@/lib/plans/groupPlanCapacity';
 import { resolveEscrowHref } from '@/lib/plans/planAgreementRoute';
 import { createClient } from '@/lib/supabase/client';
 import type { SubscriptionTier } from '@/lib/subscription/types';
-import type { DbEscrowTransaction } from '@/types/database';
+import type { DbEscrowTransaction, DbPlan } from '@/types/database';
 import { cn } from '@/utils/cn';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
@@ -39,23 +43,33 @@ function isFunded(escrow: DbEscrowTransaction): boolean {
 
 export function GroupEscrowStatusCard({ planId, offerId, isGroupPlan, isHost }: Props) {
   const [rows, setRows] = useState<GuestRow[]>([]);
+  const [planMeta, setPlanMeta] = useState<Pick<DbPlan, 'max_guests'> | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!isGroupPlan) {
       setRows([]);
+      setPlanMeta(null);
       setLoading(false);
       return;
     }
     setLoading(true);
     const client = createClient();
-    const { data: escrows } = await client
-      .from('escrow_transactions')
-      .select('*')
-      .eq('plan_id', planId)
-      .order('group_plan_index', { ascending: true });
+    const [{ data: planRow }, { data: escrows }] = await Promise.all([
+      client.from('plans').select('max_guests').eq('id', planId).maybeSingle(),
+      client
+        .from('escrow_transactions')
+        .select('*')
+        .eq('plan_id', planId)
+        .not('guest_id', 'is', null)
+        .not('status', 'in', '("cancelled","refunded")')
+        .order('group_plan_index', { ascending: true }),
+    ]);
 
-    const guestIds = (escrows ?? []).map((e) => e.guest_id).filter(Boolean) as string[];
+    setPlanMeta((planRow as Pick<DbPlan, 'max_guests'> | null) ?? null);
+
+    const activeEscrows = (escrows ?? []) as DbEscrowTransaction[];
+    const guestIds = [...latestActiveGuestEscrowByUserId(activeEscrows).keys()];
     if (!guestIds.length) {
       setRows([]);
       setLoading(false);
@@ -72,9 +86,10 @@ export function GroupEscrowStatusCard({ planId, offerId, isGroupPlan, isHost }: 
       (users ?? []).map((u) => [u.id as string, u.subscription_tier as SubscriptionTier])
     );
 
+    const escrowByGuest = latestActiveGuestEscrowByUserId(activeEscrows);
     setRows(
-      (escrows ?? []).map((e) => {
-        const guestId = e.guest_id as string;
+      guestIds.map((guestId) => {
+        const e = escrowByGuest.get(guestId)!;
         const prof = profMap.get(guestId);
         return {
           escrow: e as DbEscrowTransaction,
@@ -93,10 +108,17 @@ export function GroupEscrowStatusCard({ planId, offerId, isGroupPlan, isHost }: 
 
   if (!isGroupPlan) return null;
 
-  const fundedCount = rows.filter((r) => isFunded(r.escrow)).length;
-  const total = rows.length;
+  const guestIds = rows.map((r) => r.escrow.guest_id).filter(Boolean) as string[];
+  const paymentProgress = planMeta
+    ? resolveGroupGuestPaymentProgress(planMeta, rows.map((r) => r.escrow), guestIds)
+    : null;
+  const fundedCount = paymentProgress?.fundedGuestCount ?? rows.filter((r) => isFunded(r.escrow)).length;
+  const total = Math.max(
+    planMeta?.max_guests ?? 0,
+    paymentProgress?.acceptedGuestCount ?? rows.length
+  );
   const progress = total > 0 ? fundedCount / total : 0;
-  const allFunded = total > 0 && fundedCount === total;
+  const allFunded = total > 0 && fundedCount >= total;
 
   return (
     <section className="linkup-card relative overflow-hidden p-5">
@@ -117,7 +139,7 @@ export function GroupEscrowStatusCard({ planId, offerId, isGroupPlan, isHost }: 
             </div>
           </div>
           <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-extrabold text-primary">
-            {fundedCount}/{total} funded
+            {fundedCount}/{total} guest slots funded
           </span>
         </div>
 
