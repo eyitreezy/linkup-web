@@ -37,6 +37,8 @@ export function GroupPlanOptOutSection({ planId, scheduledAt, isGuest, onOptedOu
 
   async function openModal() {
     setError(null);
+    setModalOpen(true);
+    setTerms(null);
     setBusy(true);
     const result = await fetchGuestOptOutTerms(planId);
     setBusy(false);
@@ -45,7 +47,6 @@ export function GroupPlanOptOutSection({ planId, scheduledAt, isGuest, onOptedOu
       return;
     }
     setTerms(result.terms ?? null);
-    setModalOpen(true);
   }
 
   async function handleConfirmOptOut() {
@@ -89,7 +90,7 @@ export function GroupPlanOptOutSection({ planId, scheduledAt, isGuest, onOptedOu
         <button
           type="button"
           onClick={() => void openModal()}
-          disabled={busy}
+          disabled={busy && !modalOpen}
           className={cn(
             'flex min-h-[44px] w-full items-center justify-center rounded-full bg-[#EF4444] px-4 text-[14px] font-extrabold text-white transition hover:bg-[#DC2626] disabled:opacity-50 sm:w-auto'
           )}
@@ -106,6 +107,9 @@ export function GroupPlanOptOutSection({ planId, scheduledAt, isGuest, onOptedOu
               You are about to leave this plan. Any applicable cancellation policy will be applied based on
               the plan&apos;s current status and timing.
             </p>
+            {busy && !terms ? (
+              <p className="mt-4 text-[13px] font-semibold text-muted">Loading cancellation terms…</p>
+            ) : null}
             {terms ? (
               <div className="mt-4 space-y-2 rounded-xl border border-border/60 bg-[#F5F6FA] p-4 text-[14px]">
                 <div className="flex justify-between gap-3">
@@ -145,7 +149,7 @@ export function GroupPlanOptOutSection({ planId, scheduledAt, isGuest, onOptedOu
               <button
                 type="button"
                 onClick={() => void handleConfirmOptOut()}
-                disabled={busy}
+                disabled={busy || (!terms && !!error)}
                 className={cn(modalBtnBase, 'bg-[#EF4444] text-white hover:bg-[#DC2626]')}
               >
                 {busy ? 'Processing…' : 'Opt Out'}
