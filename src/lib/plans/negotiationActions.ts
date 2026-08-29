@@ -1,3 +1,4 @@
+import { formatGroupParticipationError } from '@/lib/plans/groupParticipationErrors';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DbPlanOffer } from '@/types/database';
 
