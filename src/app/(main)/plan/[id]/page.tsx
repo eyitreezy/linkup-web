@@ -1,4 +1,4 @@
-import { PlanDetailScreen } from '@/features/plans/PlanDetailScreen';
+import { PlanDetailRouteClient } from '@/features/plans/PlanDetailRouteClient';
 import { AuthRouteLoader } from '@/components/auth/AuthRouteLoader';
 import { getServerAuthUser } from '@/lib/auth/server-session';
 import { isSupabaseConfigured } from '@/lib/env';
@@ -14,10 +14,14 @@ type Props = { params: Promise<{ id: string }> };
 export async function generateMetadata({ params }: Props) {
   const { id } = await params;
   if (!isSupabaseConfigured) return { title: 'Plan' };
-  const user = await getServerAuthUser();
-  const supabase = await createClient();
-  const { data } = await fetchPlanDetailBundle(supabase, id, user?.id ?? null);
-  return { title: data?.plan.title ?? 'Plan details' };
+  try {
+    const user = await getServerAuthUser();
+    const supabase = await createClient();
+    const { data } = await fetchPlanDetailBundle(supabase, id, user?.id ?? null);
+    return { title: data?.plan.title ?? 'Plan details' };
+  } catch {
+    return { title: 'Plan details' };
+  }
 }
 
 export default async function PlanDetailPage({ params }: Props) {
@@ -37,13 +41,23 @@ export default async function PlanDetailPage({ params }: Props) {
   }
 
   const supabase = await createClient();
-  const { data: initialBundle, error } = await fetchPlanDetailBundle(supabase, id, currentUserId);
+  let initialBundle: Awaited<ReturnType<typeof fetchPlanDetailBundle>>['data'] = null;
+  let loadError: string | null = null;
 
-  if (error || !initialBundle) notFound();
+  try {
+    const result = await fetchPlanDetailBundle(supabase, id, currentUserId);
+    initialBundle = result.data;
+    loadError = result.error;
+  } catch (e) {
+    console.error('[PlanDetailPage] load failed', id, e);
+    loadError = e instanceof Error ? e.message : 'Could not load plan';
+  }
+
+  if (loadError || !initialBundle) notFound();
 
   return (
     <Suspense fallback={<AuthRouteLoader variant="inline" />}>
-      <PlanDetailScreen planId={id} currentUserId={currentUserId} initialBundle={initialBundle} />
+      <PlanDetailRouteClient planId={id} currentUserId={currentUserId} initialBundle={initialBundle} />
     </Suspense>
   );
 }

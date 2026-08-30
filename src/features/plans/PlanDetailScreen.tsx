@@ -61,9 +61,8 @@ import { countPendingInvitations, getPlanAvailableSlots } from '@/lib/plans/plan
 import { usePermission } from '@/hooks/usePermission';
 import { extendMoodPlan } from '@/lib/plans/moodPlanCooldown';
 import { useGatedAction } from '@/contexts/UpgradeGateContext';
-import { useSearchParams } from 'next/navigation';
 import {
-  parsePlanDetailFrom,
+  type PlanDetailFrom,
   resolvePlanDetailBack,
 } from '@/lib/plans/planDetailNavigation';
 import type { BoostQuotaMeta } from '@/lib/subscription/boostQuota';
@@ -109,12 +108,17 @@ type Props = {
   planId: string;
   currentUserId: string | null;
   initialBundle: PlanDetailBundle;
+  planDetailFrom?: PlanDetailFrom | null;
 };
 
-export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props) {
+export function PlanDetailScreen({
+  planId,
+  currentUserId,
+  initialBundle,
+  planDetailFrom = null,
+}: Props) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const planDetailBack = resolvePlanDetailBack(parsePlanDetailFrom(searchParams.get('from')));
+  const planDetailBack = resolvePlanDetailBack(planDetailFrom);
   const user = useAuthStore((s) => s.user);
   /** Server-resolved id is correct on first paint before the auth store hydrates. */
   const viewerUserId = user?.id ?? currentUserId ?? undefined;

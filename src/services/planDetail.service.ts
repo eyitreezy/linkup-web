@@ -51,6 +51,14 @@ function isUsablePlanRow(row: unknown): row is PlanFeedRow {
   return !!row && typeof row === 'object' && typeof (row as PlanFeedRow).id === 'string';
 }
 
+function normalizePlanFeedRow(row: PlanFeedRow): PlanFeedRow {
+  const meetRaw = row.meet_types as unknown;
+  if (Array.isArray(meetRaw)) {
+    return { ...row, meet_types: meetRaw[0] ?? null };
+  }
+  return row;
+}
+
 /** Creator/history access when id-only select is blocked by restrictive RLS. */
 async function loadPlanRowForDetail(
   client: SupabaseClient,
@@ -64,7 +72,7 @@ async function loadPlanRowForDetail(
     .maybeSingle();
 
   if (isUsablePlanRow(planRow)) {
-    return { plan: planRow, error: null };
+    return { plan: normalizePlanFeedRow(planRow), error: null };
   }
 
   if (viewerId) {
@@ -76,7 +84,7 @@ async function loadPlanRowForDetail(
       .maybeSingle();
 
     if (isUsablePlanRow(creatorRow)) {
-      return { plan: creatorRow, error: null };
+      return { plan: normalizePlanFeedRow(creatorRow), error: null };
     }
 
     const { data: rpcRows, error: creatorError } = await client.rpc('get_creator_plan_for_detail', {
@@ -88,17 +96,18 @@ async function loadPlanRowForDetail(
 
     const rpcPlan = (Array.isArray(rpcRows) ? rpcRows[0] : rpcRows) as PlanFeedRow | undefined;
     if (isUsablePlanRow(rpcPlan)) {
-      if (rpcPlan.meet_types || !rpcPlan.meet_type_id) {
-        return { plan: rpcPlan, error: null };
+      const normalized = normalizePlanFeedRow(rpcPlan);
+      if (normalized.meet_types || !normalized.meet_type_id) {
+        return { plan: normalized, error: null };
       }
       const { data: meetType } = await client
         .from('meet_types')
         .select('*')
-        .eq('id', rpcPlan.meet_type_id)
+        .eq('id', normalized.meet_type_id)
         .maybeSingle();
       return {
         plan: {
-          ...rpcPlan,
+          ...normalized,
           meet_types: (meetType as PlanFeedRow['meet_types']) ?? null,
         },
         error: null,
@@ -115,19 +124,25 @@ export async function fetchPlanDetailBundle(
   planId: string,
   viewerId: string | null
 ): Promise<{ data: PlanDetailBundle | null; error: string | null }> {
-  let plan: PlanFeedRow | null = null;
-
   try {
     const loaded = await loadPlanRowForDetail(client, planId, viewerId);
     if (loaded.error) return { data: null, error: loaded.error };
-    plan = loaded.plan;
+    if (!loaded.plan) return { data: null, error: null };
+
+    return await buildPlanDetailBundle(client, planId, viewerId, loaded.plan);
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Could not load plan';
+    console.error('[fetchPlanDetailBundle]', planId, e);
     return { data: null, error: message };
   }
+}
 
-  if (!plan) return { data: null, error: null };
-
+async function buildPlanDetailBundle(
+  client: SupabaseClient,
+  planId: string,
+  viewerId: string | null,
+  plan: PlanFeedRow
+): Promise<{ data: PlanDetailBundle | null; error: string | null }> {
   const row = plan;
 
   const { data: offersRaw } = await client
