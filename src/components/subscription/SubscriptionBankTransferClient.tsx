@@ -155,7 +155,7 @@ export function SubscriptionBankTransferClient({
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-6 pb-16">
+    <div className="min-w-0 space-y-6 pb-24 min-[400px]:space-y-8 min-[400px]:pb-10">
       <TabPageHeader
         kicker="Membership"
         title="Pay by bank transfer"
@@ -170,7 +170,7 @@ export function SubscriptionBankTransferClient({
       ) : null}
 
       {step === 'refund_account' ? (
-        <div className="linkup-card p-5">
+        <div className="linkup-card mx-auto w-full max-w-lg p-5">
           <p className="text-[14px] font-semibold leading-relaxed text-muted">
             Add a refund account first. We use it if a subscription payment needs to be returned.
           </p>
@@ -187,7 +187,7 @@ export function SubscriptionBankTransferClient({
       ) : null}
 
       {step === 'virtual_account' && va ? (
-        <div className="linkup-card space-y-4 p-5">
+        <div className="linkup-card mx-auto w-full max-w-lg space-y-4 p-5">
           <div className="rounded-xl border border-primary/15 bg-[#F5F6FA] p-4">
             <p className="text-[12px] font-extrabold uppercase tracking-wide text-muted">Transfer exactly</p>
             <p className="font-display text-3xl font-extrabold text-foreground">

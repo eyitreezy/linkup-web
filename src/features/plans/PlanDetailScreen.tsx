@@ -227,12 +227,15 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
 
   const isCreator = !!viewerUserId && plan?.creator_id === viewerUserId;
   const isGroupPlan = !!plan?.is_group_plan;
+  const moodClosed = plan ? isPlanMoodWindowClosed(plan) : false;
+  const planListingExpired = plan ? isPlanListingExpired(plan) : false;
+  const meetupInactiveState = plan ? resolvePlanMeetupInactive(plan, planListingExpired) : null;
+  const meetupInactive = meetupInactiveState?.inactive ?? false;
   const showInvite =
     isCreator &&
     isGroupPlan &&
+    !meetupInactive &&
     (availableSlots > 0 || pendingInvitationCount > 0);
-  const moodClosed = plan ? isPlanMoodWindowClosed(plan) : false;
-  const planListingExpired = plan ? isPlanListingExpired(plan) : false;
   const boosted = plan ? isPlanBoostActive(plan.boosted_until) : false;
 
   const acceptedGuestOffers = useMemo(
@@ -720,10 +723,17 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         }
       />
 
-      {planListingExpired ? (
+      {planListingExpired && !meetupInactive ? (
         <div className="rounded-2xl border border-slate-200/80 bg-slate-50 px-4 py-3 text-[13px] font-semibold text-slate-700">
           This plan has ended. You can still view details, but new offers, join requests, invitations,
           and sharing are closed.
+        </div>
+      ) : null}
+
+      {meetupInactive && meetupInactiveState?.inactive ? (
+        <div className="rounded-2xl border border-red-200/80 bg-red-50 px-4 py-3 text-[13px] font-semibold text-red-900">
+          <p className="font-extrabold">{meetupInactiveState.title}</p>
+          <p className="mt-1 font-semibold leading-relaxed">{meetupInactiveState.message}</p>
         </div>
       ) : null}
 
@@ -864,16 +874,22 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
         offersReady={!!bundle}
         refreshKey={guestsPanelRefreshKey}
         guestsHeaderAction={
-          isCreator &&
-          plan.is_group_plan &&
-          !resolvePlanMeetupInactive(plan, planListingExpired).inactive &&
-          (ctx?.showHostPayShare || (ctx?.showViewAgreement && !ctx.showHostPayShare))
-            ? {
-                show: true,
-                kind: ctx?.showHostPayShare ? 'pay_share' : 'confirm_plan',
-                amountLabel: ctx?.hostPayShareAmountLabel ?? null,
-                onClick: handleHostGuestsHeaderAction,
-              }
+          isCreator && plan.is_group_plan
+            ? ctx?.showHostPayShare
+              ? {
+                  show: true,
+                  kind: 'pay_share' as const,
+                  amountLabel: ctx.hostPayShareAmountLabel ?? null,
+                  onClick: handleHostGuestsHeaderAction,
+                }
+              : !meetupInactive && ctx?.showViewAgreement
+                ? {
+                    show: true,
+                    kind: 'confirm_plan' as const,
+                    amountLabel: null,
+                    onClick: handleHostGuestsHeaderAction,
+                  }
+                : undefined
             : undefined
         }
         onGuestRemoved={refreshGroupPlanState}

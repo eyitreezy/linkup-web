@@ -40,5 +40,6 @@ export async function markAllNotificationsRead(userId: string) {
 
 export async function deleteNotification(id: string) {
   const client = createClient();
-  return client.from('notifications').delete().eq('id', id);
+  const { error } = await client.from('notifications').delete().eq('id', id);
+  return { error: error?.message ?? null };
 }

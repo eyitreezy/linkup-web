@@ -2,6 +2,13 @@ import { adminHref } from '@/lib/admin/adminTabUrl';
 import { planNegotiateHref } from '@/lib/plans/negotiateRoute';
 import type { NotificationPayload } from '@/types/database';
 
+function resolveNotificationPlanId(data: NotificationPayload | null | undefined): string | null {
+  if (!data || typeof data !== 'object') return null;
+  if (typeof data.planId === 'string' && data.planId.trim()) return data.planId;
+  if (typeof data.plan_id === 'string' && data.plan_id.trim()) return data.plan_id;
+  return null;
+}
+
 export function hrefFromNotificationPayload(data: NotificationPayload | null | undefined): string | null {
   if (!data || typeof data !== 'object') return null;
   if (typeof data.href === 'string' && data.href.startsWith('/')) {
@@ -25,11 +32,12 @@ export function hrefFromNotificationPayload(data: NotificationPayload | null | u
   }
   if (data.chatId) return `/chat/${data.chatId}`;
   if (data.escrowId) return `/escrow/${data.escrowId}`;
-  if (data.planId) {
+  const planId = resolveNotificationPlanId(data);
+  if (planId) {
     if (typeof data.offerId === 'string' && data.offerId.trim()) {
-      return planNegotiateHref(data.planId, { offerId: data.offerId });
+      return planNegotiateHref(planId, { offerId: data.offerId });
     }
-    return `/plan/${data.planId}`;
+    return `/plan/${planId}`;
   }
   if (data.disputeId) return '/disputes';
   return null;
@@ -220,6 +228,15 @@ export function navigateFromNotification(
     data?.planId
   ) {
     push(`/plan/${data.planId}/requests`);
+    return;
+  }
+  if (t === 'plan_cancelled') {
+    const planId = resolveNotificationPlanId(data);
+    if (planId) {
+      push(`/plan/${planId}`);
+      return;
+    }
+    push('/wallet');
     return;
   }
   if (t.trim()) {

@@ -26,6 +26,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { IoCheckmarkCircle, IoChevronForward, IoDiamondOutline, IoSparkles } from 'react-icons/io5';
 
+const ACTIVATED_BANNER_DISMISSED_KEY = 'linkup_subscription_activated_banner_dismissed';
+
 export function SubscriptionScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -103,11 +105,27 @@ export function SubscriptionScreen() {
   }, [preselected]);
 
   useEffect(() => {
-    if (searchParams.get('activated') === '1') {
-      setStatusMsg('Your subscription is now active.');
-      void refreshSubscription();
+    if (searchParams.get('activated') !== '1') return;
+    try {
+      if (sessionStorage.getItem(ACTIVATED_BANNER_DISMISSED_KEY) === '1') return;
+    } catch {
+      /* ignore storage errors */
     }
+    setStatusMsg('Your subscription is now active.');
+    void refreshSubscription();
   }, [searchParams, refreshSubscription]);
+
+  function dismissStatusBanner() {
+    setStatusMsg(null);
+    if (searchParams.get('activated') === '1') {
+      try {
+        sessionStorage.setItem(ACTIVATED_BANNER_DISMISSED_KEY, '1');
+      } catch {
+        /* ignore storage errors */
+      }
+      router.replace('/subscription');
+    }
+  }
 
   async function handleUpgrade(tier: PaidTier) {
     setErrorMsg(null);
@@ -177,7 +195,7 @@ export function SubscriptionScreen() {
       {statusMsg ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[14px] font-semibold text-emerald-900">
           {statusMsg}
-          <button type="button" className="ml-2 font-extrabold underline" onClick={() => setStatusMsg(null)}>
+          <button type="button" className="ml-2 font-extrabold underline" onClick={dismissStatusBanner}>
             Dismiss
           </button>
         </div>

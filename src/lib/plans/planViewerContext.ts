@@ -3,6 +3,7 @@
  */
 import { planIsPastNegotiation } from '@/lib/plans/planAgreementRoute';
 import { isOfferLive } from '@/lib/plans/negotiationState';
+import { resolvePlanMeetupInactive } from '@/lib/plans/planMeetupInactive';
 import { userEscrowLegFunded } from '@/lib/escrow/splitEscrowFunding';
 import {
   isGroupSplitPlan,
@@ -157,6 +158,7 @@ export function derivePlanViewerContext(
   }
 ): PlanViewerContext {
   const listingExpired = opts?.listingExpired ?? opts?.moodClosed ?? false;
+  const meetupInactive = resolvePlanMeetupInactive(plan, listingExpired).inactive;
   const completionSelfAcked = opts?.completionSelfAcked ?? false;
   const myJoinRequest = opts?.myJoinRequest ?? null;
   const isNegotiable = plan.is_negotiable !== false;
@@ -240,19 +242,21 @@ export function derivePlanViewerContext(
     showSave = true;
 
     if (isMatchedGuest) {
-      showCalendar = true;
-      showViewAgreement = true;
-      showMessage = true;
+      showCalendar = !meetupInactive;
+      showViewAgreement = !meetupInactive;
+      showMessage = !meetupInactive;
     } else if (joinRequestFlow) {
       if (myJoinRequest?.status === 'pending') {
         showViewRequest = true;
       } else if (myJoinRequest?.status === 'approved') {
-        if (guestEscrowFunded) {
-          showViewAgreement = true;
-          showMessage = true;
-          showCalendar = true;
-        } else {
-          showViewAgreement = true;
+        if (!meetupInactive) {
+          if (guestEscrowFunded) {
+            showViewAgreement = true;
+            showMessage = true;
+            showCalendar = true;
+          } else {
+            showViewAgreement = true;
+          }
         }
       } else if (myJoinRequest?.status === 'declined') {
         // Save only
@@ -260,17 +264,19 @@ export function derivePlanViewerContext(
         // Informational state only; no request modal.
       } else {
         const canRequest =
+          !meetupInactive &&
           !listingExpired &&
           (effectiveLockState === 'open' || (isGroup && effectiveLockState === 'partial'));
         showRequestToJoin = canRequest;
       }
     } else if (isNegotiatingGuest) {
-      showViewOffer = true;
+      showViewOffer = !meetupInactive;
     } else if (isBrowsingGuest) {
       if (guestActionBlockReason) {
         // Informational state only; no offer modal.
       } else {
         const canOffer =
+          !meetupInactive &&
           !listingExpired &&
           (effectiveLockState === 'open' || (isGroup && effectiveLockState === 'partial'));
         showMakeOffer = canOffer && isNegotiable;
@@ -278,7 +284,7 @@ export function derivePlanViewerContext(
     }
   }
 
-  if (isHost) {
+  if (isHost && !meetupInactive) {
     const hostNegotiating = effectiveLockState === 'open';
     const hostGroupPartial = isGroup && effectiveLockState === 'partial';
 

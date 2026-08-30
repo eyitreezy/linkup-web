@@ -26,7 +26,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
-import { IoNotificationsOutline, IoPricetagOutline, IoSettingsOutline, IoTrashOutline } from 'react-icons/io5';
+import { IoNotificationsOutline, IoPricetagOutline, IoSettingsOutline } from 'react-icons/io5';
 
 function startOfToday(): number {
   const d = new Date();
@@ -71,6 +71,30 @@ export function NotificationsInboxScreen() {
     const list = notifications.filter((n) => notificationMatchesFilter(n, filter));
     return sortNotifications(list);
   }, [notifications, filter]);
+
+  async function dismissNotification(id: string) {
+    if (!user?.id) return;
+    const previous = queryClient.getQueryData<{ rows: DbNotification[]; error: null }>([
+      NOTIFICATIONS_QUERY_KEY,
+      user.id,
+      isAdmin,
+    ]);
+    queryClient.setQueryData(
+      [NOTIFICATIONS_QUERY_KEY, user.id, isAdmin],
+      (current: { rows: DbNotification[]; error: null } | undefined) =>
+        current
+          ? { ...current, rows: current.rows.filter((row) => row.id !== id) }
+          : current
+    );
+    const { error } = await deleteNotification(id);
+    if (error) {
+      if (previous) {
+        queryClient.setQueryData([NOTIFICATIONS_QUERY_KEY, user.id, isAdmin], previous);
+      }
+      return;
+    }
+    invalidateNotificationQueries(queryClient, user.id);
+  }
 
   const filterEmpty = filter !== 'all' && notifications.length > 0 && filtered.length === 0;
 
@@ -221,14 +245,11 @@ export function NotificationsInboxScreen() {
                       </button>
                       <button
                         type="button"
-                        aria-label="Delete notification"
-                        className="shrink-0 rounded-lg p-2 text-muted hover:bg-red-50 hover:text-red-600"
-                        onClick={async () => {
-                          await deleteNotification(n.id);
-                          invalidateNotificationQueries(queryClient, user.id);
-                        }}
+                        aria-label="Dismiss notification"
+                        className="shrink-0 rounded-lg px-2 py-2 text-[12px] font-extrabold text-muted hover:bg-red-50 hover:text-red-600"
+                        onClick={() => void dismissNotification(n.id)}
                       >
-                        <IoTrashOutline size={18} />
+                        Dismiss
                       </button>
                     </div>
                   </li>

@@ -9,6 +9,8 @@ import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'Pay by bank transfer' };
+
 type Props = {
   searchParams: Promise<{ tier?: string; cycle?: string }>;
 };
