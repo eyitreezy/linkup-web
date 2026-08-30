@@ -602,12 +602,7 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
     isHost &&
     !!plan.is_group_plan &&
     !['cancelled', 'completed'].includes(plan.status ?? '');
-  const showGuestGroupCancel =
-    isGuest &&
-    !!plan.is_group_plan &&
-    (needsConfirm || awaitingPay) &&
-    showPaymentFlow;
-  const showSingleGroupCancel = showHostGroupCancel || showGuestGroupCancel;
+  const showSingleGroupCancel = showHostGroupCancel;
   const isGroupSplit = isGroupSplitPlan(plan);
   const isGroupSplitHost = isGroupSplit && isHost;
   const groupSplitGuestCanPay = isGroupSplit && !isHost;
@@ -1125,17 +1120,15 @@ export function PlanAgreementScreen({ planId, offerId, joinRequestId }: Props) {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => (isGuest ? openGuestCancelFlow() : openHostCancelFlow())}
+                onClick={() => openHostCancelFlow()}
                 className="flex min-h-[48px] w-full items-center justify-center rounded-full border border-primary/25 bg-white px-4 text-center text-[14px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/50 disabled:opacity-50"
               >
-                {isHost ? 'Cancel group plan' : 'Cancel this plan'}
+                Cancel group plan
         </button>
-              {isHost ? (
-                <p className="mt-2 text-center text-[12px] font-semibold leading-relaxed text-muted">
-                  Group plans use host cancellation with timing-based refunds and guest compensation.
-                  Mutual cancellation applies to one-to-one plans only.
-                </p>
-              ) : null}
+              <p className="mt-2 text-center text-[12px] font-semibold leading-relaxed text-muted">
+                Group plans use host cancellation with timing-based refunds and guest compensation.
+                Mutual cancellation applies to one-to-one plans only.
+              </p>
             </div>
           ) : null}
         </>

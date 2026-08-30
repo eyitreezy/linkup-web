@@ -1,4 +1,4 @@
-import { fetchApprovedJoinRequestOffers } from '@/lib/plans/joinRequestOffers';
+import { fetchApprovedJoinRequestOffers, joinRequestSlotCents } from '@/lib/plans/joinRequestOffers';
 import type { DbPlan, DbPlanOffer } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -6,8 +6,7 @@ function syntheticOfferFromInvitation(
   plan: DbPlan,
   row: Record<string, unknown>
 ): DbPlanOffer {
-  const cents =
-    plan.current_suggested_share_cents ?? plan.agreed_price_cents ?? plan.starting_price_cents ?? 0;
+  const cents = joinRequestSlotCents(plan);
   return {
     id: `invitation-${row.id as string}`,
     plan_id: plan.id,

@@ -1,6 +1,10 @@
 import { formatEscrowMoney } from '@/lib/escrow/escrowPaymentPreview';
 import { planTotalAmountCents } from '@/lib/plans/groupDynamicSplit';
-import { groupPlanParticipantCount, groupPlanPerPersonCents } from '@/lib/plans/groupEscrowSplit';
+import {
+  groupPlanParticipantCount,
+  groupPlanPerPersonCents,
+  resolveStableGroupGuestAllocationCents,
+} from '@/lib/plans/groupEscrowSplit';
 import type { DbPlan } from '@/types/database';
 
 /** Display label for the formula slot price on non-negotiable plans. */
@@ -14,7 +18,7 @@ export function resolveJoinRequestSlotCentsLabel(plan: DbPlan): string {
 
   if (plan.escrow_pattern === 'B') {
     if (plan.is_group_plan) {
-      const cents = plan.current_suggested_share_cents ?? 0;
+      const cents = resolveStableGroupGuestAllocationCents(plan);
       if (cents > 0) return formatEscrowMoney(cents, currency);
     } else {
       const total = plan.starting_price_cents ?? 0;
@@ -33,7 +37,7 @@ export function resolveJoinRequestSlotCents(plan: DbPlan): number {
   }
   if (plan.escrow_pattern === 'B') {
     if (plan.is_group_plan) {
-      return Math.max(0, plan.current_suggested_share_cents ?? 0);
+      return resolveStableGroupGuestAllocationCents(plan);
     }
     const total = plan.starting_price_cents ?? 0;
     const bps = plan.host_contribution_bps ?? 5000;
@@ -57,12 +61,16 @@ export function resolveDefaultGroupGuestOfferAmountCents(
     | 'max_guests'
     | 'accepted_guest_count'
     | 'host_contribution_bps'
-  >
+  >,
+  options?: { existingOfferAmountCents?: number | null }
 ): number {
   if (!plan.is_group_plan) return 0;
 
-  const suggested = plan.current_suggested_share_cents ?? 0;
-  if (suggested > 0) return suggested;
+  const existing = options?.existingOfferAmountCents ?? 0;
+  if (existing > 0) return existing;
+
+  const stable = resolveStableGroupGuestAllocationCents(plan);
+  if (stable > 0) return stable;
 
   const slot = resolveJoinRequestSlotCents(plan as DbPlan);
   if (slot > 0) return slot;

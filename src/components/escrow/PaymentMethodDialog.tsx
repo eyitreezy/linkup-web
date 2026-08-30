@@ -13,6 +13,7 @@ type Props = {
   onContinue: () => void;
   onClose: () => void;
   busy?: boolean;
+  description?: string;
 };
 
 export function PaymentMethodDialog({
@@ -22,6 +23,7 @@ export function PaymentMethodDialog({
   onContinue,
   onClose,
   busy = false,
+  description = 'Choose card checkout or bank transfer for this escrow payment.',
 }: Props) {
   return (
     <EscrowModalShell open={open} onClose={onClose} maxWidth="sm">
@@ -31,7 +33,7 @@ export function PaymentMethodDialog({
             How would you like to pay?
           </h2>
           <p className="mt-2 text-[14px] font-semibold leading-relaxed text-muted">
-            Choose card checkout or bank transfer for this escrow payment.
+            {description}
           </p>
         </div>
         <PaymentMethodSelector selected={selected} onSelect={onSelect} />

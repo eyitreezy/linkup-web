@@ -11,6 +11,7 @@ import { TierBadge } from '@/components/subscription/TierBadge';
 import { isCreatorSpotlightActive } from '@/lib/plans/creatorSpotlight';
 import { formatNGN } from '@/lib/escrow/escrowFormatters';
 import { isGroupSplitPlan } from '@/lib/plans/groupDynamicSplit';
+import { resolveStableGroupGuestAllocationCents } from '@/lib/plans/groupEscrowSplit';
 import { grossAmountCents } from '@/lib/plans/planFinancialConfig';
 import { derivePresenceUi, type PresenceUi } from '@/lib/presence/hostPresenceStatus';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
@@ -87,9 +88,7 @@ export function DiscoverPlanListCard({
 
   const priceGrossLabel = formatPlanPriceGross(plan);
   const suggestedShareCents =
-    isGroupSplitPlan(plan) && plan.current_suggested_share_cents
-      ? plan.current_suggested_share_cents
-      : null;
+    isGroupSplitPlan(plan) ? resolveStableGroupGuestAllocationCents(plan) || null : null;
   const suggestedShareGrossLabel =
     suggestedShareCents != null ? formatNGN(grossAmountCents(suggestedShareCents)) : null;
   const planHref = planDetailHref(plan.id, PLAN_DETAIL_FROM.discover);

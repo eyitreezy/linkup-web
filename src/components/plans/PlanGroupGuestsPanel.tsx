@@ -12,6 +12,7 @@ import {
   isGuestEscrowFunded,
 } from '@/lib/plans/groupGuestEscrowDisplay';
 import { resolveGroupGuestSlotCounts } from '@/lib/plans/groupGuestSlotCounts';
+import { joinRequestSlotCents } from '@/lib/plans/joinRequestOffers';
 import { resolveEscrowHref } from '@/lib/plans/planAgreementRoute';
 import { createClient } from '@/lib/supabase/client';
 import type { DbPlan, DbPlanOffer, DbProfile, SubscriptionTierDb } from '@/types/database';
@@ -55,13 +56,6 @@ type Props = {
 
 const cardHeaderPrimaryBtn =
   'inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-full linkup-gradient-primary px-5 py-2.5 text-[14px] font-extrabold text-white shadow-sm transition hover:opacity-95 active:scale-[0.98] disabled:opacity-50';
-
-function joinRequestSlotCents(plan: DbPlan): number {
-  if (plan.is_group_plan) {
-    return plan.current_suggested_share_cents ?? plan.agreed_price_cents ?? plan.starting_price_cents ?? 0;
-  }
-  return plan.agreed_price_cents ?? plan.starting_price_cents ?? 0;
-}
 
 function syntheticOfferFromJoinRequest(
   plan: DbPlan,

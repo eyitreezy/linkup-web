@@ -1,15 +1,15 @@
 import { OfferFeeBreakdown } from '@/components/plans/OfferFeeBreakdown';
 import { formatNGN } from '@/lib/escrow/escrowFormatters';
-import {
-  planTotalAmountCents,
-  remainingGuestSlots,
-} from '@/lib/plans/groupDynamicSplit';
+import { planTotalAmountCents } from '@/lib/plans/groupDynamicSplit';
+import { resolveStableGroupGuestAllocationCents } from '@/lib/plans/groupEscrowSplit';
 import { grossAmountCents } from '@/lib/plans/planFinancialConfig';
 import type { DbPlan } from '@/types/database';
 
 type Props = {
   plan: Pick<
     DbPlan,
+    | 'is_group_plan'
+    | 'escrow_pattern'
     | 'current_suggested_share_cents'
     | 'total_amount_cents'
     | 'starting_price_cents'
@@ -22,10 +22,9 @@ type Props = {
 };
 
 export function GroupSuggestedShareAnchor({ plan }: Props) {
-  const suggested = plan.current_suggested_share_cents;
-  if (suggested == null || suggested <= 0) return null;
+  const suggested = resolveStableGroupGuestAllocationCents(plan);
+  if (suggested <= 0) return null;
 
-  const slots = remainingGuestSlots(plan);
   const total = planTotalAmountCents(plan);
 
   return (
@@ -35,7 +34,7 @@ export function GroupSuggestedShareAnchor({ plan }: Props) {
         {formatNGN(grossAmountCents(suggested))}
       </p>
       <p className="text-[12px] font-semibold leading-relaxed text-muted">
-        Based on {slots} remaining slot{slots === 1 ? '' : 's'} and a plan total of {formatNGN(total)}
+        Your allocated share for this group plan (plan total {formatNGN(total)})
       </p>
 
       <div className="mt-2 flex items-center justify-between border-t border-primary/15 pt-2">

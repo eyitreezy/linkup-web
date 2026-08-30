@@ -16,6 +16,12 @@ export function formatGroupParticipationError(message: string): string {
   if (m.includes('no_matrix_entry_found')) {
     return 'Cancellation terms are not available for this plan yet. Please try again later or contact support.';
   }
+  if (m.includes('group_guest_cannot_cancel_plan')) {
+    return 'Guests cannot cancel a group plan. Use Opt Out on the plan details screen if you need to leave.';
+  }
+  if (m.includes('use_group_host_cancellation')) {
+    return 'Use the group plan cancellation flow from the agreement screen.';
+  }
   if (m.includes('plan_listing_expired')) {
     return 'This plan is no longer accepting new requests.';
   }

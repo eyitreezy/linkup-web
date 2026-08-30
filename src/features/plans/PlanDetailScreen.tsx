@@ -882,7 +882,7 @@ export function PlanDetailScreen({ planId, currentUserId, initialBundle }: Props
       {isAcceptedGuest && plan.is_group_plan ? (
         <GroupPlanOptOutSection
           planId={plan.id}
-          scheduledAt={plan.scheduled_at}
+          scheduledAt={plan.agreed_scheduled_at ?? plan.scheduled_at}
           isGuest={isAcceptedGuest}
           onOptedOut={refreshGroupPlanState}
         />

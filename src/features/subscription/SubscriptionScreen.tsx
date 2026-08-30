@@ -1,5 +1,6 @@
 'use client';
 
+import { PaymentMethodDialog } from '@/components/escrow/PaymentMethodDialog';
 import { SubscriptionHistoryContent } from '@/components/subscription/SubscriptionHistoryContent';
 import { TierBadge } from '@/components/subscription/TierBadge';
 import { ConfirmDialog } from '@/features/plan-management/ConfirmDialog';
@@ -21,10 +22,12 @@ import type { DbSubscriptionEvent } from '@/types/database';
 import { useAuthStore } from '@/stores/auth-store';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { IoCheckmarkCircle, IoChevronForward, IoDiamondOutline, IoSparkles } from 'react-icons/io5';
 
 export function SubscriptionScreen() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const preselected = searchParams.get('tier') as SubscriptionTier | null;
@@ -42,6 +45,11 @@ export function SubscriptionScreen() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [downgradeOpen, setDowngradeOpen] = useState(false);
+  const [paymentMethodOpen, setPaymentMethodOpen] = useState(false);
+  const [pendingCheckoutTier, setPendingCheckoutTier] = useState<PaidTier | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'card' | 'bank_transfer' | null>(
+    null
+  );
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const checkoutTierRef = useRef<PaidTier | null>(null);
@@ -94,11 +102,35 @@ export function SubscriptionScreen() {
     }
   }, [preselected]);
 
+  useEffect(() => {
+    if (searchParams.get('activated') === '1') {
+      setStatusMsg('Your subscription is now active.');
+      void refreshSubscription();
+    }
+  }, [searchParams, refreshSubscription]);
+
   async function handleUpgrade(tier: PaidTier) {
     setErrorMsg(null);
+    setPendingCheckoutTier(tier);
+    setSelectedPaymentMethod(null);
+    setPaymentMethodOpen(true);
+  }
+
+  async function continueCheckout() {
+    if (!pendingCheckoutTier || !selectedPaymentMethod) return;
+    setPaymentMethodOpen(false);
+    if (selectedPaymentMethod === 'bank_transfer') {
+      router.push(
+        `/subscription/bank-transfer?tier=${pendingCheckoutTier}&cycle=${billingCycle}`
+      );
+      setPendingCheckoutTier(null);
+      return;
+    }
+    setErrorMsg(null);
     tierBeforeCheckout.current = subscriptionState.effectiveTier;
-    checkoutTierRef.current = tier;
-    const result = await initiateSubscription(tier, billingCycle);
+    checkoutTierRef.current = pendingCheckoutTier;
+    const result = await initiateSubscription(pendingCheckoutTier, billingCycle);
+    setPendingCheckoutTier(null);
     if (!result.ok) setErrorMsg(result.error ?? 'Checkout failed');
   }
 
@@ -317,6 +349,19 @@ export function SubscriptionScreen() {
           setCancelOpen(true);
         }}
         onClose={() => setDowngradeOpen(false)}
+      />
+
+      <PaymentMethodDialog
+        open={paymentMethodOpen}
+        selected={selectedPaymentMethod}
+        onSelect={setSelectedPaymentMethod}
+        onContinue={() => void continueCheckout()}
+        onClose={() => {
+          setPaymentMethodOpen(false);
+          setPendingCheckoutTier(null);
+        }}
+        busy={checkoutBusy}
+        description="Choose card checkout or bank transfer for your subscription payment."
       />
     </div>
   );

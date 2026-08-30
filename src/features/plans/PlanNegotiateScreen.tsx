@@ -204,19 +204,18 @@ export function PlanNegotiateScreen({ planId, offerId, openAction }: Props) {
       return;
     }
 
-    const defaultCents = resolveDefaultGroupGuestOfferAmountCents(plan);
+    const myLiveAmount =
+      guestLiveOffers[guestLiveOffers.length - 1]?.current_amount_cents ??
+      guestLiveOffers[guestLiveOffers.length - 1]?.amount_cents ??
+      null;
+
+    const defaultCents = resolveDefaultGroupGuestOfferAmountCents(plan, {
+      existingOfferAmountCents: myLiveAmount,
+    });
     if (defaultCents > 0) {
       setAmount(String(defaultCents / 100));
     }
-  }, [
-    plan,
-    isCreator,
-    counterTarget,
-    plan?.current_suggested_share_cents,
-    plan?.accepted_guest_count,
-    plan?.starting_price_cents,
-    plan?.total_amount_cents,
-  ]);
+  }, [plan, isCreator, counterTarget, guestLiveOffers]);
 
   const bidderNamesQuery = useQuery({
     queryKey: ['offer-bidders', planId, offers.map((o) => o.bidder_id).join(',')],

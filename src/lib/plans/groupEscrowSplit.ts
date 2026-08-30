@@ -1,3 +1,4 @@
+import { planTotalAmountCents } from '@/lib/plans/groupDynamicSplit';
 import type { EscrowRoleSplit } from '@/lib/plans/escrowParties';
 import type { DbPlan } from '@/types/database';
 
@@ -12,6 +13,30 @@ export function groupPlanParticipantCount(plan: Pick<DbPlan, 'max_guests' | 'acc
 /** Equal per-person share; host absorbs rounding remainder via ceil. */
 export function groupPlanPerPersonCents(totalCents: number, participantCount: number): number {
   return Math.ceil(totalCents / Math.max(1, participantCount));
+}
+
+/**
+ * Stable guest slot allocation from plan creation (equal split among host + max guest slots).
+ * Does not change when other members pay or accept — separate from host Pay Your Share math.
+ */
+export function resolveStableGroupGuestAllocationCents(
+  plan: Pick<
+    DbPlan,
+    | 'is_group_plan'
+    | 'escrow_pattern'
+    | 'total_amount_cents'
+    | 'starting_price_cents'
+    | 'agreed_price_cents'
+    | 'budget_min_cents'
+    | 'budget_max_cents'
+    | 'max_guests'
+    | 'accepted_guest_count'
+  >
+): number {
+  if (!plan.is_group_plan || plan.escrow_pattern !== 'B') return 0;
+  const total = planTotalAmountCents(plan);
+  if (total <= 0) return 0;
+  return groupPlanPerPersonCents(total, groupPlanParticipantCount(plan));
 }
 
 export function isGroupEqualSplitPlan(plan: Pick<DbPlan, 'is_group_plan' | 'escrow_pattern'>): boolean {

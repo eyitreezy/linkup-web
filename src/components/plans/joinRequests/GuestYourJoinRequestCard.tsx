@@ -8,7 +8,7 @@ import {
   deriveGuestJoinRequestCardPhase,
   GUEST_JOIN_REQUEST_PENDING_COPY,
 } from '@/lib/plans/guestJoinRequestCardState';
-import { resolveJoinRequestSlotCentsLabel } from '@/lib/plans/joinRequestSlotDisplay';
+import { resolveJoinRequestSlotCents, resolveJoinRequestSlotCentsLabel } from '@/lib/plans/joinRequestSlotDisplay';
 import type { PlanViewerContext } from '@/lib/plans/planViewerContext';
 import type { DbPlan, JoinRequestStatus } from '@/types/database';
 import { cn } from '@/utils/cn';
@@ -67,7 +67,7 @@ export function GuestYourJoinRequestCard({
             />
             <RequestToJoinButton
               planId={planId}
-              suggestedAmountCents={plan.current_suggested_share_cents}
+              suggestedAmountCents={resolveJoinRequestSlotCents(plan)}
               currency={plan.currency ?? 'NGN'}
               planListingExpired={listingExpired}
               onPlanExpired={onPlanExpired}

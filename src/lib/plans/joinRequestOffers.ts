@@ -1,8 +1,11 @@
 import type { DbPlan, DbPlanJoinRequest, DbPlanOffer } from '@/types/database';
+import { resolveStableGroupGuestAllocationCents } from '@/lib/plans/groupEscrowSplit';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export function joinRequestSlotCents(plan: Pick<DbPlan, 'is_group_plan' | 'current_suggested_share_cents' | 'starting_price_cents' | 'agreed_price_cents'>): number {
+export function joinRequestSlotCents(plan: Pick<DbPlan, 'is_group_plan' | 'escrow_pattern' | 'current_suggested_share_cents' | 'starting_price_cents' | 'agreed_price_cents' | 'total_amount_cents' | 'budget_min_cents' | 'budget_max_cents' | 'max_guests' | 'accepted_guest_count'>): number {
   if (plan.is_group_plan) {
+    const stable = resolveStableGroupGuestAllocationCents(plan);
+    if (stable > 0) return stable;
     return plan.current_suggested_share_cents ?? plan.starting_price_cents ?? 0;
   }
   return plan.agreed_price_cents ?? plan.starting_price_cents ?? 0;
