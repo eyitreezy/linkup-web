@@ -45,47 +45,87 @@ export type PlanDetailBundle = {
   pendingInvitationCount: number;
 };
 
+const PLAN_DETAIL_SELECT = '*, meet_types(*)';
+
+function isUsablePlanRow(row: unknown): row is PlanFeedRow {
+  return !!row && typeof row === 'object' && typeof (row as PlanFeedRow).id === 'string';
+}
+
+/** Creator/history access when id-only select is blocked by restrictive RLS. */
+async function loadPlanRowForDetail(
+  client: SupabaseClient,
+  planId: string,
+  viewerId: string | null
+): Promise<{ plan: PlanFeedRow | null; error: string | null }> {
+  const { data: planRow, error: selectError } = await client
+    .from('plans')
+    .select(PLAN_DETAIL_SELECT)
+    .eq('id', planId)
+    .maybeSingle();
+
+  if (isUsablePlanRow(planRow)) {
+    return { plan: planRow, error: null };
+  }
+
+  if (viewerId) {
+    const { data: creatorRow } = await client
+      .from('plans')
+      .select(PLAN_DETAIL_SELECT)
+      .eq('id', planId)
+      .eq('creator_id', viewerId)
+      .maybeSingle();
+
+    if (isUsablePlanRow(creatorRow)) {
+      return { plan: creatorRow, error: null };
+    }
+
+    const { data: rpcRows, error: creatorError } = await client.rpc('get_creator_plan_for_detail', {
+      p_plan_id: planId,
+    });
+    if (creatorError) {
+      return { plan: null, error: creatorError.message };
+    }
+
+    const rpcPlan = (Array.isArray(rpcRows) ? rpcRows[0] : rpcRows) as PlanFeedRow | undefined;
+    if (isUsablePlanRow(rpcPlan)) {
+      if (rpcPlan.meet_types || !rpcPlan.meet_type_id) {
+        return { plan: rpcPlan, error: null };
+      }
+      const { data: meetType } = await client
+        .from('meet_types')
+        .select('*')
+        .eq('id', rpcPlan.meet_type_id)
+        .maybeSingle();
+      return {
+        plan: {
+          ...rpcPlan,
+          meet_types: (meetType as PlanFeedRow['meet_types']) ?? null,
+        },
+        error: null,
+      };
+    }
+  }
+
+  if (selectError) return { plan: null, error: selectError.message };
+  return { plan: null, error: null };
+}
+
 export async function fetchPlanDetailBundle(
   client: SupabaseClient,
   planId: string,
   viewerId: string | null
 ): Promise<{ data: PlanDetailBundle | null; error: string | null }> {
   let plan: PlanFeedRow | null = null;
-  let planError: { message: string } | null = null;
 
-  const { data: planRow, error: selectError } = await client
-    .from('plans')
-    .select('*, meet_types(*)')
-    .eq('id', planId)
-    .maybeSingle();
-
-  if (selectError) {
-    planError = selectError;
-  } else {
-    plan = (planRow as PlanFeedRow | null) ?? null;
+  try {
+    const loaded = await loadPlanRowForDetail(client, planId, viewerId);
+    if (loaded.error) return { data: null, error: loaded.error };
+    plan = loaded.plan;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Could not load plan';
+    return { data: null, error: message };
   }
 
-  if (!plan && viewerId) {
-    const { data: creatorPlan, error: creatorError } = await client.rpc('get_creator_plan_for_detail', {
-      p_plan_id: planId,
-    });
-    if (creatorError) {
-      return { data: null, error: creatorError.message };
-    }
-    if (creatorPlan) {
-      const creatorRow = creatorPlan as PlanFeedRow;
-      const { data: meetType } = creatorRow.meet_type_id
-        ? await client.from('meet_types').select('*').eq('id', creatorRow.meet_type_id).maybeSingle()
-        : { data: null };
-      plan = {
-        ...creatorRow,
-        meet_types: (meetType as PlanFeedRow['meet_types']) ?? creatorRow.meet_types ?? null,
-      };
-      planError = null;
-    }
-  }
-
-  if (planError) return { data: null, error: planError.message };
   if (!plan) return { data: null, error: null };
 
   const row = plan;
@@ -229,20 +269,25 @@ export async function fetchPlanDetailBundle(
       myGuestEscrow = await fetchViewerGuestEscrow(client, planId, viewerId);
     }
     if (feedPlan.creator_id === viewerId && feedPlan.is_paid && feedPlan.is_group_plan) {
-      await ensureGroupHostShareReconciled(client, feedPlan, viewerId);
-      await reconcileGroupPlanGuestCommitments(client, planId);
-      await refreshGroupHostCloseEscrowShare(client, planId);
+      const hostGroupPlanLive =
+        feedPlan.status === 'active' || feedPlan.status === 'awaiting_payment';
 
-      const { data: refreshedPlan } = await client
-        .from('plans')
-        .select(
-          'host_escrow_id, group_closed_at, status, accepted_guest_count, accepted_guest_amounts_sum_cents, current_suggested_share_cents'
-        )
-        .eq('id', planId)
-        .maybeSingle();
+      if (hostGroupPlanLive) {
+        await ensureGroupHostShareReconciled(client, feedPlan, viewerId);
+        await reconcileGroupPlanGuestCommitments(client, planId);
+        await refreshGroupHostCloseEscrowShare(client, planId);
 
-      if (refreshedPlan) {
-        feedPlan = { ...feedPlan, ...refreshedPlan };
+        const { data: refreshedPlan } = await client
+          .from('plans')
+          .select(
+            'host_escrow_id, group_closed_at, status, accepted_guest_count, accepted_guest_amounts_sum_cents, current_suggested_share_cents'
+          )
+          .eq('id', planId)
+          .maybeSingle();
+
+        if (refreshedPlan) {
+          feedPlan = { ...feedPlan, ...refreshedPlan };
+        }
       }
 
       myHostEscrow = await fetchHostGroupEscrow(client, feedPlan, viewerId);
