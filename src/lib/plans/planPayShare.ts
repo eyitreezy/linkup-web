@@ -124,18 +124,13 @@ export function resolveHostGroupPayShareState(
     };
   }
 
-  // Close-group agreement flow — not when a slot reopened and the host may invite a replacement.
+  // Close-group agreement flow — host may still owe when open slots remain (e.g. guests paid first).
   const hasOpenSlots = opts?.hasOpenSlots ?? false;
-  if (!hasOpenSlots && !plan.group_closed_at && !plan.host_escrow_id) {
-    return {
-      showPayShare: true,
-      payShareEscrowId: null,
-      payShareAmountLabel,
-      viaAgreement: true,
-    };
-  }
-
-  if (ghostHostEscrow && payShareAmountLabel) {
+  if (
+    !plan.group_closed_at &&
+    !fundableHostEscrow &&
+    ((!hasOpenSlots && !plan.host_escrow_id) || hostSharePaymentCents > 0 || ghostHostEscrow)
+  ) {
     return {
       showPayShare: true,
       payShareEscrowId: null,
@@ -211,6 +206,12 @@ export async function fetchHostGroupEscrow(
     const primary = data as PlanGuestEscrowSnapshot | null;
     if (primary && hostEscrowFundableForViewer(primary, hostId)) {
       return primary;
+    }
+  }
+
+  for (const row of (pendingRows ?? []) as PlanGuestEscrowSnapshot[]) {
+    if (isGhostHostEscrowRow(plan, row)) {
+      return row;
     }
   }
 

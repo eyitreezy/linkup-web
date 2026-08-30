@@ -50,16 +50,45 @@ export async function fetchPlanDetailBundle(
   planId: string,
   viewerId: string | null
 ): Promise<{ data: PlanDetailBundle | null; error: string | null }> {
-  const { data: plan, error: planError } = await client
+  let plan: PlanFeedRow | null = null;
+  let planError: { message: string } | null = null;
+
+  const { data: planRow, error: selectError } = await client
     .from('plans')
     .select('*, meet_types(*)')
     .eq('id', planId)
     .maybeSingle();
 
+  if (selectError) {
+    planError = selectError;
+  } else {
+    plan = (planRow as PlanFeedRow | null) ?? null;
+  }
+
+  if (!plan && viewerId) {
+    const { data: creatorPlan, error: creatorError } = await client.rpc('get_creator_plan_for_detail', {
+      p_plan_id: planId,
+    });
+    if (creatorError) {
+      return { data: null, error: creatorError.message };
+    }
+    if (creatorPlan) {
+      const creatorRow = creatorPlan as PlanFeedRow;
+      const { data: meetType } = creatorRow.meet_type_id
+        ? await client.from('meet_types').select('*').eq('id', creatorRow.meet_type_id).maybeSingle()
+        : { data: null };
+      plan = {
+        ...creatorRow,
+        meet_types: (meetType as PlanFeedRow['meet_types']) ?? creatorRow.meet_types ?? null,
+      };
+      planError = null;
+    }
+  }
+
   if (planError) return { data: null, error: planError.message };
   if (!plan) return { data: null, error: null };
 
-  const row = plan as PlanFeedRow;
+  const row = plan;
 
   const { data: offersRaw } = await client
     .from('plan_offers')

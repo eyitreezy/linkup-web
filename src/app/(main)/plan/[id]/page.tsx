@@ -2,7 +2,6 @@ import { PlanDetailScreen } from '@/features/plans/PlanDetailScreen';
 import { getServerAuthUser } from '@/lib/auth/server-session';
 import { isSupabaseConfigured } from '@/lib/env';
 import { createClient } from '@/lib/supabase/server';
-import { fetchCreatorPlanById } from '@/services/planManagement.service';
 import { fetchPlanDetailBundle } from '@/services/planDetail.service';
 import { notFound, redirect } from 'next/navigation';
 
@@ -35,16 +34,7 @@ export default async function PlanDetailPage({ params }: Props) {
   }
 
   const supabase = await createClient();
-  let { data: initialBundle, error } = await fetchPlanDetailBundle(supabase, id, currentUserId);
-
-  if ((error || !initialBundle) && currentUserId) {
-    const { plan: creatorPlan } = await fetchCreatorPlanById(supabase, id);
-    if (creatorPlan?.creator_id === currentUserId) {
-      const retry = await fetchPlanDetailBundle(supabase, id, currentUserId);
-      initialBundle = retry.data;
-      error = retry.error;
-    }
-  }
+  const { data: initialBundle, error } = await fetchPlanDetailBundle(supabase, id, currentUserId);
 
   if (error || !initialBundle) notFound();
 

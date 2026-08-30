@@ -6,7 +6,6 @@ import { isOfferLive } from '@/lib/plans/negotiationState';
 import { resolvePlanMeetupInactive } from '@/lib/plans/planMeetupInactive';
 import { userEscrowLegFunded } from '@/lib/escrow/splitEscrowFunding';
 import {
-  isGroupSplitPlan,
   resolveHostGroupContribution,
   type GroupHostShareResolution,
 } from '@/lib/plans/groupDynamicSplit';
@@ -321,7 +320,7 @@ export function derivePlanViewerContext(
       amount_cents: o.amount_cents,
     }));
   const hostSharePaymentCents =
-    isGroup && isGroupSplitPlan(plan)
+    isGroup && isHost && plan.is_paid
       ? (opts?.hostGroupContribution?.paymentCents ??
         resolveHostGroupContribution(plan, opts?.groupGuestEscrows ?? [], {
           acceptedOffers: acceptedOfferAmounts,
