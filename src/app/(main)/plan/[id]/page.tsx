@@ -4,7 +4,7 @@ import { getServerAuthUser } from '@/lib/auth/server-session';
 import { isSupabaseConfigured } from '@/lib/env';
 import { createClient } from '@/lib/supabase/server';
 import { fetchPlanDetailBundle } from '@/services/planDetail.service';
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
 export const dynamic = 'force-dynamic';
@@ -40,24 +40,11 @@ export default async function PlanDetailPage({ params }: Props) {
     redirect(`/login?next=${encodeURIComponent(`/plan/${id}`)}`);
   }
 
-  const supabase = await createClient();
-  let initialBundle: Awaited<ReturnType<typeof fetchPlanDetailBundle>>['data'] = null;
-  let loadError: string | null = null;
-
-  try {
-    const result = await fetchPlanDetailBundle(supabase, id, currentUserId);
-    initialBundle = result.data;
-    loadError = result.error;
-  } catch (e) {
-    console.error('[PlanDetailPage] load failed', id, e);
-    loadError = e instanceof Error ? e.message : 'Could not load plan';
-  }
-
-  if (loadError || !initialBundle) notFound();
-
+  // Client fetch (browser Supabase session) — matches plan management and avoids
+  // authenticated server RSC/load failures on cancelled creator history plans.
   return (
     <Suspense fallback={<AuthRouteLoader variant="inline" />}>
-      <PlanDetailRouteClient planId={id} currentUserId={currentUserId} initialBundle={initialBundle} />
+      <PlanDetailRouteClient planId={id} currentUserId={currentUserId} />
     </Suspense>
   );
 }

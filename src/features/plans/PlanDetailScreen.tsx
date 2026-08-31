@@ -107,7 +107,7 @@ const actionCompactSecondary =
 type Props = {
   planId: string;
   currentUserId: string | null;
-  initialBundle: PlanDetailBundle;
+  initialBundle?: PlanDetailBundle;
   planDetailFrom?: PlanDetailFrom | null;
 };
 
@@ -140,9 +140,9 @@ export function PlanDetailScreen({
   } | null>(null);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
-  const [availableSlots, setAvailableSlots] = useState(initialBundle.availableSlots);
+  const [availableSlots, setAvailableSlots] = useState(initialBundle?.availableSlots ?? 0);
   const [pendingInvitationCount, setPendingInvitationCount] = useState(
-    initialBundle.pendingInvitationCount
+    initialBundle?.pendingInvitationCount ?? 0
   );
   const toggleSaved = useTogglePlanSaved(viewerUserId);
   const {
@@ -180,6 +180,7 @@ export function PlanDetailScreen({
       return data;
     },
     initialData: initialBundle,
+    enabled: !!viewerUserId,
     staleTime: 15_000,
     refetchOnWindowFocus: false,
     refetchInterval: (query) => {
@@ -269,7 +270,7 @@ export function PlanDetailScreen({
   });
   const actionContextReady = isPlanDetailActionReady(bundle);
   const [actionButtonsReady, setActionButtonsReady] = useState(() =>
-    isPlanDetailActionReady(initialBundle)
+    initialBundle ? isPlanDetailActionReady(initialBundle) : false
   );
 
   useEffect(() => {
@@ -603,13 +604,38 @@ export function PlanDetailScreen({
     }
   }
 
-  if (detailQuery.isLoading && !plan) {
+  if ((detailQuery.isLoading || detailQuery.isFetching) && !plan) {
     return (
       <div className="space-y-6 pb-12">
         <div className="h-10 w-10 animate-pulse rounded-2xl bg-[#EDE8FF]" />
         <div className="h-48 animate-pulse rounded-2xl bg-[#EDE8FF]/80" />
         <div className="h-64 animate-pulse rounded-2xl bg-[#EDE8FF]/60" />
       </div>
+    );
+  }
+
+  if (detailQuery.isError && !plan) {
+    return (
+      <AppEmptyState
+        emoji="⚠️"
+        title="Could not load this plan"
+        description={
+          detailQuery.error instanceof Error
+            ? detailQuery.error.message
+            : 'Check your connection and try again.'
+        }
+        action={{
+          label: 'Reload',
+          onClick: () => {
+            void detailQuery.refetch();
+          },
+        }}
+        secondaryAction={{
+          label: planDetailBack.label,
+          href: planDetailBack.href,
+          variant: 'secondary',
+        }}
+      />
     );
   }
 

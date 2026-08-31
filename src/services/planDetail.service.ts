@@ -65,25 +65,19 @@ async function loadPlanRowForDetail(
   planId: string,
   viewerId: string | null
 ): Promise<{ plan: PlanFeedRow | null; error: string | null }> {
-  const { data: planRow, error: selectError } = await client
-    .from('plans')
-    .select(PLAN_DETAIL_SELECT)
-    .eq('id', planId)
-    .maybeSingle();
-
-  if (isUsablePlanRow(planRow)) {
-    return { plan: normalizePlanFeedRow(planRow), error: null };
-  }
+  let selectError: { message: string } | null = null;
 
   if (viewerId) {
-    const { data: creatorRow } = await client
+    const { data: creatorRow, error: creatorSelectError } = await client
       .from('plans')
       .select(PLAN_DETAIL_SELECT)
       .eq('id', planId)
       .eq('creator_id', viewerId)
       .maybeSingle();
 
-    if (isUsablePlanRow(creatorRow)) {
+    if (creatorSelectError) {
+      selectError = creatorSelectError;
+    } else if (isUsablePlanRow(creatorRow)) {
       return { plan: normalizePlanFeedRow(creatorRow), error: null };
     }
 
@@ -113,6 +107,18 @@ async function loadPlanRowForDetail(
         error: null,
       };
     }
+  }
+
+  const { data: planRow, error: idSelectError } = await client
+    .from('plans')
+    .select(PLAN_DETAIL_SELECT)
+    .eq('id', planId)
+    .maybeSingle();
+
+  if (idSelectError) {
+    selectError = selectError ?? idSelectError;
+  } else if (isUsablePlanRow(planRow)) {
+    return { plan: normalizePlanFeedRow(planRow), error: null };
   }
 
   if (selectError) return { plan: null, error: selectError.message };
