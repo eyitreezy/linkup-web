@@ -44,7 +44,9 @@ export function GuestYourJoinRequestCard({
   const phase = deriveGuestJoinRequestCardPhase(ctx, myJoinRequest);
   const slotLabel = resolveJoinRequestSlotCentsLabel(plan);
   const statusChip =
-    myJoinRequest?.status != null ? joinRequestStatusChip(myJoinRequest.status) : null;
+    myJoinRequest?.status != null
+      ? (joinRequestStatusChip(myJoinRequest.status) ?? { label: myJoinRequest.status, className: 'bg-border text-muted' })
+      : { label: '', className: 'bg-border text-muted' };
 
   return (
     <section className="linkup-card overflow-hidden">
