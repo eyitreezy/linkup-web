@@ -19,7 +19,7 @@ type Props = {
 };
 
 export function OfferStatusBadge({ status, expired }: Props) {
-  const config = expired && status === 'pending' ? STATUS_CONFIG.expired : STATUS_CONFIG[status];
+  const config = (expired && status === 'pending' ? STATUS_CONFIG.expired : STATUS_CONFIG[status]) ?? { label: status, className: 'bg-muted/15 text-muted' };
   return (
     <span className={cn('rounded-full px-2.5 py-0.5 text-[10px] font-extrabold', config.className)}>
       {config.label}
