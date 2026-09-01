@@ -1095,7 +1095,7 @@ export function PlanDetailScreen({
           </div>
           <ul className="space-y-2">
             {plan.is_negotiable !== false
-              ? ctx!.acceptedGuests.map((guest) => {
+              ? (ctx?.acceptedGuests ?? []).map((guest) => {
                   const prof = bundle?.profilesById[guest.userId];
                   const name = prof?.display_name?.trim() || 'Guest';
                   return (
