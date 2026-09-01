@@ -10,7 +10,12 @@ export function createClient() {
     throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY');
   }
   if (!browserClient) {
-    browserClient = createBrowserClient(env.supabaseUrl, env.supabaseAnonKey);
+    browserClient = createBrowserClient(env.supabaseUrl, env.supabaseAnonKey, {
+      auth: {
+        // Disable lock — singleton pattern handles concurrency.
+        lock: async (_name, _acquireTimeout, fn) => fn(),
+      },
+    });
   }
   return browserClient;
 }
