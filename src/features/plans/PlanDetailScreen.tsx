@@ -796,7 +796,10 @@ export function PlanDetailScreen({
                 ) : null}
               {boosted ? <BoostPill /> : null}
                 {(() => {
-                  const chip = planStatusChip(displayPlanStatus ?? plan.status);
+                  const chip = planStatusChip(displayPlanStatus ?? plan.status) ?? {
+                    label: String(displayPlanStatus ?? plan.status ?? ''),
+                    className: 'bg-border text-muted',
+                  };
                   return (
                     <span
                       className={cn(
