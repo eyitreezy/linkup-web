@@ -11,7 +11,8 @@ export type PlanStatus =
   | 'awaiting_payment'
   | 'active'
   | 'completed'
-  | 'cancelled';
+  | 'cancelled'
+  | 'expired';
 export type OfferStatus =
   | 'pending'
   | 'countered'

@@ -54,6 +54,8 @@ export function planStatusChip(status: PlanStatus): { label: string; className: 
       return { label: 'Completed', className: 'bg-muted/15 text-muted' };
     case 'cancelled':
       return { label: 'Cancelled', className: 'bg-red-500/12 text-red-700' };
+    case 'expired':
+      return { label: 'Expired', className: 'bg-slate-500/12 text-slate-600' };
     case 'draft':
       return { label: 'Draft', className: 'bg-slate-500/12 text-slate-600' };
     default:

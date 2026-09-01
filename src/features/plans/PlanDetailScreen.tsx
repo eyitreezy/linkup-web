@@ -753,6 +753,15 @@ export function PlanDetailScreen({
         }
       />
 
+      {(plan.is_expired || plan.status === 'expired') && (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <p className="text-[13px] font-semibold text-slate-600">
+            This plan has expired. The scheduled time has passed without confirmation.
+            Escrow funds have been refunded per the cancellation policy.
+          </p>
+        </div>
+      )}
+
       {planListingExpired && !meetupInactive ? (
         <div className="rounded-2xl border border-slate-200/80 bg-slate-50 px-4 py-3 text-[13px] font-semibold text-slate-700">
           This plan has ended. You can still view details, but new offers, join requests, invitations,
@@ -1337,7 +1346,10 @@ export function PlanDetailScreen({
         ) : (
           <ul className="divide-y divide-border/50">
             {bundle.joinRequests.map((request) => {
-              const chip = joinRequestStatusChip(request.status);
+              const chip = joinRequestStatusChip(request.status) ?? {
+                label: request.status,
+                className: 'bg-border text-muted',
+              };
               const requester = bundle.profilesById[request.requester_id] ?? request.requester;
               const slotLabel = resolveJoinRequestSlotCentsLabel(plan);
               return (

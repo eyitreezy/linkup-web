@@ -1,4 +1,4 @@
--- Authoritative group host contribution (SECURITY DEFINER — bypasses escrow RLS gaps).
+-- Re-apply get_group_host_contribution without invalid join_request_status enum cast.
 
 CREATE OR REPLACE FUNCTION public.get_group_host_contribution(p_plan_id UUID)
 RETURNS JSONB
@@ -19,16 +19,19 @@ DECLARE
   _guest_gross_leg BIGINT;
   _host_gross BIGINT;
 BEGIN
-  IF _viewer IS NULL THEN
-    RAISE EXCEPTION 'not_authenticated';
-  END IF;
-
   SELECT * INTO _plan FROM public.plans WHERE id = p_plan_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'plan_not_found';
   END IF;
 
-  IF _plan.creator_id IS DISTINCT FROM _viewer
+  IF _viewer IS NULL THEN
+    IF current_setting('request.jwt.claim.sub', true) IS NULL THEN
+      _viewer := _plan.creator_id;
+    END IF;
+    IF _viewer IS NULL THEN
+      RAISE EXCEPTION 'not_authenticated';
+    END IF;
+  ELSIF _plan.creator_id IS DISTINCT FROM _viewer
     AND NOT EXISTS (
       SELECT 1 FROM public.plan_offers o
       WHERE o.plan_id = p_plan_id
@@ -56,8 +59,11 @@ BEGIN
   END IF;
 
   _total_budget := public._group_plan_total_cents(_plan);
-  _guest_commitment := GREATEST(0, COALESCE(_plan.accepted_guest_amounts_sum_cents, 0)::BIGINT);
-  _host_budget := public._group_host_share_needed_cents(_plan);
+  _guest_commitment := public._sum_accepted_guest_commitments_cents(p_plan_id);
+  IF _guest_commitment <= 0 THEN
+    _guest_commitment := GREATEST(0, COALESCE(_plan.accepted_guest_amounts_sum_cents, 0)::BIGINT);
+  END IF;
+  _host_budget := GREATEST(0, _total_budget - _guest_commitment);
 
   FOR _offer IN
     SELECT

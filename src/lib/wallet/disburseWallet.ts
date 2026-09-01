@@ -22,20 +22,37 @@ export async function invokeDisburseWallet(input: {
     },
   });
 
+  const payload = data as {
+    error?: string;
+    success?: boolean;
+    disbursement_id?: string;
+    transfer_ref?: string;
+    amount_cents?: number;
+  } | null;
+
+  const transferRef = payload?.transfer_ref ?? payload?.disbursement_id;
+  if (transferRef) {
+    return {
+      success: true,
+      disbursement_id: payload?.disbursement_id,
+      transfer_ref: payload?.transfer_ref,
+      amount_cents: payload?.amount_cents ?? input.amountCents,
+    };
+  }
+
   if (error) {
     return { success: false, error: error.message };
   }
 
-  const payload = data as { error?: string; success?: boolean } | null;
   if (payload?.error) {
     return { success: false, error: payload.error };
   }
 
   return {
     success: true,
-    disbursement_id: (payload as { disbursement_id?: string })?.disbursement_id,
-    transfer_ref: (payload as { transfer_ref?: string })?.transfer_ref,
-    amount_cents: (payload as { amount_cents?: number })?.amount_cents,
+    disbursement_id: payload?.disbursement_id,
+    transfer_ref: payload?.transfer_ref,
+    amount_cents: payload?.amount_cents,
   };
 }
 

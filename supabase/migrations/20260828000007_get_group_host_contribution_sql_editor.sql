@@ -42,7 +42,7 @@ BEGIN
       SELECT 1 FROM public.plan_join_requests jr
       WHERE jr.plan_id = p_plan_id
         AND jr.requester_id = _viewer
-        AND jr.status = 'approved'::public.join_request_status
+        AND jr.status = 'approved'
     ) THEN
     RAISE EXCEPTION 'not_plan_party';
   END IF;
