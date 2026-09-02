@@ -86,6 +86,12 @@ export function MessagesInboxProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!userId) return;
     const client = createClient();
+    let debounce: ReturnType<typeof setTimeout> | undefined;
+    const invalidate = () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => invalidateInboxQueries(queryClient, userId), 180);
+    };
+
     const channel = client
       .channel(`inbox-user-${userId}`)
       .on(
@@ -95,9 +101,7 @@ export function MessagesInboxProvider({ children }: { children: ReactNode }) {
           schema: 'public',
           table: 'messages',
         },
-        () => {
-          invalidateInboxQueries(queryClient, userId);
-        }
+        invalidate
       )
       .on(
         'postgres_changes',
@@ -106,12 +110,11 @@ export function MessagesInboxProvider({ children }: { children: ReactNode }) {
           schema: 'public',
           table: 'messages',
         },
-        () => {
-          invalidateInboxQueries(queryClient, userId);
-        }
+        invalidate
       )
       .subscribe();
     return () => {
+      if (debounce) clearTimeout(debounce);
       void client.removeChannel(channel);
     };
   }, [userId, queryClient]);

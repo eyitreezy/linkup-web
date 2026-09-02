@@ -59,6 +59,11 @@ import {
 import { formatMessageTime } from '@/lib/messaging/formatMessageTime';
 import { fetchActiveMeetupWithPeer, type LinkedMeetup } from '@/lib/messaging/fetchActiveMeetupWithPeer';
 import { invalidateInboxQueries } from '@/lib/messaging/invalidate';
+import {
+  applyMessageRealtimeEvent,
+  upsertMessageInCache,
+} from '@/lib/messaging/messageCache';
+import { messagesQueryKey } from '@/lib/messaging/queryKeys';
 import { useInboxQuery } from '@/lib/messaging/useInboxQuery';
 import {
   fetchPeerReadCursor,
@@ -133,6 +138,9 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
   const scrollRef = useRef<HTMLDivElement>(null);
   const composeInputRef = useRef<HTMLTextAreaElement>(null);
   const messageRefs = useRef(new Map<string, HTMLDivElement>());
+  const isNearBottomRef = useRef(true);
+  const shouldScrollToBottomRef = useRef(false);
+  const messageRefetchDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const queryClient = useQueryClient();
   const { signalTyping, clearTyping } = usePresence();
 
@@ -428,7 +436,7 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
   }, [user?.id, conversationId]);
 
   const { data: messages, isLoading, error } = useQuery({
-    queryKey: ['messages', conversationId],
+    queryKey: messagesQueryKey(conversationId),
     queryFn: async () => {
       const client = createClient();
       const { data, error: err } = await fetchMessages(client, conversationId);
@@ -653,7 +661,7 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
       setSendError(result.error);
       return;
     }
-    void queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+    void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId) });
   }
 
   async function runDeleteForMe(m: ChatMessageRow) {
@@ -686,7 +694,7 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
       setSendError(result.error);
       return;
     }
-    void queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+    void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId) });
     invalidateInboxQueries(queryClient, user.id);
   }
 
@@ -718,7 +726,7 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
       return;
     }
     setEditModal(null);
-    void queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+    void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId) });
     invalidateInboxQueries(queryClient, user.id);
   }
 
@@ -739,18 +747,56 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
   }, [conversationId, visibleMessages, queryClient, user?.id]);
 
   useEffect(() => {
+    isNearBottomRef.current = true;
+    shouldScrollToBottomRef.current = true;
+  }, [conversationId]);
+
+  useEffect(() => {
     const client = createClient();
-    const sub = subscribeToMessages(client, conversationId, () => {
-      void queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+    const scheduleMessageRefetch = () => {
+      if (messageRefetchDebounceRef.current) clearTimeout(messageRefetchDebounceRef.current);
+      messageRefetchDebounceRef.current = setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId) });
+      }, 280);
+    };
+
+    const sub = subscribeToMessages(client, conversationId, (payload) => {
+      const result = applyMessageRealtimeEvent(queryClient, conversationId, payload);
+      if (result === 'needs-refetch') {
+        scheduleMessageRefetch();
+      }
       invalidateInboxQueries(queryClient, user?.id);
+      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+        const senderId = payload.new.sender_id as string | null | undefined;
+        if (senderId && senderId !== user?.id && isNearBottomRef.current) {
+          shouldScrollToBottomRef.current = true;
+        }
+      }
     });
     return () => {
+      if (messageRefetchDebounceRef.current) clearTimeout(messageRefetchDebounceRef.current);
       void client.removeChannel(sub);
     };
   }, [conversationId, queryClient, user?.id]);
 
   useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const updateNearBottom = () => {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      isNearBottomRef.current = distanceFromBottom < 96;
+    };
+
+    updateNearBottom();
+    el.addEventListener('scroll', updateNearBottom, { passive: true });
+    return () => el.removeEventListener('scroll', updateNearBottom);
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!shouldScrollToBottomRef.current && !isNearBottomRef.current) return;
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    shouldScrollToBottomRef.current = false;
   }, [visibleMessages, showTypingIndicator]);
 
   useEffect(() => {
@@ -785,7 +831,13 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
     const client = createClient();
     const replyId = pendingReply?.messageId ?? null;
     const outbound = isGroupChat ? encodeGroupMentions(text, mentionMembers) : text;
-    const { error: err } = await sendTextMessage(client, conversationId, user.id, outbound, replyId);
+    const { data: sent, error: err } = await sendTextMessage(
+      client,
+      conversationId,
+      user.id,
+      outbound,
+      replyId
+    );
     setSending(false);
     clearTyping();
     if (err) {
@@ -795,7 +847,12 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
     setText('');
     setComposeSelection({ start: 0, end: 0 });
     setPendingReply(null);
-    void queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+    if (sent) {
+      upsertMessageInCache(queryClient, conversationId, sent);
+      shouldScrollToBottomRef.current = true;
+    } else {
+      void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId) });
+    }
     invalidateInboxQueries(queryClient, user?.id);
   }
 
@@ -812,7 +869,8 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
       return;
     }
     setText('');
-    void queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+    shouldScrollToBottomRef.current = true;
+    void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId) });
     invalidateInboxQueries(queryClient, user?.id);
   }
 

@@ -28,6 +28,7 @@ import {
   formatOfferAmount,
   formatProposalSnippet,
   joinRequestStatusChip,
+  ACCEPTED_GUEST_AGREEMENT_LABEL,
   resolvePlanStatusChip,
   planningPartnerContext,
 } from '@/features/plans/planDetailUtils';
@@ -1116,7 +1117,7 @@ export function PlanDetailScreen({
                           onClick={() => goAgreement(guest.offerId)}
                         >
                           <IoDocumentTextOutline size={14} aria-hidden />
-                          View agreement & pay
+                          {ACCEPTED_GUEST_AGREEMENT_LABEL}
                         </button>
                         <button
                           type="button"
@@ -1151,7 +1152,7 @@ export function PlanDetailScreen({
                           onClick={() => goAgreement(undefined, request.id)}
                         >
                           <IoDocumentTextOutline size={14} aria-hidden />
-                          View agreement & pay
+                          {ACCEPTED_GUEST_AGREEMENT_LABEL}
                         </button>
                         <button
                           type="button"

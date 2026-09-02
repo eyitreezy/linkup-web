@@ -40,11 +40,23 @@ export function WalletWithdrawDialog({
   const maxNgn = Math.floor(balanceCents / 100);
   const parsedNgn = Number.parseInt(amountInput.replace(/\D/g, ''), 10);
   const amountCents =
-    Number.isFinite(parsedNgn) && parsedNgn > 0 ? Math.min(parsedNgn, maxNgn) * 100 : balanceCents;
+    Number.isFinite(parsedNgn) && parsedNgn > 0
+      ? Math.min(parsedNgn, maxNgn) * 100
+      : balanceCents;
+  const withdrawDisabled =
+    busy || balanceCents < 100 || showSuccess || amountCents < 100;
 
   async function handleWithdraw() {
     if (!account) {
       setShowAddAccount(true);
+      return;
+    }
+    if (balanceCents < 100) {
+      setError('Your available balance is too low to withdraw.');
+      return;
+    }
+    if (amountCents < 100) {
+      setError('Enter an amount up to your available balance.');
       return;
     }
     setError(null);
@@ -133,7 +145,7 @@ export function WalletWithdrawDialog({
 
                 <button
                   type="button"
-                  disabled={busy || balanceCents < 100 || showSuccess}
+                  disabled={withdrawDisabled}
                   onClick={() => void handleWithdraw()}
                   className={cn(
                     'mt-4 flex min-h-[44px] w-full items-center justify-center rounded-full linkup-gradient-primary px-5 text-[14px] font-extrabold text-white transition hover:opacity-95 disabled:opacity-50'

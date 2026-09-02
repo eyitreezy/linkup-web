@@ -39,6 +39,7 @@ export function usePlanOffersRealtime(planId: string | undefined) {
       [
         { table: 'plan_offers', filter: `plan_id=eq.${planId}` },
         { table: 'plan_offer_rounds', filter: `plan_id=eq.${planId}`, event: 'INSERT' },
+        { table: 'plan_join_requests', filter: `plan_id=eq.${planId}` },
         { table: 'plans', filter: `id=eq.${planId}`, event: 'UPDATE' },
       ],
       { channelPrefix: 'plan-offers-rt' }

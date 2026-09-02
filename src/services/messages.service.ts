@@ -526,17 +526,28 @@ export async function sendMediaMessage(
   return { error: null };
 }
 
+export type MessageRealtimePayload = {
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+  new: Record<string, unknown>;
+  old: Record<string, unknown>;
+};
+
 export function subscribeToMessages(
   client: SupabaseClient,
   conversationId: string,
-  onMessage: () => void
+  onEvent: (payload: MessageRealtimePayload) => void
 ) {
   const channel = client.channel(`messages:${conversationId}`);
   const handler = { schema: 'public' as const, table: 'messages' as const, filter: `conversation_id=eq.${conversationId}` };
+  const wrap =
+    (eventType: MessageRealtimePayload['eventType']) =>
+    (payload: { new: Record<string, unknown>; old: Record<string, unknown> }) => {
+      onEvent({ eventType, new: payload.new ?? {}, old: payload.old ?? {} });
+    };
   channel
-    .on('postgres_changes', { event: 'INSERT', ...handler }, onMessage)
-    .on('postgres_changes', { event: 'UPDATE', ...handler }, onMessage)
-    .on('postgres_changes', { event: 'DELETE', ...handler }, onMessage)
+    .on('postgres_changes', { event: 'INSERT', ...handler }, wrap('INSERT'))
+    .on('postgres_changes', { event: 'UPDATE', ...handler }, wrap('UPDATE'))
+    .on('postgres_changes', { event: 'DELETE', ...handler }, wrap('DELETE'))
     .subscribe();
   return channel;
 }

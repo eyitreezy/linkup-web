@@ -2,6 +2,9 @@ import type { ProfileMini } from '@/services/planDetail.service';
 import type { DbPlan, DbPlanOffer, JoinRequestStatus, OfferStatus, PlanStatus } from '@/types/database';
 import { resolvePlanStatusDisplayLabel } from '@/lib/plans/planTypeHelpers';
 
+/** Label for per-guest agreement actions in the Accepted guests roster on plan detail. */
+export const ACCEPTED_GUEST_AGREEMENT_LABEL = 'View Agreement';
+
 export function planningPartnerContext(
   plan: DbPlan,
   userId: string | undefined,

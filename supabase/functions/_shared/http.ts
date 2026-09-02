@@ -10,13 +10,20 @@ export function handleCors(req: Request): Response | null {
   return null;
 }
 
-export function jsonResponse(body: Record<string, unknown>, status = 200): Response {
+export function jsonResponse(
+  body: Record<string, unknown>,
+  status = 200
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
 
-export function jsonError(error: string, status: number, code?: string): Response {
+export function jsonError(
+  error: string,
+  status: number,
+  code?: string
+): Response {
   return jsonResponse({ error, code: code ?? `http_${status}` }, status);
 }
