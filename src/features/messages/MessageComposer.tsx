@@ -98,7 +98,7 @@ export function MessageComposer({
           onChange={onChange}
           inputRef={resolvedInputRef}
           disabled={sending || disabled}
-          placement="above"
+          placement="auto"
           onSelectionRestore={(start, end) => updateSelection(start, end)}
         />
         <textarea

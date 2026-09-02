@@ -12,7 +12,7 @@ type Props = {
   inputRef?: RefObject<HTMLTextAreaElement | null>;
   className?: string;
   buttonClassName?: string;
-  placement?: 'above' | 'below';
+  placement?: 'above' | 'below' | 'auto';
   disabled?: boolean;
   onSelectionRestore?: (start: number, end: number) => void;
 };
@@ -23,11 +23,12 @@ export function EmojiPickerButton({
   inputRef,
   className,
   buttonClassName,
-  placement = 'above',
+  placement = 'auto',
   disabled,
   onSelectionRestore,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const selectionRef = useRef({ start: value.length, end: value.length });
 
   function handleSelect(emoji: string) {
@@ -58,6 +59,7 @@ export function EmojiPickerButton({
   return (
     <div className={cn('relative shrink-0', className)}>
       <button
+        ref={buttonRef}
         type="button"
         disabled={disabled}
         onClick={handleToggle}
@@ -74,6 +76,7 @@ export function EmojiPickerButton({
         open={open}
         onClose={() => setOpen(false)}
         onSelect={handleSelect}
+        anchorRef={buttonRef}
         placement={placement}
       />
     </div>

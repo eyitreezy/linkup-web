@@ -9,7 +9,7 @@ type Props = TextareaHTMLAttributes<HTMLTextAreaElement> & {
   value: string;
   onValueChange: (value: string) => void;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
-  emojiPlacement?: 'above' | 'below';
+  emojiPlacement?: 'above' | 'below' | 'auto';
 };
 
 export function TextareaWithEmoji({
@@ -17,7 +17,7 @@ export function TextareaWithEmoji({
   onValueChange,
   className,
   inputRef,
-  emojiPlacement = 'above',
+  emojiPlacement = 'auto',
   disabled,
   ...rest
 }: Props) {
@@ -41,7 +41,7 @@ export function TextareaWithEmoji({
           inputRef={resolvedRef}
           disabled={disabled}
           placement={emojiPlacement}
-          buttonClassName="mb-0 h-8 w-8"
+          buttonClassName="mb-0 h-8 w-8 min-[360px]:h-8 min-[360px]:w-8"
         />
       </div>
     </div>
