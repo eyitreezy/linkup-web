@@ -1,5 +1,6 @@
 import { openOrCreateGroupChat } from '@/lib/messaging/openOrCreateGroupChat';
 import { openDirectChatPath } from '@/lib/messaging/openDirectChat';
+import { isNonNegotiablePlan } from '@/lib/plans/planTypeHelpers';
 import type { DbPlan, DbPlanJoinRequest, DbPlanOffer } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -8,6 +9,53 @@ export class PlanMeetupChatError extends Error {
     super(message);
     this.name = 'PlanMeetupChatError';
   }
+}
+
+function resolveCounterpartyFromOffers(
+  plan: DbPlan,
+  isCreator: boolean,
+  offers: DbPlanOffer[]
+): string | null {
+  const sorted = [...offers].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+  const lastBidder = [...sorted].reverse().find((o) => o.bidder_id !== plan.creator_id)?.bidder_id;
+  return isCreator ? lastBidder ?? null : plan.creator_id;
+}
+
+function resolveCounterpartyFromJoinRequests(
+  plan: DbPlan,
+  isCreator: boolean,
+  joinRequests: DbPlanJoinRequest[]
+): string | null {
+  const approved = joinRequests
+    .filter((r) => r.status === 'approved')
+    .sort(
+      (a, b) =>
+        new Date(b.updated_at ?? b.created_at).getTime() -
+        new Date(a.updated_at ?? a.created_at).getTime()
+    );
+
+  if (isCreator) {
+    return approved[0]?.requester_id ?? null;
+  }
+
+  const guestApproved = approved.find((r) => r.requester_id !== plan.creator_id);
+  return guestApproved ? plan.creator_id : null;
+}
+
+function resolveStandardPlanCounterparty(
+  plan: DbPlan,
+  isCreator: boolean,
+  offers: DbPlanOffer[],
+  joinRequests?: DbPlanJoinRequest[]
+): string | null {
+  if (isNonNegotiablePlan(plan) && joinRequests?.length) {
+    const fromJoinRequests = resolveCounterpartyFromJoinRequests(plan, isCreator, joinRequests);
+    if (fromJoinRequests) return fromJoinRequests;
+  }
+
+  return resolveCounterpartyFromOffers(plan, isCreator, offers);
 }
 
 export async function openPlanMeetupChatPath(
@@ -30,14 +78,14 @@ export async function openPlanMeetupChatPath(
     return openGroupPlanMeetupChatPath(client, plan, userId, offers, joinRequests);
   }
 
-  const sorted = [...offers].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-  );
-  const lastBidder = [...sorted].reverse().find((o) => o.bidder_id !== plan.creator_id)?.bidder_id;
-  const other = isCreator ? lastBidder ?? null : plan.creator_id;
+  const other = resolveStandardPlanCounterparty(plan, isCreator, offers, joinRequests);
   if (!other) {
     throw new PlanMeetupChatError(
-      isCreator ? 'No one has sent an offer yet. Check back soon.' : 'Could not open chat.'
+      isCreator
+        ? isNonNegotiablePlan(plan)
+          ? 'No approved guest yet. Check back after a join request is approved.'
+          : 'No one has sent an offer yet. Check back soon.'
+        : 'Could not open chat.'
     );
   }
   return openDirectChatPath(client, userId, other);

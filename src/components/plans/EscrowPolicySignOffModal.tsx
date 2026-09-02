@@ -65,6 +65,23 @@ export function EscrowPolicySignOffModal({ planId, escrowPattern, onSigned }: Pr
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    if (!mounted) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mounted]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollHeight <= el.clientHeight + 24) {
+      setHasScrolled(true);
+    }
+  }, [mounted, sections]);
+
   function onScroll() {
     const el = scrollRef.current;
     if (!el) return;
@@ -90,7 +107,7 @@ export function EscrowPolicySignOffModal({ planId, escrowPattern, onSigned }: Pr
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-end justify-center sm:items-center"
+      className="fixed inset-0 z-[9999] flex items-end justify-center p-3 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="escrow-policy-title"
@@ -98,8 +115,8 @@ export function EscrowPolicySignOffModal({ planId, escrowPattern, onSigned }: Pr
       <div className="fixed inset-0 bg-black/60" aria-hidden />
 
       <div
-        className="relative z-[1] flex w-full max-w-lg flex-col rounded-t-3xl border border-border bg-white shadow-2xl sm:rounded-3xl"
-        style={{ maxHeight: 'calc(100dvh - 48px)' }}
+        className="relative z-[1] flex w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-border bg-white shadow-2xl sm:max-h-[min(720px,calc(100dvh-2rem))] sm:rounded-3xl"
+        style={{ maxHeight: 'calc(100dvh - 1.5rem)' }}
       >
         <div className="shrink-0 border-b border-border/40 px-5 py-4">
           <h2 id="escrow-policy-title" className="font-display text-xl font-extrabold text-foreground">

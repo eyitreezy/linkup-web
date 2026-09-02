@@ -28,7 +28,7 @@ import {
   formatOfferAmount,
   formatProposalSnippet,
   joinRequestStatusChip,
-  planStatusChip,
+  resolvePlanStatusChip,
   planningPartnerContext,
 } from '@/features/plans/planDetailUtils';
 import { resolveJoinRequestSlotCentsLabel } from '@/lib/plans/joinRequestSlotDisplay';
@@ -796,7 +796,9 @@ export function PlanDetailScreen({
                 ) : null}
               {boosted ? <BoostPill /> : null}
                 {(() => {
-                  const chip = plan ? (planStatusChip(displayPlanStatus ?? plan.status) ?? { label: String(displayPlanStatus ?? plan.status ?? ''), className: 'bg-border text-muted' }) : { label: '', className: 'bg-border text-muted' };
+                  const chip = plan
+                    ? resolvePlanStatusChip(plan, displayPlanStatus ?? plan.status)
+                    : { label: '', className: 'bg-border text-muted' };
                   return (
                     <span
                       className={cn(
@@ -1114,7 +1116,7 @@ export function PlanDetailScreen({
                           onClick={() => goAgreement(guest.offerId)}
                         >
                           <IoDocumentTextOutline size={14} aria-hidden />
-                          View agreement
+                          View agreement & pay
                         </button>
                         <button
                           type="button"
@@ -1149,7 +1151,7 @@ export function PlanDetailScreen({
                           onClick={() => goAgreement(undefined, request.id)}
                         >
                           <IoDocumentTextOutline size={14} aria-hidden />
-                          View agreement
+                          View agreement & pay
                         </button>
                         <button
                           type="button"
@@ -1172,7 +1174,7 @@ export function PlanDetailScreen({
           <button type="button" className={actionSecondary} onClick={() => goAgreement()}>
             <span className="inline-flex items-center gap-2">
               <IoDocumentTextOutline size={18} />
-              View agreement
+              View agreement & pay
             </span>
           </button>
           <button type="button" className={actionPrimary} onClick={() => void openCounterpartyChat()} disabled={chatBusy}>
@@ -1270,10 +1272,10 @@ export function PlanDetailScreen({
                     ? ctx?.showManageOffers
                       ? 'Manage offers'
                       : ctx?.showViewAgreement
-                        ? 'View agreement'
+                        ? 'View agreement & pay'
                         : 'Manage offers'
                     : ctx?.showViewAgreement
-                      ? 'View agreement'
+                      ? 'View agreement & pay'
                       : ctx?.showViewOffer
                         ? 'View offer'
                         : 'Make offer',
@@ -1529,7 +1531,7 @@ function ActionRail({
           <button type="button" className={actionSecondary} onClick={() => onAgreement()}>
           <span className="inline-flex items-center gap-2">
             <IoDocumentTextOutline size={18} />
-            View agreement
+            View agreement & pay
           </span>
         </button>
         </div>
@@ -1540,7 +1542,7 @@ function ActionRail({
           <button type="button" className={actionSecondary} onClick={() => onAgreement()}>
             <span className="inline-flex items-center gap-2">
               <IoDocumentTextOutline size={18} />
-              View agreement
+              View agreement & pay
             </span>
           </button>
           <button type="button" className={actionPrimary} onClick={onChat} disabled={chatBusy}>

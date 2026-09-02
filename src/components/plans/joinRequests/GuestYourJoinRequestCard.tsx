@@ -162,8 +162,9 @@ export function GuestYourJoinRequestCard({
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-4">
             <p className="font-extrabold text-foreground">You are already a guest</p>
             <p className="mt-2 text-[13px] font-semibold leading-relaxed text-muted">
-              You are confirmed on this group plan. View your agreement or message the group from the actions
-              above.
+              {plan.is_group_plan
+                ? 'You are confirmed on this group plan. View your agreement or message the group from the actions above.'
+                : 'You are confirmed on this plan. View your agreement and continue with the next steps from the actions above.'}
             </p>
           </div>
         ) : null}

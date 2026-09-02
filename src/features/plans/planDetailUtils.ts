@@ -1,5 +1,6 @@
 import type { ProfileMini } from '@/services/planDetail.service';
 import type { DbPlan, DbPlanOffer, JoinRequestStatus, OfferStatus, PlanStatus } from '@/types/database';
+import { resolvePlanStatusDisplayLabel } from '@/lib/plans/planTypeHelpers';
 
 export function planningPartnerContext(
   plan: DbPlan,
@@ -39,9 +40,11 @@ export function planningPartnerContext(
   };
 }
 
-export function planStatusChip(status: PlanStatus): { label: string; className: string } {
+export function planStatusChip(status: PlanStatus | 'fixed'): { label: string; className: string } {
   const label = status.replace(/_/g, ' ');
   switch (status) {
+    case 'fixed':
+      return { label: 'Fixed', className: 'bg-slate-500/12 text-slate-700' };
     case 'negotiating':
       return { label: 'Negotiating', className: 'bg-[#EDE8FF] text-primary' };
     case 'agreed':
@@ -61,6 +64,14 @@ export function planStatusChip(status: PlanStatus): { label: string; className: 
     default:
       return { label, className: 'bg-primary/10 text-primary capitalize' };
   }
+}
+
+export function resolvePlanStatusChip(
+  plan: Pick<DbPlan, 'is_negotiable'> | null | undefined,
+  status: PlanStatus | null | undefined
+): { label: string; className: string } {
+  const resolved = resolvePlanStatusDisplayLabel(plan ?? null, status ?? 'draft');
+  return planStatusChip(resolved) ?? { label: String(resolved), className: 'bg-border text-muted' };
 }
 
 export function offerStatusChip(status: OfferStatus): { label: string; className: string } {

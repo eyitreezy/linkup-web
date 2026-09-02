@@ -1,4 +1,4 @@
-// LinkUp service worker — handles web push notifications for mood plans
+// LinkUp service worker — web push for mood plans and chat messages
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -15,29 +15,47 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data.json();
   } catch {
-    data = { title: 'LinkUp', body: event.data.text(), planId: null };
+    data = { title: 'LinkUp', body: event.data.text() };
   }
 
-  const { title, body, planId, imageUrl } = data;
+  const type = data.type ?? (data.planId ? 'mood_plan' : data.chatId ? 'message' : 'general');
+  const title = data.title ?? 'LinkUp';
+  const body =
+    data.body ??
+    (type === 'message' ? 'You have a new message.' : 'A mood meetup is happening near you.');
+  const url =
+    data.url ??
+    (data.chatId ? `/messages?c=${data.chatId}` : data.planId ? `/plan/${data.planId}` : '/discover');
+
+  const tag =
+    type === 'message' && data.chatId
+      ? `message-${data.chatId}`
+      : data.planId
+        ? `mood-plan-${data.planId}`
+        : 'linkup-push';
 
   const options = {
-    body: body ?? 'A mood meetup is happening near you.',
+    body,
     icon: '/linkup-logo.png',
     badge: '/splash-icon.png',
-    image: imageUrl ?? undefined,
-    tag: planId ? `mood-plan-${planId}` : 'mood-plan',
+    image: data.imageUrl ?? undefined,
+    tag,
     renotify: false,
     requireInteraction: false,
-    data: { planId, url: planId ? `/plan/${planId}` : '/discover' },
-    actions: [
-      { action: 'view', title: 'View plan' },
-      { action: 'dismiss', title: 'Dismiss' },
-    ],
+    data: { type, planId: data.planId ?? null, chatId: data.chatId ?? null, url },
+    actions:
+      type === 'message'
+        ? [
+            { action: 'view', title: 'Open chat' },
+            { action: 'dismiss', title: 'Dismiss' },
+          ]
+        : [
+            { action: 'view', title: 'View plan' },
+            { action: 'dismiss', title: 'Dismiss' },
+          ],
   };
 
-  event.waitUntil(
-    self.registration.showNotification(title ?? 'Mood plan near you', options)
-  );
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', (event) => {

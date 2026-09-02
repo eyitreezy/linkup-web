@@ -1,6 +1,7 @@
 'use client';
 
 import { LocationSearchField } from '@/components/location/LocationSearchField';
+import { TextareaWithEmoji } from '@/components/emoji/TextareaWithEmoji';
 import { FormCard } from '@/components/settings/FormCard';
 import { GradientChip } from '@/components/settings/GradientChip';
 import { SettingsPageHeader } from '@/components/settings/SettingsPageHeader';
@@ -202,11 +203,12 @@ export function EditProfileScreen() {
           }}
         />
         <label className="mt-4 block text-[13px] font-extrabold">Bio ({draft.bio.length}/150)</label>
-        <textarea
+        <TextareaWithEmoji
           maxLength={150}
           className="mt-1 min-h-[80px] w-full rounded-xl border border-border px-3 py-2.5 text-[14px] font-semibold"
           value={draft.bio}
-          onChange={(e) => setDraft((d) => ({ ...d, bio: e.target.value }))}
+          onValueChange={(bio) => setDraft((d) => ({ ...d, bio }))}
+          rows={3}
         />
         <ToggleRow
           label="Public profile"

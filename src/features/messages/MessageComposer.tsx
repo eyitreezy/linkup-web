@@ -1,9 +1,10 @@
 'use client';
 
+import { EmojiPickerButton } from '@/components/emoji/EmojiPickerButton';
 import { cn } from '@/utils/cn';
 import { IoAddCircleOutline, IoArrowUp } from 'react-icons/io5';
 import type { ReactNode, RefObject } from 'react';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
 export type MessageComposerLook = {
   inputBg: string;
@@ -50,8 +51,16 @@ export function MessageComposer({
   onSelectionChange,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const localInputRef = useRef<HTMLTextAreaElement>(null);
+  const resolvedInputRef = inputRef ?? localInputRef;
+  const [selection, setSelection] = useState({ start: 0, end: 0 });
   const canSend = value.trim().length > 0 && !sending && !disabled;
   const tl = threadLook;
+
+  function updateSelection(start: number, end: number) {
+    setSelection({ start, end });
+    onSelectionChange?.(start, end);
+  }
 
   return (
     <div className={cn('px-2 pb-2 pt-1 min-[360px]:px-3 min-[360px]:pb-3', compact && 'px-2')}>
@@ -84,8 +93,16 @@ export function MessageComposer({
             <IoAddCircleOutline size={compact ? 24 : 28} />
           </button>
         ) : null}
+        <EmojiPickerButton
+          value={value}
+          onChange={onChange}
+          inputRef={resolvedInputRef}
+          disabled={sending || disabled}
+          placement="above"
+          onSelectionRestore={(start, end) => updateSelection(start, end)}
+        />
         <textarea
-          ref={inputRef}
+          ref={resolvedInputRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder ?? 'Message…'}
@@ -116,15 +133,19 @@ export function MessageComposer({
           }}
           onSelect={(e) => {
             const target = e.currentTarget;
-            onSelectionChange?.(target.selectionStart ?? 0, target.selectionEnd ?? 0);
+            updateSelection(target.selectionStart ?? 0, target.selectionEnd ?? 0);
           }}
           onClick={(e) => {
             const target = e.currentTarget;
-            onSelectionChange?.(target.selectionStart ?? 0, target.selectionEnd ?? 0);
+            updateSelection(target.selectionStart ?? 0, target.selectionEnd ?? 0);
           }}
           onKeyUp={(e) => {
             const target = e.currentTarget;
-            onSelectionChange?.(target.selectionStart ?? 0, target.selectionEnd ?? 0);
+            updateSelection(target.selectionStart ?? 0, target.selectionEnd ?? 0);
+          }}
+          onFocus={(e) => {
+            const target = e.currentTarget;
+            updateSelection(target.selectionStart ?? selection.start, target.selectionEnd ?? selection.end);
           }}
         />
         <button

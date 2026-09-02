@@ -10,6 +10,7 @@ import {
 } from '@/components/plans/create/MeetTypeSelectorSection';
 import { TierBadge } from '@/components/subscription/TierBadge';
 import { LocationSearchField } from '@/components/location/LocationSearchField';
+import { TextareaWithEmoji } from '@/components/emoji/TextareaWithEmoji';
 import { ToggleSwitch } from '@/components/settings/ToggleRow';
 import { Input } from '@/components/ui/Input';
 import { useGatedAction, useUpgradeGate } from '@/contexts/UpgradeGateContext';
@@ -513,9 +514,9 @@ export function CreatePlanScreen() {
           <span className="mb-1.5 block text-[12px] font-extrabold uppercase tracking-wide text-muted">
             Description
           </span>
-          <textarea
+          <TextareaWithEmoji
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onValueChange={setDescription}
             rows={4}
             placeholder="What should people expect?"
             className="w-full rounded-2xl border border-border bg-white px-4 py-3 text-[15px] font-semibold outline-none focus:border-primary/40"
