@@ -36,10 +36,14 @@ export function filterDiscoverPlan(
   viewerUserId?: string | null,
   viewerMatchedPlanIds?: Set<string>
 ): boolean {
-  if (plan.status === 'agreed' && !plan.is_group_plan) {
-    if (viewerUserId && viewerMatchedPlanIds?.has(plan.id)) return true;
+  if (isPlanListingExpired(plan)) {
     return false;
   }
+
+  if (plan.status === 'agreed' && !plan.is_group_plan) {
+    return !!(viewerUserId && viewerMatchedPlanIds?.has(plan.id));
+  }
+
   return true;
 }
 
@@ -218,11 +222,7 @@ export function applyDiscoverFilters(
   }
 
   out = out.filter((row) => {
-    const viewerMatchedAgreed =
-      viewerId != null &&
-      viewerMatchedPlanIds?.has(row.id) &&
-      row.status === 'agreed';
-    if (isPlanListingExpired(row) && !viewerMatchedAgreed) return false;
+    if (isPlanListingExpired(row)) return false;
 
     if (filter.verifiedHostsOnly && !passesVerifiedHostFilter(row, filter.verifiedHostsOnly)) {
       return false;
