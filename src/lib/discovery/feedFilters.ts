@@ -31,8 +31,13 @@ export {
   isDistanceFilterActive,
 } from '@/lib/discovery/parseStoredFeedFilters';
 
-export function filterDiscoverPlan(plan: PlanFeedRow): boolean {
-  if (plan.status === 'awaiting_payment' && !plan.is_group_plan) {
+export function filterDiscoverPlan(
+  plan: PlanFeedRow,
+  viewerUserId?: string | null,
+  viewerMatchedPlanIds?: Set<string>
+): boolean {
+  if (plan.status === 'agreed' && !plan.is_group_plan) {
+    if (viewerUserId && viewerMatchedPlanIds?.has(plan.id)) return true;
     return false;
   }
   return true;
@@ -143,6 +148,7 @@ export function applyDiscoverFilters(
     presenceByUser?: Record<string, DbUserPresence>;
     effectiveTier?: SubscriptionTier;
     hiddenPlanIds?: Set<string>;
+    viewerMatchedPlanIds?: Set<string>;
   }
 ): PlanFeedRow[] {
   const {
@@ -156,8 +162,9 @@ export function applyDiscoverFilters(
     presenceByUser,
     effectiveTier = 'FREE',
     hiddenPlanIds,
+    viewerMatchedPlanIds,
   } = opts;
-  let out = rows.filter(filterDiscoverPlan);
+  let out = rows.filter((row) => filterDiscoverPlan(row, viewerId, viewerMatchedPlanIds));
   out = filterPlansByMood(out, mood);
 
   if (viewerId) {
@@ -211,7 +218,11 @@ export function applyDiscoverFilters(
   }
 
   out = out.filter((row) => {
-    if (isPlanListingExpired(row)) return false;
+    const viewerMatchedAgreed =
+      viewerId != null &&
+      viewerMatchedPlanIds?.has(row.id) &&
+      row.status === 'agreed';
+    if (isPlanListingExpired(row) && !viewerMatchedAgreed) return false;
 
     if (filter.verifiedHostsOnly && !passesVerifiedHostFilter(row, filter.verifiedHostsOnly)) {
       return false;

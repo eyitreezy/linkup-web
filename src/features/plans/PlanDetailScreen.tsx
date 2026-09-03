@@ -101,9 +101,9 @@ const actionSecondary =
   'flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-primary/25 bg-white px-5 py-2.5 text-[14px] font-extrabold text-primary hover:bg-[#EDE8FF]/50 disabled:opacity-50';
 /** Compact pills — matches PlanGroupGuestsPanel escrow button sizing. */
 const actionCompactPrimary =
-  'inline-flex h-9 w-[8.5rem] items-center justify-center gap-1 rounded-full linkup-gradient-primary px-2.5 text-[12px] font-extrabold text-white shadow-sm transition hover:opacity-95 active:scale-[0.98] disabled:opacity-50';
+  'inline-flex h-9 w-[9.5rem] items-center justify-center gap-1 rounded-full linkup-gradient-primary px-2.5 text-[12px] font-extrabold text-white shadow-sm transition whitespace-nowrap hover:opacity-95 active:scale-[0.98] disabled:opacity-50';
 const actionCompactSecondary =
-  'inline-flex h-9 w-[8.5rem] items-center justify-center gap-1 rounded-full border border-primary/25 bg-white px-2.5 text-[12px] font-extrabold text-primary transition hover:bg-[#EDE8FF]/50 disabled:opacity-50';
+  'inline-flex h-9 w-[9.5rem] items-center justify-center gap-1 rounded-full border border-primary/25 bg-white px-2.5 text-[12px] font-extrabold text-primary transition whitespace-nowrap hover:bg-[#EDE8FF]/50 disabled:opacity-50';
 
 type Props = {
   planId: string;
@@ -850,12 +850,30 @@ export function PlanDetailScreen({
       </section>
 
       <section className="rounded-2xl border border-primary/15 bg-gradient-to-br from-[#EDE8FF]/40 to-[#FFF0F5]/50 p-5">
-        <h3 className="font-display text-lg font-extrabold text-foreground">Planning together</h3>
-        <p className="mt-1 text-[13px] font-semibold text-muted">
-          {partnerCtx?.mode === 'hosting'
-            ? 'When you accept an offer, your match appears here.'
-            : 'The person behind this meetup.'}
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="font-display text-lg font-extrabold text-foreground">Planning together</h3>
+            <p className="mt-1 text-[13px] font-semibold text-muted">
+              {partnerCtx?.mode === 'hosting'
+                ? 'When you accept an offer, your match appears here.'
+                : 'The person behind this meetup.'}
+            </p>
+          </div>
+          {isCreator &&
+          !plan.is_group_plan &&
+          ctx?.showViewAgreement &&
+          !ctx.showHostPayShare &&
+          !resolvePlanMeetupInactive(plan, planListingExpired).inactive ? (
+            <button
+              type="button"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full linkup-gradient-primary px-4 text-[12px] font-extrabold text-white shadow-sm transition whitespace-nowrap hover:opacity-95 active:scale-[0.98]"
+              onClick={() => goAgreement()}
+            >
+              <IoDocumentTextOutline size={14} aria-hidden />
+              Confirm plan
+            </button>
+          ) : null}
+        </div>
         {partnerCtx?.mode === 'hosting' ? (
           <p className="mt-4 rounded-xl border border-dashed border-primary/25 bg-white/70 px-4 py-3 text-[13px] font-semibold text-muted">
             You&apos;re hosting. Interested guests send offers, then you can match and chat.
@@ -1041,19 +1059,6 @@ export function PlanDetailScreen({
         onChat={() => void openCounterpartyChat()}
           onCalendar={handleAddToCalendar}
         />
-      ) : null}
-
-      {isCreator &&
-      !plan.is_group_plan &&
-      ctx?.showViewAgreement &&
-      !ctx.showHostPayShare &&
-      !resolvePlanMeetupInactive(plan, planListingExpired).inactive ? (
-        <button type="button" className={actionPrimary} onClick={() => goAgreement()}>
-          <span className="inline-flex items-center justify-center gap-2">
-            <IoDocumentTextOutline size={18} aria-hidden />
-            Confirm plan
-          </span>
-        </button>
       ) : null}
 
       {ctx?.showConfirmAttendance ? (

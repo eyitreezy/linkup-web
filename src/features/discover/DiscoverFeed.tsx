@@ -35,6 +35,7 @@ import { fetchPresenceMap } from '@/services/presence.service';
 import {
   DISCOVER_PAGE_SIZE,
   fetchDiscoverPlansPage,
+  fetchViewerMatchedStandardPlanIds,
   type PlanFeedRow,
 } from '@/services/plans.service';
 import { useAuthStore } from '@/stores/auth-store';
@@ -213,6 +214,17 @@ export function DiscoverFeed() {
 
   useDiscoverPlansRealtime(user?.id, discoverQueryKey);
 
+  const { data: viewerMatchedPlanIds = new Set<string>() } = useQuery({
+    queryKey: ['discover-matched-plan-ids', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return new Set<string>();
+      const client = createClient();
+      return fetchViewerMatchedStandardPlanIds(client, user.id);
+    },
+    enabled: !!user?.id,
+    staleTime: 30_000,
+  });
+
   const showInitialLoading = isPending && feedRows.length === 0;
 
   const loadMore = useCallback(async () => {
@@ -273,6 +285,7 @@ export function DiscoverFeed() {
       viewerProfile,
       effectiveTier: subscriptionState.effectiveTier,
       hiddenPlanIds,
+      viewerMatchedPlanIds,
     });
   }, [
     feedRows,
@@ -285,6 +298,7 @@ export function DiscoverFeed() {
     viewerProfile,
     subscriptionState.effectiveTier,
     hiddenPlanIds,
+    viewerMatchedPlanIds,
   ]);
 
   const meetTypeScoped = useMemo(() => {

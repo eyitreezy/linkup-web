@@ -90,6 +90,67 @@ function attachCreators(plans: (DbPlan & { meet_types?: DbMeetType | null })[], 
 
 const PAGE_SIZE = 48;
 
+export async function fetchViewerMatchedStandardPlanIds(
+  client: SupabaseClient,
+  viewerUserId: string
+): Promise<Set<string>> {
+  const { data } = await client
+    .from('plan_offers')
+    .select('plan_id')
+    .eq('bidder_id', viewerUserId)
+    .eq('status', 'accepted');
+
+  return new Set((data ?? []).map((row) => row.plan_id as string));
+}
+
+async function fetchViewerMatchedStandardPlans(
+  client: SupabaseClient,
+  viewerUserId: string,
+  priceFilter?: DiscoverPriceFilter | null
+): Promise<(DbPlan & { meet_types?: DbMeetType | null })[]> {
+  const matchedPlanIds = await fetchViewerMatchedStandardPlanIds(client, viewerUserId);
+  if (matchedPlanIds.size === 0) return [];
+
+  let q = client
+    .from('plans')
+    .select('*, meet_types(*)')
+    .in('id', [...matchedPlanIds])
+    .eq('is_suppressed', false)
+    .is('archived_at', null)
+    .eq('is_group_plan', false)
+    .eq('status', 'agreed');
+
+  if (priceFilter && hasDiscoverPriceFilter(priceFilter)) {
+    const { minPriceCents, maxPriceCents } = discoverPriceFilterBounds(priceFilter);
+    if (minPriceCents != null) {
+      q = q.gte('starting_price_cents', minPriceCents);
+    }
+    if (maxPriceCents != null) {
+      q = q.lte('starting_price_cents', maxPriceCents);
+    }
+  }
+
+  const { data, error } = await q;
+  if (error || !data) return [];
+  return data as (DbPlan & { meet_types?: DbMeetType | null })[];
+}
+
+function mergeDiscoverPlans(
+  primary: (DbPlan & { meet_types?: DbMeetType | null })[],
+  matched: (DbPlan & { meet_types?: DbMeetType | null })[]
+): (DbPlan & { meet_types?: DbMeetType | null })[] {
+  if (matched.length === 0) return primary;
+  const seen = new Set(primary.map((plan) => plan.id));
+  const merged = [...primary];
+  for (const plan of matched) {
+    if (!seen.has(plan.id)) {
+      merged.push(plan);
+      seen.add(plan.id);
+    }
+  }
+  return merged;
+}
+
 async function discoverPlansQuery(
   client: SupabaseClient,
   viewerUserId: string | null,
@@ -186,7 +247,11 @@ export async function fetchDiscoverPlans(
 
   if (error) return { data: [] as PlanFeedRow[], error };
 
-  const plans = ((data ?? []) as (DbPlan & { meet_types?: DbMeetType | null })[]).slice(0, limit);
+  let plans = ((data ?? []) as (DbPlan & { meet_types?: DbMeetType | null })[]).slice(0, limit);
+  if (viewerUserId) {
+    const matched = await fetchViewerMatchedStandardPlans(client, viewerUserId, opts?.priceFilter);
+    plans = mergeDiscoverPlans(plans, matched);
+  }
   const profiles = await fetchProfilesForCreators(
     client,
     plans.map((p) => p.creator_id)
@@ -233,7 +298,11 @@ export async function fetchDiscoverPlansPage(
 
   if (error) return { data: [] as PlanFeedRow[], error };
 
-  const plans = (data ?? []) as (DbPlan & { meet_types?: DbMeetType | null })[];
+  let plans = (data ?? []) as (DbPlan & { meet_types?: DbMeetType | null })[];
+  if (viewerUserId) {
+    const matched = await fetchViewerMatchedStandardPlans(client, viewerUserId, opts?.priceFilter);
+    plans = mergeDiscoverPlans(plans, matched);
+  }
   const profiles = await fetchProfilesForCreators(
     client,
     plans.map((p) => p.creator_id)
