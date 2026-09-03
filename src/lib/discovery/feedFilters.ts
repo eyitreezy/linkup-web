@@ -31,12 +31,43 @@ export {
   isDistanceFilterActive,
 } from '@/lib/discovery/parseStoredFeedFilters';
 
+export function isViewerMatchedAgreedStandardPlan(
+  plan: PlanFeedRow,
+  viewerUserId?: string | null,
+  viewerMatchedPlanIds?: Set<string>
+): boolean {
+  return !!(
+    viewerUserId &&
+    viewerMatchedPlanIds?.has(plan.id) &&
+    plan.status === 'agreed' &&
+    !plan.is_group_plan
+  );
+}
+
+/** Whether a plan should be excluded from the discover feed entirely. */
+export function isPlanExcludedFromDiscoverFeed(
+  plan: PlanFeedRow,
+  viewerUserId?: string | null,
+  viewerMatchedPlanIds?: Set<string>
+): boolean {
+  if (plan.status === 'cancelled' || plan.status === 'completed' || plan.status === 'expired') {
+    return true;
+  }
+  if (plan.is_expired) return true;
+
+  if (isViewerMatchedAgreedStandardPlan(plan, viewerUserId, viewerMatchedPlanIds)) {
+    return false;
+  }
+
+  return isPlanListingExpired(plan);
+}
+
 export function filterDiscoverPlan(
   plan: PlanFeedRow,
   viewerUserId?: string | null,
   viewerMatchedPlanIds?: Set<string>
 ): boolean {
-  if (isPlanListingExpired(plan)) {
+  if (isPlanExcludedFromDiscoverFeed(plan, viewerUserId, viewerMatchedPlanIds)) {
     return false;
   }
 
@@ -184,13 +215,23 @@ export function applyDiscoverFilters(
     });
   }
 
-  out = filterTierRelativePremiumVisibilityPlans(
-    out,
-    viewerId ?? null,
-    effectiveTier,
-    viewerLat,
-    viewerLng
+  const matchedAgreedStandard = out.filter((row) =>
+    isViewerMatchedAgreedStandardPlan(row, viewerId, viewerMatchedPlanIds)
   );
+  const discoverScoped = out.filter(
+    (row) => !isViewerMatchedAgreedStandardPlan(row, viewerId, viewerMatchedPlanIds)
+  );
+
+  out = [
+    ...filterTierRelativePremiumVisibilityPlans(
+      discoverScoped,
+      viewerId ?? null,
+      effectiveTier,
+      viewerLat,
+      viewerLng
+    ),
+    ...matchedAgreedStandard,
+  ];
   if (hiddenPlanIds?.size) {
     out = out.filter((row) => !hiddenPlanIds.has(row.id));
   }
@@ -198,9 +239,25 @@ export function applyDiscoverFilters(
   const viewerCoords =
     viewerLat != null && viewerLng != null ? { lat: viewerLat, lng: viewerLng } : null;
 
-  out = applyRadiusVisibilityFilter(out, viewerId, viewerCoords);
+  const matchedAgreedAfterHidden = out.filter((row) =>
+    isViewerMatchedAgreedStandardPlan(row, viewerId, viewerMatchedPlanIds)
+  );
+  const discoverScopedAfterHidden = out.filter(
+    (row) => !isViewerMatchedAgreedStandardPlan(row, viewerId, viewerMatchedPlanIds)
+  );
 
-  out = out.filter((row) => moodReachVisibleToViewer(row, viewerCoords, viewerId));
+  out = [
+    ...applyRadiusVisibilityFilter(discoverScopedAfterHidden, viewerId, viewerCoords),
+    ...matchedAgreedAfterHidden,
+  ];
+
+  out = [
+    ...out.filter(
+      (row) =>
+        isViewerMatchedAgreedStandardPlan(row, viewerId, viewerMatchedPlanIds) ||
+        moodReachVisibleToViewer(row, viewerCoords, viewerId)
+    ),
+  ];
 
   const maxKm =
     filter.maxDistanceKm != null ? Math.max(1, Math.round(filter.maxDistanceKm)) : null;
@@ -209,11 +266,20 @@ export function applyDiscoverFilters(
   const priceBounds = discoverPriceFilterBounds(filter);
 
   if (distanceFilterActive && maxKm != null) {
-    out = applyMaxDistanceFilter(out, {
-      maxDistanceKm: maxKm,
-      viewerLat,
-      viewerLng,
-    });
+    const matchedAgreed = out.filter((row) =>
+      isViewerMatchedAgreedStandardPlan(row, viewerId, viewerMatchedPlanIds)
+    );
+    const scoped = out.filter(
+      (row) => !isViewerMatchedAgreedStandardPlan(row, viewerId, viewerMatchedPlanIds)
+    );
+    out = [
+      ...applyMaxDistanceFilter(scoped, {
+        maxDistanceKm: maxKm,
+        viewerLat,
+        viewerLng,
+      }),
+      ...matchedAgreed,
+    ];
   }
 
   // Price filter applies to all remaining discover rows.
@@ -222,7 +288,7 @@ export function applyDiscoverFilters(
   }
 
   out = out.filter((row) => {
-    if (isPlanListingExpired(row)) return false;
+    if (isPlanExcludedFromDiscoverFeed(row, viewerId, viewerMatchedPlanIds)) return false;
 
     if (filter.verifiedHostsOnly && !passesVerifiedHostFilter(row, filter.verifiedHostsOnly)) {
       return false;
@@ -243,11 +309,20 @@ export function applyDiscoverFilters(
   });
 
   if (distanceFilterActive && maxKm != null) {
-    out = applyMaxDistanceFilter(out, {
-      maxDistanceKm: maxKm,
-      viewerLat,
-      viewerLng,
-    });
+    const matchedAgreed = out.filter((row) =>
+      isViewerMatchedAgreedStandardPlan(row, viewerId, viewerMatchedPlanIds)
+    );
+    const scoped = out.filter(
+      (row) => !isViewerMatchedAgreedStandardPlan(row, viewerId, viewerMatchedPlanIds)
+    );
+    out = [
+      ...applyMaxDistanceFilter(scoped, {
+        maxDistanceKm: maxKm,
+        viewerLat,
+        viewerLng,
+      }),
+      ...matchedAgreed,
+    ];
   }
 
   const hasViewerCoords = viewerLat != null && viewerLng != null;

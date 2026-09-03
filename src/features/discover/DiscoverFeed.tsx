@@ -214,16 +214,21 @@ export function DiscoverFeed() {
 
   useDiscoverPlansRealtime(user?.id, discoverQueryKey);
 
-  const { data: viewerMatchedPlanIds = new Set<string>() } = useQuery({
+  const { data: viewerMatchedPlanIds = [] } = useQuery({
     queryKey: ['discover-matched-plan-ids', user?.id],
     queryFn: async () => {
-      if (!user?.id) return new Set<string>();
+      if (!user?.id) return [] as string[];
       const client = createClient();
       return fetchViewerMatchedStandardPlanIds(client, user.id);
     },
     enabled: !!user?.id,
     staleTime: 30_000,
   });
+
+  const viewerMatchedPlanIdSet = useMemo(
+    () => new Set(viewerMatchedPlanIds),
+    [viewerMatchedPlanIds]
+  );
 
   const showInitialLoading = isPending && feedRows.length === 0;
 
@@ -285,7 +290,7 @@ export function DiscoverFeed() {
       viewerProfile,
       effectiveTier: subscriptionState.effectiveTier,
       hiddenPlanIds,
-      viewerMatchedPlanIds,
+      viewerMatchedPlanIds: viewerMatchedPlanIdSet,
     });
   }, [
     feedRows,
@@ -298,7 +303,7 @@ export function DiscoverFeed() {
     viewerProfile,
     subscriptionState.effectiveTier,
     hiddenPlanIds,
-    viewerMatchedPlanIds,
+    viewerMatchedPlanIdSet,
   ]);
 
   const meetTypeScoped = useMemo(() => {

@@ -90,17 +90,83 @@ function attachCreators(plans: (DbPlan & { meet_types?: DbMeetType | null })[], 
 
 const PAGE_SIZE = 48;
 
+function normalizePlanMeetTypes(
+  plan: DbPlan & { meet_types?: DbMeetType | null | DbMeetType[] }
+): DbPlan & { meet_types?: DbMeetType | null } {
+  const meetRaw = plan.meet_types as unknown;
+  if (Array.isArray(meetRaw)) {
+    return { ...plan, meet_types: meetRaw[0] ?? null };
+  }
+  return { ...plan, meet_types: (plan.meet_types as DbMeetType | null | undefined) ?? null };
+}
+
+function passesDiscoverPriceFilterForPlan(
+  plan: DbPlan,
+  priceFilter?: DiscoverPriceFilter | null
+): boolean {
+  if (!priceFilter || !hasDiscoverPriceFilter(priceFilter)) return true;
+  const { minPriceCents, maxPriceCents } = discoverPriceFilterBounds(priceFilter);
+  const price = plan.starting_price_cents ?? 0;
+  if (minPriceCents != null && price < minPriceCents) return false;
+  if (maxPriceCents != null && price > maxPriceCents) return false;
+  return true;
+}
+
+function isMatchedAgreedStandardPlanRow(
+  plan: DbPlan,
+  matchedPlanIds: Set<string>
+): boolean {
+  return (
+    matchedPlanIds.has(plan.id) &&
+    plan.status === 'agreed' &&
+    !plan.is_group_plan &&
+    !plan.is_expired &&
+    !plan.is_suppressed
+  );
+}
+
+/** Plan ids where the viewer is the matched guest on a standard plan. */
 export async function fetchViewerMatchedStandardPlanIds(
   client: SupabaseClient,
   viewerUserId: string
-): Promise<Set<string>> {
-  const { data } = await client
-    .from('plan_offers')
-    .select('plan_id')
-    .eq('bidder_id', viewerUserId)
-    .eq('status', 'accepted');
+): Promise<string[]> {
+  const ids = new Set<string>();
 
-  return new Set((data ?? []).map((row) => row.plan_id as string));
+  const [{ data: acceptedOffers }, { data: approvedJoins }, { data: myOffers }] =
+    await Promise.all([
+      client
+        .from('plan_offers')
+        .select('plan_id')
+        .eq('bidder_id', viewerUserId)
+        .eq('status', 'accepted'),
+      client
+        .from('plan_join_requests')
+        .select('plan_id')
+        .eq('requester_id', viewerUserId)
+        .eq('status', 'approved'),
+      client.from('plan_offers').select('id').eq('bidder_id', viewerUserId),
+    ]);
+
+  for (const row of acceptedOffers ?? []) {
+    if (row.plan_id) ids.add(row.plan_id as string);
+  }
+  for (const row of approvedJoins ?? []) {
+    if (row.plan_id) ids.add(row.plan_id as string);
+  }
+
+  const offerIds = (myOffers ?? []).map((row) => row.id as string).filter(Boolean);
+  if (offerIds.length > 0) {
+    const { data: viaAcceptedOfferId } = await client
+      .from('plans')
+      .select('id')
+      .in('accepted_offer_id', offerIds)
+      .eq('is_group_plan', false);
+    for (const row of viaAcceptedOfferId ?? []) {
+      if (row.id) ids.add(row.id as string);
+    }
+  }
+
+  return [...ids];
 }
 
 async function fetchViewerMatchedStandardPlans(
@@ -108,31 +174,56 @@ async function fetchViewerMatchedStandardPlans(
   viewerUserId: string,
   priceFilter?: DiscoverPriceFilter | null
 ): Promise<(DbPlan & { meet_types?: DbMeetType | null })[]> {
-  const matchedPlanIds = await fetchViewerMatchedStandardPlanIds(client, viewerUserId);
+  const matchedPlanIds = new Set(await fetchViewerMatchedStandardPlanIds(client, viewerUserId));
   if (matchedPlanIds.size === 0) return [];
 
-  let q = client
-    .from('plans')
-    .select('*, meet_types(*)')
-    .in('id', [...matchedPlanIds])
-    .eq('is_suppressed', false)
-    .is('archived_at', null)
-    .eq('is_group_plan', false)
-    .eq('status', 'agreed');
+  const plans = new Map<string, DbPlan & { meet_types?: DbMeetType | null }>();
 
-  if (priceFilter && hasDiscoverPriceFilter(priceFilter)) {
-    const { minPriceCents, maxPriceCents } = discoverPriceFilterBounds(priceFilter);
-    if (minPriceCents != null) {
-      q = q.gte('starting_price_cents', minPriceCents);
-    }
-    if (maxPriceCents != null) {
-      q = q.lte('starting_price_cents', maxPriceCents);
+  const [{ data: guestOffers }, { data: approvedJoins }] = await Promise.all([
+    client
+      .from('plan_offers')
+      .select('plans!inner(*, meet_types(*))')
+      .eq('bidder_id', viewerUserId)
+      .eq('status', 'accepted'),
+    client
+      .from('plan_join_requests')
+      .select('plans!inner(*, meet_types(*))')
+      .eq('requester_id', viewerUserId)
+      .eq('status', 'approved'),
+  ]);
+
+  const embedRows = [...(guestOffers ?? []), ...(approvedJoins ?? [])];
+  for (const row of embedRows) {
+    const raw = row.plans as unknown as
+      | (DbPlan & { meet_types?: DbMeetType | null | DbMeetType[] })
+      | null;
+    if (!raw?.id || !matchedPlanIds.has(raw.id)) continue;
+    if (!isMatchedAgreedStandardPlanRow(raw, matchedPlanIds)) continue;
+    if (raw.is_suppressed || raw.archived_at) continue;
+    if (!passesDiscoverPriceFilterForPlan(raw, priceFilter)) continue;
+    plans.set(raw.id, normalizePlanMeetTypes(raw));
+  }
+
+  const missingIds = [...matchedPlanIds].filter((id) => !plans.has(id));
+  if (missingIds.length > 0) {
+    const { data: directPlans } = await client
+      .from('plans')
+      .select('*, meet_types(*)')
+      .in('id', missingIds)
+      .eq('is_suppressed', false)
+      .is('archived_at', null)
+      .eq('is_group_plan', false)
+      .eq('status', 'agreed');
+
+    for (const raw of directPlans ?? []) {
+      const plan = normalizePlanMeetTypes(raw as DbPlan & { meet_types?: DbMeetType | null | DbMeetType[] });
+      if (!isMatchedAgreedStandardPlanRow(plan, matchedPlanIds)) continue;
+      if (!passesDiscoverPriceFilterForPlan(plan, priceFilter)) continue;
+      plans.set(plan.id, plan);
     }
   }
 
-  const { data, error } = await q;
-  if (error || !data) return [];
-  return data as (DbPlan & { meet_types?: DbMeetType | null })[];
+  return [...plans.values()];
 }
 
 function mergeDiscoverPlans(
