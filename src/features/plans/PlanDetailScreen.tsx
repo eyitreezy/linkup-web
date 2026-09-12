@@ -48,6 +48,8 @@ import { openPlanMeetupChatPath } from '@/lib/messaging/openPlanMeetupChat';
 import { planDistanceFromViewer } from '@/lib/discovery/feedFilters';
 import { offerLiveAmount } from '@/lib/plans/negotiationState';
 import { isOfferExpired } from '@/lib/plans/offerRules';
+import { getMeetupCountdown } from '@/lib/plans/meetupCountdown';
+import { ArrivalNudgeButton } from '@/components/plans/ArrivalNudgeButton';
 import { resolveDiscoverViewerCoords } from '@/lib/discovery/viewerLocation';
 import { planMeetupCoords } from '@/lib/plans/planMeetupCoords';
 import { daysUntilIso, isPlanActiveWindowExpiringSoon } from '@/lib/plans/planActiveWindow';
@@ -89,6 +91,9 @@ import {
   IoPeople,
   IoPersonAddOutline,
   IoShareOutline,
+  IoStar,
+  IoChevronForward,
+  IoWarningOutline,
   IoTimeOutline,
 } from 'react-icons/io5';
 
@@ -127,6 +132,10 @@ export function PlanDetailScreen({
   const [chatBusy, setChatBusy] = useState(false);
   const [groupChatBusy, setGroupChatBusy] = useState(false);
   const [hostCancelOpen, setHostCancelOpen] = useState(false);
+  const [myNudgedAt, setMyNudgedAt] = useState<string | null>(null);
+  const [partnerNudgedAt, setPartnerNudgedAt] = useState<string | null>(null);
+  const [reviewAlreadySubmitted, setReviewAlreadySubmitted] = useState(false);
+  const [countdownTick, setCountdownTick] = useState(0);
   const [groupChatConvId, setGroupChatConvId] = useState<string | null>(null);
   const [extendBusy, setExtendBusy] = useState(false);
   const [extendMsg, setExtendMsg] = useState<string | null>(null);
@@ -223,6 +232,53 @@ export function PlanDetailScreen({
   }, [groupEscrowsQuery.data, groupEscrowsQuery.isLoading, plan]);
   usePlanOffersRealtime(planId);
   useGroupPlanDetailRealtime(planId, !!plan?.is_group_plan);
+
+  const meetupIso = plan?.agreed_scheduled_at ?? plan?.scheduled_at ?? null;
+
+  useEffect(() => {
+    if (plan?.status !== 'active' || !meetupIso) return;
+    const id = window.setInterval(() => setCountdownTick((tick) => tick + 1), 60_000);
+    return () => window.clearInterval(id);
+  }, [plan?.status, meetupIso]);
+
+  useEffect(() => {
+    if (!plan?.id || plan.status !== 'active' || !viewerUserId) return;
+    const client = createClient();
+    void (async () => {
+      const { data } = await client
+        .from('plan_arrival_nudges')
+        .select('user_id, nudged_at')
+        .eq('plan_id', plan.id);
+      const rows = data ?? [];
+      const mine = rows.find((row) => row.user_id === viewerUserId);
+      const others = rows
+        .filter((row) => row.user_id !== viewerUserId)
+        .sort(
+          (a, b) =>
+            new Date(a.nudged_at as string).getTime() - new Date(b.nudged_at as string).getTime()
+        );
+      setMyNudgedAt((mine?.nudged_at as string) ?? null);
+      setPartnerNudgedAt((others[0]?.nudged_at as string) ?? null);
+    })();
+  }, [plan?.id, plan?.status, viewerUserId]);
+
+  useEffect(() => {
+    if (!plan?.review_unlock_at || !viewerUserId) {
+      setReviewAlreadySubmitted(false);
+      return;
+    }
+    const client = createClient();
+    void client
+      .from('meetup_reviews')
+      .select('score_punctuality')
+      .eq('plan_id', planId)
+      .eq('reviewer_id', viewerUserId)
+      .maybeSingle()
+      .then(({ data }) => {
+        setReviewAlreadySubmitted(!!(data?.score_punctuality && data.score_punctuality > 0));
+      });
+  }, [plan?.review_unlock_at, planId, viewerUserId]);
+
   const dbUser = profileQuery.data?.dbUser ?? null;
   const runGated = useGatedAction();
 
@@ -667,6 +723,23 @@ export function PlanDetailScreen({
     distanceAwayKm = Number.isFinite(d) ? Math.round(d) : null;
   }
   const meetupPin = planMeetupCoords(plan);
+  void countdownTick;
+  const countdown = plan.status === 'active' ? getMeetupCountdown(meetupIso) : null;
+  const canReview = !!(
+    plan.review_unlock_at &&
+    new Date(plan.review_unlock_at) <= new Date() &&
+    (plan.status === 'completed' || plan.status === 'active') &&
+    !reviewAlreadySubmitted
+  );
+  const nudgeReportedUserId = isCreator
+    ? bundle?.offers.find((offer) => offer.status === 'accepted')?.bidder_id ?? null
+    : plan.creator_id;
+  const showArrivalNudge =
+    plan.status === 'active' && !!viewerUserId && (isCreator || isAcceptedGuest);
+  const showReportIssueLink =
+    (plan.status === 'active' || plan.status === 'completed') &&
+    !!viewerUserId &&
+    (isCreator || isAcceptedGuest);
 
   return (
     <GroupPlanPolicyGate active={isGroupPlan}>
@@ -843,11 +916,50 @@ export function PlanDetailScreen({
               />
             ) : null}
           </dl>
+          {countdown ? (
+            <div className="flex items-center gap-3 rounded-2xl border border-primary/20 bg-[#EDE8FF]/60 px-4 py-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                <IoTimeOutline className="text-primary" size={20} aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[13px] font-extrabold text-primary">{countdown}</p>
+                <p className="text-[11px] font-semibold text-muted">
+                  {meetupIso
+                    ? new Date(meetupIso).toLocaleDateString('en-NG', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : null}
+                </p>
+              </div>
+            </div>
+          ) : null}
           {distanceAwayKm != null ? (
             <p className="text-[13px] font-semibold text-muted">{distanceAwayKm} km away</p>
           ) : null}
         </div>
       </section>
+
+      {canReview ? (
+        <Link
+          href={`/plan/${planId}/review`}
+          className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 transition hover:bg-amber-100"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100">
+            <IoStar className="text-amber-600" size={20} aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-extrabold text-amber-900">Leave a review</p>
+            <p className="text-[11px] font-semibold text-amber-700">
+              Share your experience to help the community
+            </p>
+          </div>
+          <IoChevronForward className="shrink-0 text-amber-600" size={18} aria-hidden />
+        </Link>
+      ) : null}
 
       <section className="rounded-2xl border border-primary/15 bg-gradient-to-br from-[#EDE8FF]/40 to-[#FFF0F5]/50 p-5">
         <div className="flex items-start justify-between gap-3">
@@ -886,6 +998,20 @@ export function PlanDetailScreen({
           />
         ) : null}
       </section>
+
+      {showArrivalNudge ? (
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-white">
+          <ArrivalNudgeButton
+            planId={planId}
+            currentUserId={viewerUserId}
+            planStatus={plan.status}
+            scheduledAt={meetupIso}
+            myNudgedAt={myNudgedAt}
+            partnerNudgedAt={partnerNudgedAt}
+            reportedUserId={nudgeReportedUserId}
+          />
+        </div>
+      ) : null}
 
       {isCreator &&
       plan.is_mood_plan &&
@@ -1189,6 +1315,18 @@ export function PlanDetailScreen({
               Message
             </span>
           </button>
+        </div>
+      ) : null}
+
+      {showReportIssueLink ? (
+        <div className="flex justify-center pt-2">
+          <Link
+            href={`/plan/${planId}/exigency`}
+            className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-muted transition hover:text-red-600"
+          >
+            <IoWarningOutline size={14} aria-hidden />
+            Report an issue
+          </Link>
         </div>
       ) : null}
 
