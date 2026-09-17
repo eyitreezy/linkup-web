@@ -1,5 +1,6 @@
 export type TabIconName =
   | 'heart'
+  | 'matchmaker'
   | 'compass'
   | 'chatbubbles'
   | 'bookmark'
@@ -14,12 +15,19 @@ export type TabIconName =
  */
 export const MOBILE_TAB_NAV = [
   { href: '/discover', label: 'Discover', icon: 'heart' as TabIconName },
+  { href: '/matchmaker', label: 'MatchMaker', icon: 'matchmaker' as TabIconName },
   { href: '/meetr', label: 'Meetr', icon: 'compass' as TabIconName },
   { href: '/messages', label: 'Messages', icon: 'chatbubbles' as TabIconName },
-  { href: '/plans', label: 'Saved', icon: 'bookmark' as TabIconName },
   { href: '/plan-management', label: 'Manage', icon: 'albums' as TabIconName },
   { href: '/offers', label: 'Offers', icon: 'pricetag' as TabIconName },
 ] as const;
+
+/** Saved plans — relocated from primary nav to Account screen. */
+export const SAVED_PLANS_NAV_ITEM = {
+  href: '/plans',
+  label: 'Saved plans',
+  icon: 'bookmark' as TabIconName,
+} as const;
 
 /** Profile — not in MOBILE_TAB_NAV; linked from account menu with notification badge. */
 export const PROFILE_NAV_ITEM = {

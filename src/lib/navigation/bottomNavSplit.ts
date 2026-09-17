@@ -6,9 +6,9 @@ import type { NavTabItem } from '@/components/navigation/tabNavConfig';
  */
 export const BOTTOM_NAV_BAR_PRIORITY = [
   '/discover',
+  '/matchmaker',
   '/meetr',
   '/messages',
-  '/plans',
   '/offers',
   '/plan-management',
   '/admin',

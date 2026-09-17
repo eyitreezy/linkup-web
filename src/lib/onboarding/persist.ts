@@ -70,6 +70,7 @@ export async function autosaveOnboardingProgress(args: {
 
   patch.birth_date = birthIso(draft.birthDate);
   patch.bio = draft.bio.trim() || null;
+  patch.communication_style = draft.communicationStyle;
 
   if (draft.selfGender) {
     patch.gender = draft.selfGender;
@@ -177,6 +178,7 @@ export async function saveOnboardingStep(args: {
     if (stepBlocker) return { error: stepBlocker };
     patch.bio = draft.bio.trim() || null;
     patch.gender = draft.selfGender;
+    patch.communication_style = draft.communicationStyle;
   }
 
   if (stepIndex >= 2) {

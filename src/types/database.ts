@@ -158,6 +158,7 @@ export interface DbProfile {
   birth_date?: string | null;
   photo_urls?: string[] | null;
   gender?: string | null;
+  communication_style?: string | null;
   onboarding_status?: 'pending' | 'complete' | 'skipped';
   preferences: ProfilePreferences;
   /** Top-level column (mirrors preferences.expo_push_token) — visible in Supabase Table Editor. */

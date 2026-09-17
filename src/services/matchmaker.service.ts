@@ -1,0 +1,130 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { MatchMakerGateState } from '@/lib/matchmaker/gates';
+import type { MatchMakerConnectionRow } from '@/lib/matchmaker/connection';
+import type { PoolProfileRow } from '@/lib/matchmaker/compatibility';
+
+export async function fetchMatchMakerGateState(
+  client: SupabaseClient
+): Promise<{ data: MatchMakerGateState | null; error: string | null }> {
+  const { data, error } = await client.rpc('matchmaker_get_gate_state');
+  if (error) return { data: null, error: error.message };
+  return { data: data as MatchMakerGateState, error: null };
+}
+
+export async function fetchMatchMakerPool(
+  client: SupabaseClient,
+  limit = 12
+): Promise<{ data: PoolProfileRow[]; error: string | null }> {
+  const { data, error } = await client.rpc('matchmaker_get_pool', { p_limit: limit });
+  if (error) return { data: [], error: error.message };
+  return { data: (data ?? []) as PoolProfileRow[], error: null };
+}
+
+export async function expressMatchMakerInterest(
+  client: SupabaseClient,
+  toUserId: string
+): Promise<{ matched: boolean; connectionId?: string; error: string | null }> {
+  const { data, error } = await client.rpc('matchmaker_express_interest', { p_to_user_id: toUserId });
+  if (error) return { matched: false, error: error.message };
+  const payload = data as { matched?: boolean; connection_id?: string };
+  return {
+    matched: !!payload.matched,
+    connectionId: payload.connection_id,
+    error: null,
+  };
+}
+
+export async function fetchMatchMakerConnection(
+  client: SupabaseClient,
+  connectionId: string
+): Promise<{ data: MatchMakerConnectionRow | null; error: string | null }> {
+  const { data, error } = await client
+    .from('matchmaker_connections')
+    .select(
+      'id, user_a_id, user_b_id, status, connected_at, first_message_at, plan_unlock_at, ended_at, first_plan_created_at, paused_at'
+    )
+    .eq('id', connectionId)
+    .maybeSingle();
+  if (error) return { data: null, error: error.message };
+  return { data: data as MatchMakerConnectionRow | null, error: null };
+}
+
+export async function endMatchMakerConnection(
+  client: SupabaseClient,
+  connectionId: string,
+  reason: string
+): Promise<{ error: string | null }> {
+  const { error } = await client.rpc('matchmaker_end_connection', {
+    p_connection_id: connectionId,
+    p_reason: reason,
+  });
+  return { error: error?.message ?? null };
+}
+
+export async function sendReadyToMeetSignal(
+  client: SupabaseClient,
+  connectionId: string
+): Promise<{ error: string | null }> {
+  const { error } = await client.rpc('matchmaker_send_ready_signal', {
+    p_connection_id: connectionId,
+  });
+  return { error: error?.message ?? null };
+}
+
+export async function recordMatchMakerFirstMessage(
+  client: SupabaseClient,
+  connectionId: string
+): Promise<{ error: string | null }> {
+  const { error } = await client.rpc('matchmaker_record_first_message', {
+    p_connection_id: connectionId,
+  });
+  return { error: error?.message ?? null };
+}
+
+export async function saveMatchMakerIntent(
+  client: SupabaseClient,
+  userId: string
+): Promise<{ error: string | null }> {
+  const { error } = await client.from('matchmaker_intents').upsert({
+    user_id: userId,
+    declared_at: new Date().toISOString(),
+    is_active: true,
+    last_reaffirmed_at: new Date().toISOString(),
+  });
+  return { error: error?.message ?? null };
+}
+
+export type MatchMakerValuesInput = {
+  faith: string | null;
+  family_goals: string;
+  pace_preference: string;
+  communication_frequency: string | null;
+  dealbreakers: Record<string, unknown>;
+};
+
+export async function saveMatchMakerValues(
+  client: SupabaseClient,
+  userId: string,
+  values: MatchMakerValuesInput
+): Promise<{ error: string | null }> {
+  const { error } = await client.from('matchmaker_values').upsert({
+    user_id: userId,
+    ...values,
+    updated_at: new Date().toISOString(),
+  });
+  return { error: error?.message ?? null };
+}
+
+export async function hasReadySignal(
+  client: SupabaseClient,
+  connectionId: string,
+  userId: string
+): Promise<boolean> {
+  const { data } = await client
+    .from('matchmaker_ready_signals')
+    .select('id')
+    .eq('connection_id', connectionId)
+    .eq('signalling_user_id', userId)
+    .maybeSingle();
+  return !!data;
+}

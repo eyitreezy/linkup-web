@@ -624,6 +624,54 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
             </div>
           </FormCard>
           <FormCard>
+            <PremiumSectionHead title="How do you prefer to communicate?" />
+            <p className="mt-1 text-[12px] font-semibold text-muted">
+              Helps us personalise your LinkUp experience
+            </p>
+            <div className="mt-3 space-y-2">
+              {[
+                { value: 'daily', label: 'Daily contact', sub: 'I like staying in touch regularly' },
+                { value: 'few_times_week', label: 'A few times a week', sub: 'Regular but not every day' },
+                { value: 'flexible', label: 'Flexible', sub: 'I go with the flow' },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() =>
+                    setDraft((d) => ({
+                      ...d,
+                      communicationStyle: d.communicationStyle === opt.value ? null : opt.value,
+                    }))
+                  }
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition',
+                    draft.communicationStyle === opt.value
+                      ? 'border-primary bg-[#F0EEFF]'
+                      : 'border-border bg-surface'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
+                      draft.communicationStyle === opt.value ? 'border-primary bg-primary' : 'border-border'
+                    )}
+                  >
+                    {draft.communicationStyle === opt.value ? (
+                      <span className="h-2 w-2 rounded-full bg-white" />
+                    ) : null}
+                  </span>
+                  <span>
+                    <span className="block text-[14px] font-extrabold text-foreground">{opt.label}</span>
+                    <span className="block text-[11px] font-semibold text-muted">{opt.sub}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-center text-[11px] font-semibold text-muted">
+              Optional — you can update this anytime
+            </p>
+          </FormCard>
+          <FormCard>
             <PremiumSectionHead title="What you're here for" />
             <div className="mt-2 min-h-[2.75rem] flex flex-wrap content-start gap-2">
               {INTENTS.map((i) => (

@@ -433,6 +433,19 @@ export async function sendTextMessage(
   }
 
   if (error) return { data: null, error: error.message };
+
+  const { data: convo } = await client
+    .from('conversations')
+    .select('matchmaker_connection_id')
+    .eq('id', conversationId)
+    .maybeSingle();
+
+  const mmConnectionId = (convo as { matchmaker_connection_id?: string | null } | null)
+    ?.matchmaker_connection_id;
+  if (mmConnectionId) {
+    await client.rpc('matchmaker_record_first_message', { p_connection_id: mmConnectionId });
+  }
+
   return { data: normalizeMessageRow(data as unknown as Record<string, unknown>), error: null };
 }
 

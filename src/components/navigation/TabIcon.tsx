@@ -1,3 +1,4 @@
+import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
 import type { TabIconName } from '@/components/navigation/tabNavConfig';
 import { cn } from '@/utils/cn';
 import {
@@ -34,6 +35,9 @@ type Props = {
 
 /** Same Ionicons (io5) as mobile `app/(tabs)/_layout.tsx`. */
 export function TabIcon({ name, className, size = 24 }: Props) {
+  if (name === 'matchmaker') {
+    return <MatchMakerTabIcon size={size} className={className} />;
+  }
   const Icon = ICONS[name];
   return <Icon size={size} className={cn('shrink-0', className)} aria-hidden />;
 }

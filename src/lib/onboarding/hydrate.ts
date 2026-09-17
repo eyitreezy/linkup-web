@@ -35,6 +35,10 @@ export function draftFromProfile(p: DbProfile | null, videos: DbProfileVideo[] =
   }
   d.profilePublic = p.is_profile_public;
   if (p.gender) d.selfGender = p.gender;
+  const commStyle = (p as { communication_style?: string | null }).communication_style;
+  if (commStyle === 'daily' || commStyle === 'few_times_week' || commStyle === 'flexible') {
+    d.communicationStyle = commStyle;
+  }
 
   const pref = p.preferences ?? {};
   if (pref.adult_confirmed === true) d.adultConfirmed = true;

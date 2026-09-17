@@ -22,6 +22,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import {
   IoAirplaneOutline,
+  IoBookmarkOutline,
   IoCreateOutline,
   IoGitMergeOutline,
   IoHelpCircleOutline,
@@ -184,6 +185,7 @@ export function ProfileScreen() {
             subtitle={trialNavHint}
           />
           <ProfileSettingsRow href="/profile/edit" icon={IoCreateOutline} label="Edit profile" />
+          <ProfileSettingsRow href="/plans" icon={IoBookmarkOutline} label="Saved plans" />
           <ProfileSettingsRow
             href="/trust"
             icon={IoShieldCheckmarkOutline}

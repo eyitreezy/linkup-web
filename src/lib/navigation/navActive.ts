@@ -23,6 +23,13 @@ export function isStandaloneAppRoute(pathname: string): boolean {
     '/dispute',
     '/disputes',
     '/chat/',
+    '/matchmaker/declare',
+    '/matchmaker/values',
+    '/matchmaker/reflect',
+    '/matchmaker/heal',
+    '/matchmaker/reentry',
+    '/matchmaker/suspended',
+    '/matchmaker/connection/',
   ];
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }

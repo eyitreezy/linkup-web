@@ -35,6 +35,7 @@ export type OnboardingDraft = {
   locationLatitude: number | null;
   locationLongitude: number | null;
   profilePublic: boolean;
+  communicationStyle: string | null;
 };
 
 export function defaultOnboardingDraft(): OnboardingDraft {
@@ -61,6 +62,7 @@ export function defaultOnboardingDraft(): OnboardingDraft {
     locationLatitude: null,
     locationLongitude: null,
     profilePublic: true,
+    communicationStyle: null,
   };
 }
 
