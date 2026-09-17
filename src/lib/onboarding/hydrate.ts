@@ -1,6 +1,7 @@
 import { mediaDraftFromProfile } from '@/lib/profile/media/draft';
 import { dedupePromptAnswers } from '@/lib/onboarding/promptAnswers';
 import type { DbProfileVideo } from '@/lib/profile/media/types';
+import { normalizeProfileGender } from '@/lib/profile/gender';
 import type { DbProfile } from '@/types/database';
 import { defaultOnboardingDraft, type OnboardingDraft } from '@/types/onboarding';
 
@@ -34,7 +35,7 @@ export function draftFromProfile(p: DbProfile | null, videos: DbProfileVideo[] =
     d.locationLongitude = p.longitude;
   }
   d.profilePublic = p.is_profile_public;
-  if (p.gender) d.selfGender = p.gender;
+  if (p.gender) d.selfGender = normalizeProfileGender(p.gender);
   const commStyle = (p as { communication_style?: string | null }).communication_style;
   if (commStyle === 'daily' || commStyle === 'few_times_week' || commStyle === 'flexible') {
     d.communicationStyle = commStyle;

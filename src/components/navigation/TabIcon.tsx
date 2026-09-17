@@ -31,12 +31,14 @@ type Props = {
   name: TabIconName;
   className?: string;
   size?: number;
+  active?: boolean;
 };
 
 /** Same Ionicons (io5) as mobile `app/(tabs)/_layout.tsx`. */
-export function TabIcon({ name, className, size = 24 }: Props) {
+export function TabIcon({ name, className, size = 24, active = false }: Props) {
   if (name === 'matchmaker') {
-    return <MatchMakerTabIcon size={size} className={className} />;
+    const color = active ? '#9B1B4B' : '#6B7280';
+    return <MatchMakerTabIcon size={size} color={color} active={active} className={className} />;
   }
   const Icon = ICONS[name];
   return <Icon size={size} className={cn('shrink-0', className)} aria-hidden />;

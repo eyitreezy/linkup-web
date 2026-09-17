@@ -2,9 +2,11 @@ export type MatchMakerGate =
   | 'subscription'
   | 'kyc'
   | 'cooldown'
+  | 'suspended'
   | 'intent'
   | 'values'
   | 'connection'
+  | 'open'
   | 'pool';
 
 export type MatchMakerGateState = {
@@ -12,16 +14,12 @@ export type MatchMakerGateState = {
   connection_id?: string;
   connection_status?: string;
   cooldown_until?: string;
+  suspension_until?: string;
 };
 
+/** Redirect only for onboarding/connection flows — not for gate modals. */
 export function gateRedirectPath(state: MatchMakerGateState): string | null {
   switch (state.gate) {
-    case 'subscription':
-      return '/subscription';
-    case 'kyc':
-      return '/kyc';
-    case 'cooldown':
-      return '/matchmaker/suspended';
     case 'intent':
       return '/matchmaker/declare';
     case 'values':

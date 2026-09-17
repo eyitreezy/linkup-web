@@ -58,22 +58,38 @@ function BottomNavTabLink({
         <TabIcon
           name={item.icon}
           size={18}
-          className={cn('min-[360px]:hidden', active ? 'text-primary' : 'text-[#6B7280]')}
+          active={item.icon === 'matchmaker' ? active : undefined}
+          className={cn(
+            'min-[360px]:hidden',
+            item.icon === 'matchmaker' ? undefined : active ? 'text-primary' : 'text-[#6B7280]'
+          )}
         />
         <TabIcon
           name={item.icon}
           size={20}
-          className={cn('hidden min-[360px]:block min-[400px]:hidden', active ? 'text-primary' : 'text-[#6B7280]')}
+          active={item.icon === 'matchmaker' ? active : undefined}
+          className={cn(
+            'hidden min-[360px]:block min-[400px]:hidden',
+            item.icon === 'matchmaker' ? undefined : active ? 'text-primary' : 'text-[#6B7280]'
+          )}
         />
         <TabIcon
           name={item.icon}
           size={22}
-          className={cn('hidden min-[400px]:block min-[480px]:hidden', active ? 'text-primary' : 'text-[#6B7280]')}
+          active={item.icon === 'matchmaker' ? active : undefined}
+          className={cn(
+            'hidden min-[400px]:block min-[480px]:hidden',
+            item.icon === 'matchmaker' ? undefined : active ? 'text-primary' : 'text-[#6B7280]'
+          )}
         />
         <TabIcon
           name={item.icon}
           size={24}
-          className={cn('hidden min-[480px]:block', active ? 'text-primary' : 'text-[#6B7280]')}
+          active={item.icon === 'matchmaker' ? active : undefined}
+          className={cn(
+            'hidden min-[480px]:block',
+            item.icon === 'matchmaker' ? undefined : active ? 'text-primary' : 'text-[#6B7280]'
+          )}
         />
       </NavItemUnreadIndicator>
       <span className="w-full max-w-[3.25rem] truncate text-center text-[8px] font-semibold leading-tight tracking-tight min-[360px]:max-w-[4rem] min-[360px]:text-[9px] min-[400px]:max-w-[4.75rem] min-[400px]:text-[10px] min-[480px]:max-w-none">

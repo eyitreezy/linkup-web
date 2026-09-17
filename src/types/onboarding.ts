@@ -1,6 +1,7 @@
 import type { ProfileMediaDraft } from '@/lib/profile/media/types';
 import { defaultProfileMediaDraft } from '@/lib/profile/media/draft';
 import { exportPromptAnswersForDb } from '@/lib/onboarding/promptAnswers';
+import { normalizeProfileGender } from '@/lib/profile/gender';
 import type { ProfilePreferences } from '@/types/database';
 
 export type MeetingIntent = 'friendship' | 'dating' | 'activity' | 'networking';
@@ -74,6 +75,6 @@ export function preferencesFromDraft(draft: OnboardingDraft): ProfilePreferences
     meeting_intent: draft.meetingIntent ?? undefined,
     prompt_answers: exportPromptAnswersForDb(draft.promptAnswers),
     show_me: draft.showMe,
-    self_gender: draft.selfGender ?? undefined,
+    self_gender: normalizeProfileGender(draft.selfGender) ?? undefined,
   };
 }

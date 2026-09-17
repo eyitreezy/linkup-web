@@ -7,6 +7,7 @@ import {
   profileMediaMeetsMinimums,
   profileMediaValidationMessage,
 } from '@/lib/profile/media/validation';
+import { normalizeProfileGender } from '@/lib/profile/gender';
 import { hasValidProfileLocation, profileLocationFromDraft } from '@/lib/profile/profileLocation';
 import { createClient } from '@/lib/supabase/client';
 import type { ProfilePreferences } from '@/types/database';
@@ -79,7 +80,7 @@ export async function saveEditProfile(args: {
       display_name: draft.displayName.trim(),
       bio: draft.bio.trim() || null,
       birth_date: birthIso(draft.birthDate),
-      gender: draft.selfGender,
+      gender: normalizeProfileGender(draft.selfGender),
       photo_urls: mediaPatch.photo_urls,
       primary_photo_url: mediaPatch.primary_photo_url,
       avatar_url: mediaPatch.avatar_url,

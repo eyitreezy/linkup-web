@@ -57,7 +57,14 @@ export function Sidebar() {
                 <TabIcon
                   name={item.icon}
                   size={20}
-                  className={active ? 'text-white' : 'text-muted'}
+                  active={item.icon === 'matchmaker' ? active : undefined}
+                  className={
+                    item.icon === 'matchmaker'
+                      ? undefined
+                      : active
+                        ? 'text-white'
+                        : 'text-muted'
+                  }
                 />
               </NavItemUnreadIndicator>
               {item.label}

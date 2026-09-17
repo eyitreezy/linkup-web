@@ -1,5 +1,5 @@
 # LinkUp MatchMaker — Complete User Interaction Specification
-## Accepted Standard for Feature Integration · v1.1
+## Accepted Standard for Feature Integration · v1.0
 
 ---
 
@@ -7,9 +7,10 @@
 
 | Token | Value | Usage |
 |---|---|---|
-| Primary (web) | `#6C63FF` | CTAs, active states, progress, headers — from `--primary` in `globals.css` |
-| Primary (mobile) | `#5E52FF` | CTAs, active states — from `constants/theme.ts` |
-| MatchMaker Accent | `#9B1B4B` | Hearts, connection indicators, emotional moments — **only new token** |
+| Primary (web) | `#6C63FF` | Web CTAs, active states — matches `--primary` in globals.css |
+| Primary (mobile) | `#5E52FF` | Mobile CTAs — matches `colors.primary` in constants/theme.ts |
+| MatchMaker Accent | `#9B1B4B` | Same on both platforms — the only new token introduced |
+| MatchMaker Accent | `#9B1B4B` | Hearts, connection indicators, emotional moments |
 | Background (warm) | `#FDF8F4` | All MatchMaker screen backgrounds |
 | Surface | `#FFFFFF` | Cards, modals, input fields |
 | Surface warm | `#FBF5F0` | Secondary card surfaces, note boxes |
@@ -25,25 +26,10 @@
 - Card swipe: physics-based follow with resistance at edges
 - Micro-interactions: `200ms` ease-in-out for state changes (button press, icon tap)
 
-**Tab icon:** Heart symbol inside a ring glyph. Label: **MatchMaker**. MatchMaker accent `#9B1B4B` when active, muted when inactive.
+**Tab icon:** Flat SVG — heart shape with an elliptical orbital ring crossing in front and behind it. Same stroke weight as existing Ionicons tab icons (1.5pt inactive, 2pt active). No fill on heart in inactive state; `#9B1B4B` fill at 15% opacity on heart in active state. Orbital ring back arc at 35% opacity. Both arcs and heart stroke use `currentColor`.
 
-**Theme scoping:** MatchMaker uses each platform's native primary colour. Do not override global primary tokens. Accent `#9B1B4B` is scoped via `constants/matchmakerTheme.ts` on mobile and inline styles on web only.
+Created as `MatchMakerTabIcon` component — not an Ionicons icon. Label: **MatchMaker**. Active colour: `#9B1B4B`. Inactive: standard tab inactive muted colour.
 
----
-
-## CANONICAL REFERENCE — TWO CLOCKS
-
-MatchMaker uses two independent time anchors. This block is the single source of truth for both documents.
-
-| Clock | Anchor | What it drives |
-|---|---|---|
-| **Connection journey clock** | `matchmaker_connections.connected_at` | Day 7 Shared Activity, Day 10 check-in, Day 10+ "I feel ready to meet", connection screen "Day N" display |
-| **Plan window clock** | `matchmaker_connections.first_message_at + 21 days` | Plan unlock (`plan_unlock_at`), [Create Plan] activation, plan-window nudges |
-
-Rules:
-- A user who never sends a message unlocks Day 7/10 milestones but never unlocks the plan window.
-- `first_plan_created_at`, once set, bypasses the 21-day lock for all subsequent plans within the same connection.
-- Connection screen day counter always uses `connected_at`.
 
 ---
 
@@ -65,9 +51,9 @@ The existing LinkUp 5-step onboarding collects the following fields that MatchMa
 | `meeting_intent` | Step 2 | Pre-existing intent field — MatchMaker adds its own separate intent declaration (Gate 3). The two are independent. |
 | `prompt_answers` | Step 2 | Shown on full MatchMaker profile view — same as Discover profile |
 | `location` | Step 3 | Pool proximity filtering and dealbreaker radius check. Shown as general area (not exact) on pool cards |
-| `verification_status` | Post-onboarding | Gate 2 KYC check — must be `'verified'` (equivalent to KYC Tier 1 completion) |
-| `host_tier` | Account | Gate 1 subscription check — must be `'GOLD'` or `'PLATINUM'` via `UpgradeGateContext` |
-| `gender` | Step 1 or profile | Pool gender filter — heterosexual/straight only for current Nigeria scope. Women see men, men see women. Null, unset, or values other than `'male'`/`'female'` → excluded from pool (non-binary out of scope for Nigeria MVP). Incomplete profiles excluded via `matchmaker_get_pool` RPC pre-filter |
+| `verification_status` | Post-onboarding | Gate 2 KYC check — must be `'verified'` |
+| `host_tier` | Account | Gate 1 subscription check — `profiles.host_tier IN ('GOLD', 'PLATINUM')`. Use existing `UpgradeGateContext`. `subscription_tier` is not the canonical field. |
+| `gender` | Step 1 or profile | Pool gender filter — heterosexual/straight only for current Nigeria scope. Women see men, men see women |
 
 **None of the above require changes.** They are read by MatchMaker as-is from the existing profile.
 
@@ -165,29 +151,43 @@ User taps MatchMaker tab for the first time.
 Screen slides in from right.
 
 Gate check runs in sequence (server-side, single round trip):
-1. `profiles.host_tier IN ('GOLD', 'PLATINUM')`
-2. `profiles.verification_status = 'verified'`
+1. Subscription tier (Gold+)
+2. KYC status (Tier 1 verified)
 3. Intent declaration (completed)
 4. Values setup (completed)
 
 The FIRST failing gate is shown. User resolves it and returns.
 ```
 
-**Subscription gate screen:**
-- Background: MatchMaker warm `#FDF8F4`
-- Icon: ring-heart glyph in `#9B1B4B`, 48pt, centred
-- Heading: "MatchMaker is a Gold feature"
-- Body: "Upgrade your LinkUp subscription to access intentional matchmaking designed for people serious about a long-term relationship."
-- CTA primary: "Upgrade to Gold" → navigates to subscription screen
-- CTA secondary: "Learn more about Gold" → subscription benefits sheet
-- Back chevron top-left — returns to previous tab
+**Gate pattern — ALL gates (subscription, KYC, cooldown, suspension):**
 
-**KYC gate screen:**
-- Icon: shield with checkmark in `#6C63FF`
-- Heading: "Verify your identity first"
-- Body: "MatchMaker is built on trust. We verify every member before they enter the pool — to protect you and everyone else."
-- CTA primary: "Complete verification" → /kyc
-- CTA secondary: "Why is this required?" → inline expandable explanation
+The MatchMaker tab is always accessible in the navigation. When a gate is not met:
+1. User lands on the MatchMaker screen
+2. Real pool profiles (up to 6) are fetched and rendered beneath a blur
+3. A non-closeable modal sits above the blur with dynamic content
+4. Blurred content has pointer-events disabled — cannot be interacted with
+5. Intent Declaration and Values Setup use full-screen overlays (no blur)
+
+**Modal content by gate state:**
+
+| Gate | Icon | Heading | Body | CTA |
+|---|---|---|---|---|
+| Subscription | Ring-heart `#9B1B4B` | "MatchMaker is a Gold feature and above" | "Upgrade to Gold or a subscription plan higher than Gold to access intentional matchmaking designed for people serious about finding a long-term relationship." | "Upgrade to Gold" → /subscription |
+| KYC | Shield checkmark `#6C63FF` | "Verify your identity first" | "MatchMaker requires identity verification before you enter the pool — to protect you and every other member." | "Complete verification" → /kyc |
+| Cooldown | Clock `#7B6E65` | "MatchMaker is paused for [N] days" | "MatchMaker is built for intentional connections. Your access resumes on [date]." | "Got it" → modal collapses to persistent banner |
+| Suspension | Warning `#9B1B4B` | "MatchMaker access suspended" | "Your MatchMaker access is suspended for [N] days due to a contact-sharing policy violation. All other LinkUp features remain accessible." | "Got it" → modal collapses to persistent banner |
+
+**After "Got it" (cooldown/suspension):**
+Modal collapses. A persistent amber banner appears at the top of the still-blurred screen:
+`[Clock icon]  "MatchMaker resumes in [N] days"  [Days pill]`
+Pool stays blurred and non-interactive.
+
+**Modal rules:**
+- No X button
+- No dismiss gesture
+- No tap-outside-to-close
+- `onRequestClose` is intentionally empty (mobile)
+- Subscription and KYC modals: not dismissible under any circumstance — user must take the CTA action
 
 ---
 
@@ -410,7 +410,11 @@ Card content:
   ["View full profile" — text link — right aligned — #6C63FF]
 ```
 
-**Two clocks:** See **CANONICAL REFERENCE — TWO CLOCKS** at the top of this document.
+**TWO SEPARATE CLOCKS — explicitly stated:**
+- Day 7, Day 10, and the connection screen "Day N" display count from `connected_at`
+- Plan window unlock counts from `first_message_at + 21 days`
+- A user who never messages will unlock Day 7/10 milestones but can never unlock the plan window
+- Connection screen day counter uses `connected_at` as anchor
 
 **Swipe interactions (mobile):**
 - Swipe right: card rotates clockwise 8deg, green tint overlay fades in with heart icon, releases with spring animation off screen right. Express Interest registered.
@@ -452,10 +456,8 @@ before expiry):
 ```
 Same animation — no difference to the user.
 The interest is stored server-side.
-No user-facing indicator anywhere for sender or receiver
-while the target remains in an active connection.
-When target's connection ends (after exclusion check),
-the interest surfaces in their queue automatically.
+When target's connection ends, the interest surfaces
+in their queue automatically.
 ```
 
 ---
@@ -516,6 +518,14 @@ When a user's connection ends and queued interests are processed:
 
 This is enforced server-side in `matchmaker_end_connection()` RPC only — not client-side.
 
+### 2.3c Interest Queue — No User-Facing Indicator
+
+When a user has an active connection and someone expresses interest in them:
+- Completely silent. No badge, no notification, no indicator anywhere in the app.
+- The interested party sees no confirmation their interest was queued — card disappears as normal after swipe.
+- When the active connection ends: exclusion check runs first, then queued interests surface in the receiver's interests queue automatically.
+- Neither party is notified about the queueing or the surfacing — the receiver simply finds new items in their interests queue.
+
 ### 2.4 Pending Interests Queue (Received)
 
 User taps the interests icon/tab within MatchMaker (top-right of pool screen, badge count shown).
@@ -563,17 +573,17 @@ Shown as a full-screen overlay when user opens MatchMaker tab after 60 days of p
 
 [Spacing: 32pt]
 
-[CTA 1 — "Yes, I am still looking"]
-[CTA 2 — text link — "Ask me later"]
-[CTA 3 — text link, below — "Remove me from the pool"]
+[CTA — "Yes, I am still looking"]
+[Text link — "Remove me from the pool for now"]
 ```
 
-- CTA 1 "Yes, I am still looking" → overlay dismisses, pool refreshes, clock resets
-- CTA 2 "Ask me later" → snoozes 7 days, prompt reappears on next MatchMaker open
-- CTA 3 "Remove me from the pool" → removed silently from pool, no notification to others
-- Dismiss / back button → same as "Ask me later" — NOT as removal
-- Complete silence for 7 days (no app open or no action) → removed from pool + notification sent:
-  "You have been removed from the MatchMaker pool. You can return anytime."
+- "Yes, I am still looking" → overlay dismisses, pool refreshes, clock resets
+CANONICAL THREE OPTIONS:
+[Primary CTA]: "Yes, I am still looking" → pool stays, clock resets
+[Text link]:   "Ask me later" → snoozes 7 days, reappears on next open
+[Small link]:  "Remove me from the pool" → silent removal, no notification to others
+Dismiss/back button = "Ask me later" (NOT removal)
+7 days complete silence = removal + notification: "You have been removed from the MatchMaker pool. You can return anytime." 
 
 ---
 
@@ -815,7 +825,7 @@ Nudge card dismisses on tap anywhere outside it, or after 8 seconds.
 - The signal lives only as a push notification moment for the receiver
 - Life goes on — conversation continues normally in chat.
 
-**Receiving party experience:**
+**Receiving party experience (CANONICAL):**
 - Push notification (if app closed):
   ```
   [Heart-ring icon]
@@ -823,10 +833,11 @@ Nudge card dismisses on tap anywhere outside it, or after 8 seconds.
   "No pressure — your plan window opens in [X] days.
    Keep the conversation going."
   ```
-- If app is open: warm toast notification at bottom of screen (same text, 4 seconds).
-- Tapping the notification → opens the chat thread with that person.
-- No acknowledgement button. No required action. It is awareness only.
-- The signal does not appear anywhere on the connection screen after delivery. It lives only as the notification moment.
+- If app is open: warm toast notification at bottom of screen (same text, 4 seconds)
+- Tapping notification → opens chat thread with that person
+- No acknowledgement button anywhere. No required action. Awareness only.
+- Nothing appears on the receiver's connection screen
+- The entire signal lives only as this notification moment
 
 ---
 
@@ -846,27 +857,31 @@ Connection screen updates:
 - Status bar updates: "Plan window is open"
 
 **Create Plan interaction:**
-```
-Tap [Create Plan] on connection screen.
-→ MatchMaker plan proposal screen slides in (proposing party):
 
-[Warm full-screen]
+Initiator (either party may initiate — no restriction):
+```
+Tap [Create Plan] on connection screen
+→ MatchMaker plan proposal screen slides in:
+
+[Warm full-screen — #FDF8F4]
 [Ring-heart icon — 48pt — centred]
 "Propose a meetup"
-"Set the details and your preferred cost split.
- [Name] will review and agree before anything is confirmed."
+"Set the details. [Name] reviews and agrees before
+ anything is confirmed or charged."
 
-→ Proposer goes through standard LinkUp plan creation UI
-  and selects their preferred escrow pattern (A, B, or C)
+→ Initiator goes through standard LinkUp plan creation UI
+→ Initiator selects preferred escrow pattern (A, B, or C)
 → On submit: other party receives push notification:
   "[Name] proposed a meetup plan. Review and agree."
-→ Receiver sees plan details + escrow pattern
-  They tap [Agree] or propose an alternative pattern
+→ Receiver: review screen shows plan details + escrow pattern
+  Options: [Agree] or [Propose different split]
 → Standard LinkUp offer-and-agreement flow takes over
-  from this point — no new flow required
-→ plans.matchmaker_connection_id links the plan to
-  the connection row for history and unlock logic
+→ Escrow created ONLY after both parties agree
+→ plans.matchmaker_connection_id set on plan creation
+→ matchmaker_connections.first_plan_created_at set on first plan
 ```
+Note: "No single proposing party" (Locked Decision #3) means EITHER party
+may initiate — not that no one initiates. Both must consent before escrow locks.
 
 ---
 
@@ -911,10 +926,6 @@ After this prompt (or skip), the main choice appears:
   "Keep building what you have started.
    You can create more plans without the 21-day wait."
   [Select]
-  Note: matchmaker_connections row stays 'active'.
-  Subsequent plans bypass 21-day lock when
-  first_plan_created_at IS NOT NULL.
-  Plan completion does NOT change connection status.
 
   [Card 2 — muted border]
   "End this connection"
@@ -922,13 +933,12 @@ After this prompt (or skip), the main choice appears:
   [Select]
 ```
 
-Each card selection requires a confirmation tap — no accidental terminations.
-
-**Post-meetup persistence rules:**
-- Connection does NOT auto-end if neither party chooses Continue or End within any window
-- Reflection/feeling prompt and Continue/End choice are surfaced once but dismissible ("Skip for now")
-- An active connection can persist indefinitely with multiple plans; no maximum duration
-- `first_plan_created_at`, once set, bypasses the 21-day lock for all subsequent plans
+Behaviour:
+- Prompt is shown once after plan completion. It is dismissible.
+- If dismissed: connection remains active. Prompt does not reappear.
+- No auto-end timeout. Connection persists until explicitly ended.
+- No maximum connection duration. Multiple plans are supported indefinitely.
+- Each card selection requires a confirmation tap — no accidental terminations.
 
 ---
 
@@ -1009,11 +1019,11 @@ Replaces the pool and connection screen. Warm, calm visual state.
 
 [Muted note at bottom]
   "Your MatchMaker discovery pool resumes in
-   [X] days. Discover and all other LinkUp features
-   remain fully accessible."
+   [X] days. All other LinkUp features are
+   available as normal."
 ```
 
-Only the MatchMaker discovery pool is hidden. The Discover tab is fully accessible. The MatchMaker tab shows only this screen for 3 days.
+The rest of the app is fully accessible. The MatchMaker tab shows only this screen for 3 days.
 
 ---
 
@@ -1123,41 +1133,7 @@ on the ring-heart icon to confirm the tap was received.
 
 ---
 
-### 6.2 Contact-Sharing Suspension Screen
-
-Same visual layout as the rapid-cycler cooldown screen (6.3), but with a **7-day** countdown and heading **"MatchMaker policy violation"**.
-
-```
-[Warm background — muted tone]
-
-[Clock icon — 48pt — #7B6E65 — centred]
-
-[Spacing: 24pt]
-
-"MatchMaker policy violation"
-[22pt — bold]
-
-[Spacing: 12pt]
-
-"Sharing contact information outside the app violates
- MatchMaker policy. Your MatchMaker access is suspended
- for 7 days. All other LinkUp features remain accessible."
-
-[Spacing: 32pt]
-
-[Progress bar — 7-day countdown]
-"[N] days remaining"
-
-[Spacing: auto]
-
-[CTA — disabled — greyed — "MatchMaker resumes in [N] days"]
-```
-
-After 7 days: MatchMaker access restored automatically.
-
----
-
-### 6.3 Rapid Cycler — Cooldown Screen
+### 6.2 Rapid Cycler — Cooldown Screen
 
 ```
 [Warm background — muted tone — slightly cooler than usual]
@@ -1194,32 +1170,7 @@ After 30 days: CTA activates → tapping → re-entry screen (Part 5.3).
 
 ---
 
-### 6.4 Misalignment Report Flow
-
-Entry: Connection screen settings (⋯ menu) → **Report misalignment**
-
-```
-[Single-page form — warm background]
-[Reason selection + optional details text area]
-[Submit — primary CTA]
-
-On submit:
-  → Stored silently server-side
-  → Reporter sees: "Your report has been received"
-  → No confirmation or notification to the other party
-```
-
-Separate from general report/block. Pattern of 2+ reports from different connections within 90 days triggers admin review (see userflow §6.4).
-
----
-
-### 6.5 Subscription Lapse
-
-**Pool exit (immediate and silent):**
-- User removed from MatchMaker pool with no dedicated screen
-- If user taps MatchMaker tab → subscription gate screen shown
-
-**Active connection paused state:**
+### 6.3 Subscription Lapse — Connection Paused State
 
 ```
 [Warning banner — amber tone — top of connection screen]
@@ -1236,12 +1187,6 @@ If 14 days pass without resolution:
 - Both parties receive notification: "This connection has ended."
 - No reason given to either party
 - Standard end connection / reflection period begins
-
----
-
-### 6.6 Interest Queue During Active Connection
-
-Completely silent — no badge, banner, toast, or any user-facing indicator for sender or receiver while the target has an active connection. Queued interest surfaces automatically when the connection ends (after exclusion check in `matchmaker_end_connection()` RPC).
 
 ---
 
@@ -1308,7 +1253,7 @@ No details beyond name, duration, and outcome. Reason for ending is never shown 
 | Pool — card stack | All gates passed | Swipe / tap actions |
 | Profile view | Card tap | Back or express interest |
 | Interests queue | Badge tap | Back |
-| Re-affirmation | 60-day idle | Still looking / ask later / remove |
+| Re-affirmation | 60-day idle | Confirm or remove |
 | Connection screen | Mutual interest | End or back |
 | Chat thread | Open chat button | Back (Messages tab) |
 | Shared Activity | Day 7+ button | Submit or close |
@@ -1321,9 +1266,6 @@ No details beyond name, duration, and outcome. Reason for ending is never shown 
 | Healing screen | Day 4 auto | Complete or skip |
 | Re-entry screen | Day 6+ | Tap to enter |
 | Cooldown screen | Rapid cycler trigger | Auto (30 days) |
-| Policy suspension | Contact-sharing strike | Auto (7 days) |
-| Misalignment report | Connection ⋯ menu | Submit |
-| Subscription gate | Tab tap (lapsed tier) | Upgrade or back |
 | Settings | Gear icon | Back |
 | Connection history | Settings | Back |
 
@@ -1383,6 +1325,20 @@ A review card appears at the very top of Step 1 (before the faith question):
 
 If `communication_style` is null (was skipped in onboarding):
 The review card is absent. A communication style selector appears inline in Step 1 of Gate 4 as a regular input.
+
+---
+
+## DATABASE NOTE — EXISTING TABLE MODIFICATION
+
+```sql
+-- Run alongside MatchMaker schema migration:
+ALTER TABLE plans
+  ADD COLUMN IF NOT EXISTS matchmaker_connection_id UUID NULL
+  REFERENCES matchmaker_connections(id);
+-- Links each MatchMaker plan to its connection row
+-- Required for: plan history, first_plan_created_at logic,
+--               subsequent plan 21-day lock bypass
+```
 
 ---
 

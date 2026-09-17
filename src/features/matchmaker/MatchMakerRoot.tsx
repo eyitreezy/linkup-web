@@ -1,72 +1,110 @@
 'use client';
 
-import { MatchMakerPool } from '@/features/matchmaker/MatchMakerPool';
+import { TabPageHeader } from '@/components/layout/TabPageHeader';
+import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
+import {
+  MatchMakerGateModal,
+  type MatchMakerGateModalState,
+} from '@/features/matchmaker/MatchMakerGateModal';
 import { MatchMakerLayout } from '@/features/matchmaker/MatchMakerLayout';
-import { gateRedirectPath } from '@/lib/matchmaker/gates';
+import { MatchMakerPool } from '@/features/matchmaker/MatchMakerPool';
+import { MatchMakerPoolPreview } from '@/features/matchmaker/MatchMakerPoolPreview';
+import type { MatchMakerGate } from '@/lib/matchmaker/gates';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
-import { fetchMatchMakerGateState } from '@/services/matchmaker.service';
+import {
+  fetchMatchMakerGateState,
+  fetchMatchMakerPoolPreview,
+} from '@/services/matchmaker.service';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
-import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
+import { useEffect, useState } from 'react';
+import { IoTimeOutline } from 'react-icons/io5';
 
-function GateScreen({
-  title,
-  body,
-  ctaHref,
-  ctaLabel,
-}: {
-  title: string;
-  body: string;
-  ctaHref: string;
-  ctaLabel: string;
-}) {
+function daysUntil(iso?: string): number {
+  if (!iso) return 0;
+  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000));
+}
+
+function MatchMakerSkeleton() {
   return (
     <MatchMakerLayout>
-      <div className="mx-auto flex max-w-md flex-col items-center px-4 py-16 text-center">
-        <MatchMakerTabIcon size={56} className="text-[#9B1B4B]" />
-        <h1 className="mt-6 font-display text-2xl font-extrabold">{title}</h1>
-        <p className="mt-3 text-[15px] font-semibold leading-relaxed" style={{ color: MATCHMAKER_THEME.textMuted }}>
-          {body}
-        </p>
-        <Link
-          href={ctaHref}
-          className="mt-8 inline-flex min-h-[48px] w-full items-center justify-center rounded-full font-extrabold text-white shadow-md"
-          style={{ background: MATCHMAKER_THEME.ctaGradient }}
-        >
-          {ctaLabel}
-        </Link>
+      <div className="mx-auto max-w-lg px-4 pb-10 pt-2">
+        <TabPageHeader
+          kicker="MatchMaker"
+          title="Your pool"
+          description="One connection at a time. Take your time."
+          icon={<MatchMakerTabIcon size={22} color="#9B1B4B" active />}
+        />
+        <div className="mt-6 h-80 animate-pulse rounded-3xl bg-[#FBF5F0]" />
       </div>
     </MatchMakerLayout>
   );
 }
 
+const GATED_MODAL: MatchMakerGateModalState[] = ['subscription', 'kyc', 'cooldown', 'suspended'];
+
 export function MatchMakerRoot() {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
-
-  const gateQuery = useQuery({
-    queryKey: ['matchmaker-gate', user?.id],
-    queryFn: async () => {
-      const client = createClient();
-      const { data, error } = await fetchMatchMakerGateState(client);
-      if (error) throw new Error(error);
-      return data;
-    },
-    enabled: !!user?.id,
-  });
+  const [gate, setGate] = useState<MatchMakerGate | 'loading'>('loading');
+  const [cooldownUntil, setCooldownUntil] = useState<string | undefined>();
+  const [suspensionUntil, setSuspensionUntil] = useState<string | undefined>();
+  const [connectionId, setConnectionId] = useState<string | undefined>();
+  const [modalDismissed, setModalDismissed] = useState(false);
+  const [poolPreview, setPoolPreview] = useState<Awaited<ReturnType<typeof fetchMatchMakerPoolPreview>>['data']>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const state = gateQuery.data;
-    if (!state) return;
-    const redirect = gateRedirectPath(state);
-    if (redirect && state.gate !== 'pool') {
-      router.replace(redirect);
+    if (!user?.id) return;
+
+    let cancelled = false;
+
+    async function checkGate() {
+      setGate('loading');
+      setModalDismissed(false);
+      setError(null);
+
+      const client = createClient();
+      const { data, error: gateError } = await fetchMatchMakerGateState(client);
+      if (cancelled) return;
+
+      if (gateError || !data) {
+        setError(gateError ?? 'Could not load MatchMaker');
+        return;
+      }
+
+      const resolvedGate = data.gate === 'pool' ? 'open' : data.gate;
+      setGate(resolvedGate);
+      setCooldownUntil(data.cooldown_until);
+      setSuspensionUntil(data.suspension_until);
+      setConnectionId(data.connection_id);
+
+      if (GATED_MODAL.includes(resolvedGate as MatchMakerGateModalState)) {
+        const preview = await fetchMatchMakerPoolPreview(client, 6);
+        if (!cancelled) setPoolPreview(preview.data);
+      }
     }
-  }, [gateQuery.data, router]);
+
+    void checkGate();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (gate !== 'connection' || !connectionId) return;
+    router.replace(`/matchmaker/connection/${connectionId}`);
+  }, [gate, connectionId, router]);
+
+  useEffect(() => {
+    if (gate === 'intent') {
+      router.replace('/matchmaker/declare');
+    } else if (gate === 'values') {
+      router.replace('/matchmaker/values');
+    }
+  }, [gate, router]);
 
   if (!user) {
     return (
@@ -81,63 +119,17 @@ export function MatchMakerRoot() {
     );
   }
 
-  if (gateQuery.isLoading) {
+  if (gate === 'loading') return <MatchMakerSkeleton />;
+
+  if (error) {
     return (
       <MatchMakerLayout>
-        <div className="mx-auto max-w-md animate-pulse space-y-4 p-6">
-          <div className="h-48 rounded-2xl bg-[#FBF5F0]" />
-          <div className="h-12 rounded-full bg-[#EDE0D4]/80" />
-        </div>
+        <p className="p-6 text-center text-[14px] font-semibold text-[#EF4444]">{error}</p>
       </MatchMakerLayout>
     );
   }
 
-  if (gateQuery.error) {
-    return (
-      <MatchMakerLayout>
-        <p className="p-6 text-center text-[14px] font-semibold text-[#EF4444]">
-          {gateQuery.error instanceof Error ? gateQuery.error.message : 'Could not load MatchMaker'}
-        </p>
-      </MatchMakerLayout>
-    );
-  }
-
-  const gate = gateQuery.data?.gate;
-
-  if (gate === 'subscription') {
-    return (
-      <GateScreen
-        title="MatchMaker is for Gold members"
-        body="Upgrade to Gold or Platinum to enter MatchMaker and connect with serious-minded members."
-        ctaHref="/subscription"
-        ctaLabel="Upgrade to Gold"
-      />
-    );
-  }
-
-  if (gate === 'kyc') {
-    return (
-      <GateScreen
-        title="Verification required"
-        body="MatchMaker requires identity verification to protect every member's safety and seriousness."
-        ctaHref="/kyc"
-        ctaLabel="Complete verification"
-      />
-    );
-  }
-
-  if (gate === 'cooldown') {
-    return (
-      <GateScreen
-        title="MatchMaker is paused"
-        body="Your MatchMaker access is paused. All other LinkUp features remain available."
-        ctaHref="/matchmaker/suspended"
-        ctaLabel="View details"
-      />
-    );
-  }
-
-  if (gate === 'intent' || gate === 'values' || gate === 'connection') {
+  if (gate === 'connection' || gate === 'intent' || gate === 'values') {
     return (
       <MatchMakerLayout>
         <div className="flex min-h-[40vh] items-center justify-center">
@@ -147,5 +139,46 @@ export function MatchMakerRoot() {
     );
   }
 
-  return <MatchMakerPool />;
+  const isGated = GATED_MODAL.includes(gate as MatchMakerGateModalState);
+  const gateModal = gate as MatchMakerGateModalState;
+
+  return (
+    <div className="relative min-h-screen" style={{ background: MATCHMAKER_THEME.background }}>
+      <div
+        className="min-h-screen"
+        style={
+          isGated
+            ? { filter: 'blur(12px)', pointerEvents: 'none', userSelect: 'none' }
+            : undefined
+        }
+      >
+        {isGated ? <MatchMakerPoolPreview profiles={poolPreview} /> : <MatchMakerPool />}
+      </div>
+
+      {isGated && modalDismissed ? (
+        <div className="fixed left-0 right-0 top-0 z-40 flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3">
+          <IoTimeOutline size={16} className="shrink-0 text-amber-600" />
+          <p className="flex-1 text-[13px] font-extrabold text-amber-900">
+            {gate === 'cooldown'
+              ? `MatchMaker resumes in ${daysUntil(cooldownUntil)} days`
+              : gate === 'suspended'
+                ? `MatchMaker suspended — ${daysUntil(suspensionUntil)} days remaining`
+                : gate === 'subscription'
+                  ? 'Upgrade to Gold to access MatchMaker'
+                  : 'Complete verification to access MatchMaker'}
+          </p>
+        </div>
+      ) : null}
+
+      {isGated && !modalDismissed ? (
+        <MatchMakerGateModal
+          gate={gateModal}
+          cooldownDaysRemaining={daysUntil(cooldownUntil)}
+          cooldownUntil={cooldownUntil}
+          suspensionDaysRemaining={daysUntil(suspensionUntil)}
+          onDismiss={() => setModalDismissed(true)}
+        />
+      ) : null}
+    </div>
+  );
 }

@@ -20,6 +20,15 @@ export async function fetchMatchMakerPool(
   return { data: (data ?? []) as PoolProfileRow[], error: null };
 }
 
+export async function fetchMatchMakerPoolPreview(
+  client: SupabaseClient,
+  limit = 6
+): Promise<{ data: PoolProfileRow[]; error: string | null }> {
+  const { data, error } = await client.rpc('matchmaker_get_pool_preview', { p_limit: limit });
+  if (error) return { data: [], error: error.message };
+  return { data: (data ?? []) as PoolProfileRow[], error: null };
+}
+
 export async function expressMatchMakerInterest(
   client: SupabaseClient,
   toUserId: string

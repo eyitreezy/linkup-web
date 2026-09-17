@@ -1,3 +1,4 @@
+import { normalizeProfileGender } from '@/lib/profile/gender';
 import { hasValidProfileLocation, profileLocationFromDraft } from '@/lib/profile/profileLocation';
 import { persistProfileMediaDraft } from '@/lib/profile/media/persist';
 import { hasProfileVideo, profileMediaMeetsMinimums } from '@/lib/profile/media/validation';
@@ -73,7 +74,7 @@ export async function autosaveOnboardingProgress(args: {
   patch.communication_style = draft.communicationStyle;
 
   if (draft.selfGender) {
-    patch.gender = draft.selfGender;
+    patch.gender = normalizeProfileGender(draft.selfGender);
   }
 
   if (hasValidProfileLocation(draft)) {
@@ -177,7 +178,7 @@ export async function saveOnboardingStep(args: {
     const stepBlocker = getOnboardingStepBlocker(draft, 1);
     if (stepBlocker) return { error: stepBlocker };
     patch.bio = draft.bio.trim() || null;
-    patch.gender = draft.selfGender;
+    patch.gender = normalizeProfileGender(draft.selfGender);
     patch.communication_style = draft.communicationStyle;
   }
 
@@ -259,7 +260,7 @@ export async function finalizeOnboarding(args: {
       display_name: draft.displayName.trim(),
       bio: draft.bio.trim() || null,
       birth_date: birthIso(draft.birthDate),
-      gender: draft.selfGender,
+      gender: normalizeProfileGender(draft.selfGender),
       photo_urls: mediaPatch.photo_urls,
       primary_photo_url: mediaPatch.primary_photo_url,
       avatar_url: mediaPatch.avatar_url,

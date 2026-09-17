@@ -1,5 +1,5 @@
 # LinkUp MatchMaker — Complete User Flow & Interaction Design
-## Annexure C Implementation Blueprint — v2.2 (Team Decisions Incorporated)
+## Annexure C Implementation Blueprint — v2.1 (Team Decisions Incorporated)
 
 ---
 
@@ -9,38 +9,27 @@
 |---|---|---|
 | 1 | Conversation milestone | Any connection not reaching the 21-day threshold. 3 such connections within 60 days triggers 30-day cooldown |
 | 2 | Compatibility display | Human-language similarity signals from algorithm and values inputs. Updated silently after healing period |
-| 3 | Plan creation consent | Pattern A/B/C selected by the proposer; receiver must explicitly agree before escrow is created. Either party may counter-propose a different pattern |
+| 3 | Plan creation consent | Pattern (A/B/C) selected during mutual consent flow — no single proposing party |
 | 4 | Age range | 18+ minimum. All existing LinkUp members are eligible |
 | 5 | Gender/orientation | Heterosexual/straight only for current Nigeria scope. Sexual orientation is a private dealbreaker filter. Expansion will accommodate broader orientations |
 | 6 | Profile photo | Same policy as Discover |
-| 7 | Subscription access | Gold and above only. Gate check: `profiles.host_tier IN ('GOLD', 'PLATINUM')` via existing `UpgradeGateContext` |
+| 7 | Subscription access | Gold and above only. Canonical check: `profiles.host_tier IN ('GOLD', 'PLATINUM')`. Use existing `UpgradeGateContext` pattern. |
 | 8 | Re-match policy | Never. Two users who previously connected cannot be matched again — permanent |
-| 9 | Connection status | `active` \| `ended` \| `paused` only. No `pending_mutual` |
-| 10 | "I feel ready to meet" | Interaction spec wins: sender button disappears on tap; receiver gets push only; no connection screen state change; DB row for rate-limiting only; chat is the implicit acknowledgement channel |
-| 11 | Reflection period scope | Only the MatchMaker pool is hidden. Discover tab remains fully accessible |
-| 12 | Primary navigation | **Discover → MatchMaker → Meetr → Messages → Account**. Saved removed from primary nav on both platforms; relocated to Account screen after Edit Profile |
 
 ---
 
-## CANONICAL REFERENCE — TWO CLOCKS
+## NAVIGATION DECISIONS (confirmed)
 
-MatchMaker uses two independent time anchors. This block is the single source of truth for both documents.
-
-| Clock | Anchor | What it drives |
-|---|---|---|
-| **Connection journey clock** | `matchmaker_connections.connected_at` | Day 7 Shared Activity, Day 10 check-in, Day 10+ "I feel ready to meet", connection screen "Day N" display |
-| **Plan window clock** | `matchmaker_connections.first_message_at + 21 days` | Plan unlock (`plan_unlock_at`), [Create Plan] activation, plan-window nudges |
-
-Rules:
-- A user who never sends a message unlocks Day 7/10 milestones but never unlocks the plan window.
-- `first_plan_created_at`, once set, bypasses the 21-day lock for all subsequent plans within the same connection.
-- Connection screen day counter always uses `connected_at`.
+- **Tab order (web + mobile):** Discover → MatchMaker → Meetr → Messages → Account
+- **Saved tab removed from primary navigation** on both platforms
+- **Saved relocated to Account screen** — after Edit Profile row, with `IoBookmark` icon, label "Saved plans"
+- This is confirmed for both web and mobile
 
 ---
 
 ## OVERVIEW
 
-MatchMaker is a standalone tab in the primary navigation: **Discover → MatchMaker → Meetr → Messages → Account**. Saved is no longer a primary tab; it lives on the Account screen (both platforms). MatchMaker is the most regulated meet type on the platform. It is available to **Gold subscription and above** only (`host_tier IN ('GOLD', 'PLATINUM')`). Every existing LinkUp member aged 18+ is eligible to subscribe and enter.
+MatchMaker is a standalone tab in the primary navigation alongside Discover, Meetr, Messages, and Saved. It is the most regulated meet type on the platform. It is available to **Gold subscription and above** only. Every existing LinkUp member aged 18+ is eligible to subscribe and enter.
 
 The central premise: one person, one connection, one genuine opportunity to build something meaningful.
 
@@ -77,8 +66,7 @@ User taps **MatchMaker** in the primary nav for the first time (or after being r
 ### Gate 1 — Subscription Check
 
 ```
-Is profiles.host_tier IN ('GOLD', 'PLATINUM')?
-(Checked via existing UpgradeGateContext / subscription system)
+Is user on Gold subscription or above?
 ├── NO → Subscription gate screen
 │         "MatchMaker is available to Gold members and above"
 │         Shows Gold/Platinum/other tier benefits
@@ -91,8 +79,7 @@ Is profiles.host_tier IN ('GOLD', 'PLATINUM')?
 ### Gate 2 — KYC Check
 
 ```
-Is profiles.verification_status = 'verified'?
-(Equivalent to KYC Tier 1 completion in current schema)
+Is user KYC Tier 1 verified?
 ├── NO → Verification gate screen
 │         "MatchMaker requires identity verification"
 │         "Your identity is verified before you enter the pool
@@ -152,8 +139,8 @@ Has user completed MatchMaker values setup?
 │
 │         Step 1: Faith & Religion
 │         "Does faith matter to you in a relationship?"
-│         [Yes — faith is important to me] → select faith
-│         [Open — faith is not a deciding factor]
+│         [Yes — I practice a faith] → select faith
+│         [Open — faith is not a deciding factor for me]
 │         [Prefer not to say]
 │         Optional. Private. Never shown publicly.
 │
@@ -238,12 +225,11 @@ Generated from overlap between both users' values inputs, interest tags, activit
 Signals updated silently after each Healing Period questionnaire.
 
 **Gender filter (current scope):**
-MatchMaker operates heterosexual/straight only. Women see men. Men see women. Sexual orientation is available as a private dealbreaker field for future-proofing but does not change pool composition in the current Nigeria scope.
-
-**Pool exclusion (gender and profile completeness):**
-- If `profiles.gender` is null or not set → excluded from MatchMaker pool entirely
-- Non-binary is out of scope for Nigeria MVP — if gender is not `'male'` or `'female'`, exclude from pool
-- Incomplete profiles (missing required fields) → excluded via `matchmaker_get_pool` RPC pre-filter before compatibility scoring
+MatchMaker operates heterosexual/straight only. Women see men. Men see women.
+- Profiles with `gender = NULL` or any value other than `'male'` / `'female'`: excluded from pool entirely
+- Non-binary is out of scope for Nigeria MVP — excluded from pool, not surfaced to or from any user
+- Incomplete profiles (missing required fields) excluded via `matchmaker_get_pool` RPC pre-filter
+- Sexual orientation dealbreaker stored in JSONB for future-proofing but NOT applied in pool query for MVP
 
 **Re-match rule:**
 Users who previously had a MatchMaker connection are permanently excluded from each other's discovery pool. This is enforced at the server level before compatibility scoring.
@@ -258,8 +244,6 @@ Server checks: does this user have an active connection?
 ├── YES → Interest stored silently
 │          Not shown to target until their connection ends
 │          (one-active-connection rule enforced server-side)
-│          No user-facing indicator anywhere for sender or receiver
-│          while the target remains in an active connection
 │
 └── NO → Target receives notification:
           "[Name] expressed interest in you on MatchMaker"
@@ -303,23 +287,27 @@ In-app prompt:
 "Are you still actively seeking a long-term relationship with
  marriage potential? Confirm to remain in the MatchMaker pool."
 
-├── "Yes, I am still looking" → Remains in pool. Clock resets.
+CANONICAL THREE-OPTION MODEL:
 
-├── "Ask me later" (text link) → Snoozes prompt for 7 days.
-│    Prompt reappears on next MatchMaker tab open after snooze.
+CTA 1 (primary button): "Yes, I am still looking"
+  → Remains in pool. 60-day clock resets.
 
-├── "Remove me from the pool" (text link, below) → Quietly removed from pool.
-│    No notification to others.
-│    Can re-enter via "Return to MatchMaker" → Gate 3.
-│    Prompt reappears on next MatchMaker tab open after 7 days.
+CTA 2 (text link): "Ask me later"
+  → Snoozes prompt for 7 days. Prompt reappears on next
+    MatchMaker open after snooze expires.
 
-├── Dismiss / back button → Treated as "Ask me later" (NOT as removal).
-│    Prompt reappears on next MatchMaker open. Not punitive.
+CTA 3 (small text link below): "Remove me from the pool"
+  → Quietly removed. No notification to others.
+    Can re-enter anytime via "Return to MatchMaker" → Gate 3.
 
-└── Complete silence for 7 days after first prompt (no app open or no action taken)
-     → Quietly removed from pool.
-     → User receives notification: "You have been removed from the MatchMaker
-        pool. You can return anytime by tapping Return to MatchMaker."
+Dismiss / back button:
+  → Treated as "Ask me later" (NOT removal). Not punitive.
+
+7 days of complete silence (app not opened or no action):
+  → Quietly removed from pool.
+  → User receives notification:
+    "You have been removed from the MatchMaker pool.
+     You can return anytime."
      → Can re-enter via "Return to MatchMaker" → Gate 3.
 ```
 
@@ -383,8 +371,6 @@ Neither can start a new MatchMaker connection until this one ends.
 
 ### 3.3 21-Day Clock Logic
 
-See **CANONICAL REFERENCE — TWO CLOCKS** at the top of this document.
-
 ```
 Connection established — clock NOT running
          │
@@ -444,19 +430,19 @@ DAY 10 (from connected_at) — Check-in nudge
   + curated conversation starter from shared signals
 
 DAY 10+ (from connected_at) — "I feel ready to meet" signal available
-  One party taps [I feel ready to meet] → confirms inline
+  One party taps [I feel ready to meet]
          │
          ▼
-  Sender: button disappears entirely. No sent state, no waiting
-          state, no reciprocal indicator on connection screen.
-  Receiver: push notification only (toast if app open):
-  "[Name] feels ready to meet. No pressure — your plan window
-   opens in [X] days. Keep the conversation going."
+  Other party notified:
+  "[Name] feels ready to meet. Your MatchMaker plan
+   window opens in [X] days. No pressure — the
+   decision is mutual and the timing is yours."
 
-  No connection screen state change for either party.
-  No acknowledgement UI. No mutual acknowledgement tracking
-  beyond the matchmaker_ready_signals DB row (rate-limiting).
-  Conversation in chat is the implicit acknowledgement channel.
+  Receiving party options:
+  ├── Acknowledge in chat (voluntary)
+  ├── Ignore (no consequence, no notification to sender)
+  └── Also signal ready (mutual signal noted —
+       does NOT unlock plan early. 21-day lock stands.)
 
   Either party can end the connection at any point,
   including in response to feeling pressured.
@@ -472,16 +458,15 @@ DAY 21 (from first_message_at) — Plan window unlocks
 
   [Create Plan] activates in connection screen.
 
-  Plan creation — proposer selects pattern; receiver consents:
-  • ONE party taps [Create Plan] on connection screen (proposer)
-  • Proposer enters MatchMaker plan proposal screen (wrapper
-    over existing plan creation), sets plan details, and selects
+  Plan creation — mutual consent flow (technical mechanic):
+  • ONE party taps [Create Plan] on connection screen
+  • They enter a MatchMaker plan proposal screen (wrapper
+    over existing plan creation) and set plan details +
     preferred escrow pattern (A, B, or C)
   • Other party receives push notification:
     "[Name] proposed a meetup plan. Review and agree."
   • Receiver reviews plan details and escrow pattern,
-    then taps [Agree] or counter-proposes a different pattern
-  • Escrow is NOT created until receiver explicitly agrees
+    then taps [Agree] or proposes an alternative pattern
   • Standard LinkUp offer-and-agreement flow takes over
     from this point — no custom flow required
   • Standard escrow, cancellation matrix, and dispute
@@ -514,21 +499,14 @@ Feed into Healing Period questionnaire if connection ends.
 
          │
          ▼
-Both parties independently choose (prompt surfaced once, dismissible):
+Both parties independently choose:
 ├── "Continue this connection"
 │    → Return to connection screen
-│    → Can create further plans (no 21-day lock when
-│       first_plan_created_at IS NOT NULL)
-│    → Connection stays active indefinitely; multiple plans allowed
+│    → Can create further plans (no 21-day lock for
+│       subsequent plans within the same connection)
 │
 └── "End this connection"
      → Phase 4: End Connection Flow
-
-Post-meetup rules:
-• Connection does NOT auto-end if neither party chooses Continue or End
-• Prompt is surfaced once but dismissible ("Skip for now")
-• An active connection can persist indefinitely with multiple plans
-• There is no maximum connection duration and no auto-end timeout
 ```
 
 ---
@@ -590,8 +568,7 @@ Both parties immediately:
 
 ```
 MatchMaker tab visual state: calm, muted design
-MatchMaker discovery pool: hidden (tab shows reflection screen only)
-Discover tab: fully accessible — no restriction
+Discovery content: hidden
 All other LinkUp features: fully accessible
 
 Platform presents optional prompt (private, never shared):
@@ -661,6 +638,15 @@ Tapping → Returns to Phase 2 (Pool State)
 
 ## PHASE 6 — GUARDRAILS & EDGE CASES
 
+### 6.0b Interest Queue — User-Facing Behaviour
+
+When User A expresses interest in User B while B has an active connection:
+- The queued interest is COMPLETELY SILENT — no indicator shown to either party
+- User A sees no "pending" state on B's card (card disappears from pool as usual after swipe)
+- User B sees nothing — no notification, no queue indicator
+- When B's connection ends: exclusion check runs first (see §2.2b), then interest surfaces in B's queue
+- User A is never notified whether their interest surfaced or not
+
 ### 6.1 One-Active-Connection State
 
 ```
@@ -671,11 +657,8 @@ The tab shows only the active connection screen.
 No profile cards. No browsing. Full focus on the current connection.
 
 All other LinkUp tabs remain fully accessible:
-Discover, Meetr, Messages, and Account (including Saved) are unaffected.
+Discover, Meetr, Messages, and Saved are unaffected.
 Only the MatchMaker discovery pool is hidden.
-
-Queued interests while target has active connection: completely silent.
-No badge, banner, or indicator for sender or receiver until connection ends.
 
 MatchMaker tab entry point shows:
 "You are connected with [Name]"
@@ -705,6 +688,21 @@ Outcome:
 • After 30 days: access restored via re-entry screen (Phase 5.3)
 ```
 
+### 6.3 Contact-Sharing Strike
+
+**Contact-sharing suspension screen (shown when user opens MatchMaker tab during 7-day suspension):**
+```
+[Same visual shell as cooldown screen — muted tone]
+[Warning icon — 48pt — #9B1B4B]
+"MatchMaker access suspended"
+"Sharing contact information outside the app violates
+ MatchMaker policy. Your MatchMaker access is suspended
+ for 7 days."
+[Progress bar — days remaining of 7-day suspension]
+"[N] days remaining"
+[Note: All other LinkUp features remain accessible.]
+```
+
 ### 6.3 Contact-Sharing Strike in MatchMaker
 
 ```
@@ -714,9 +712,7 @@ within MatchMaker chat (phone, WhatsApp, Instagram, etc.):
 Standard LinkUp contact-sharing enforcement applies PLUS:
 → Immediate MatchMaker access suspended for 7 days
 → Applies even if this is the user's first general strike
-→ User shown MatchMaker suspension screen (same visual as cooldown
-   screen, 7-day countdown, heading: "MatchMaker policy violation")
-→ Body copy:
+→ User notified:
    "Sharing contact information outside the app violates
     MatchMaker policy. Your MatchMaker access is suspended
     for 7 days. All other LinkUp features remain accessible."
@@ -726,48 +722,41 @@ Standard LinkUp contact-sharing enforcement applies PLUS:
 
 ### 6.4 Misalignment Report
 
+Entry point: connection screen settings menu (⋯ icon top right) → "Report this connection"
+
 ```
-Entry: Connection screen settings (⋯ menu) → "Report misalignment"
-→ Single-page form → submitted silently
-→ Reporter sees only: "Your report has been received"
-→ No confirmation shown to the other party
+Single-page report form:
+  Heading: "Report a concern"
+  Sub: "This is separate from blocking. Use this if you feel
+        this connection is not being used with sincere intent."
 
-User reports their connection for behaviour inconsistent
-with serious intent (explicit content, pressure, financial
-solicitation):
+  Reason options (select one):
+  ○ Explicit or inappropriate content
+  ○ Pressure or coercion
+  ○ Financial solicitation or scam behaviour
+  ○ Not using MatchMaker sincerely
+  ○ Other
 
-→ Separate from general report/block function
-→ Single report: logged internally only. No automated action.
-   The report is recorded against the reported user's MatchMaker
-   history and informs admin context for future review.
-   No notification to either party.
+  [Optional short text — max 200 chars]
 
-→ Pattern trigger: 2 or more misalignment reports from different
-   connections against the same user within a 90-day window
-   triggers admin review flag.
-   This prevents single-connection weaponisation — e.g. a user
-   who pressures their connection, then ends it and immediately
-   claims the other party was the aggressor.
+  [Submit report]
 
-→ On admin review of a flagged pattern:
-   • Admin investigates across reported connections
-   • If pattern is confirmed: MatchMaker access suspended
-     pending outcome. Duration at admin discretion.
-   • If pattern is not confirmed: reports remain logged,
-     no suspension applied.
-
-→ Standard dispute escalation process if warranted
-→ Admin review via existing admin panel (new MatchMaker tab)
+On submit:
+→ "Your report has been received." — single confirmation, no detail
+→ Report logged internally. No notification to reported user.
+→ Single report: no automated action. Logged for admin context.
+→ 2+ reports from different connections within 90 days:
+   Admin review flag raised (not automatic suspension).
+→ Admin confirms pattern → MatchMaker access suspended.
+→ Pattern not confirmed → reports remain logged only.
 ```
 
 ### 6.5 Subscription Lapse
 
 ```
-User's host_tier drops below Gold (cancellation, payment failure):
+User's subscription drops below Gold (cancellation, payment failure):
 
-→ User exits MatchMaker pool immediately and silently
-   (no dedicated screen unless user taps MatchMaker tab,
-    where they see the subscription gate)
+→ User exits MatchMaker pool immediately
 → If in active connection:
    Connection is paused, not ended
    Other party notified:
@@ -814,7 +803,7 @@ matchmaker_connections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_a_id UUID REFERENCES profiles(user_id),
   user_b_id UUID REFERENCES profiles(user_id),
-  status TEXT,               -- active | ended | paused
+  status TEXT,               -- pending_mutual | active | ended
   connected_at TIMESTAMPTZ,
   first_message_at TIMESTAMPTZ NULL,
   plan_unlock_at TIMESTAMPTZ NULL,
@@ -895,29 +884,13 @@ matchmaker_exclusions (
 ALTER TABLE profiles ADD COLUMN communication_style TEXT NULL;
 -- Populated from onboarding question addition (Phase 0)
 
--- Subscription gate uses existing profiles.host_tier
--- (UpgradeGateContext). No new subscription column needed.
-
--- Link MatchMaker plans to connections:
-ALTER TABLE plans ADD COLUMN matchmaker_connection_id UUID NULL
-  REFERENCES matchmaker_connections(id);
--- Set when first MatchMaker plan is created; used for history
--- and to bypass 21-day lock on subsequent plans within connection
+-- Add to users (subscription check):
+-- No change needed — subscription_tier already exists
 ```
 
 ---
 
 ## NAVIGATION & SCREEN INVENTORY
-
-### Primary Navigation (both platforms)
-
-```
-Discover → MatchMaker → Meetr → Messages → Account
-```
-
-Saved removed from primary tab bar. Relocated to Account screen after Edit Profile (bookmark icon). Web: sidebar account section. Mobile: Profile/Account tab row.
-
-### MatchMaker Routes
 
 ```
 /matchmaker                         — Main tab (pool / active / locked state)
@@ -928,17 +901,15 @@ Saved removed from primary tab bar. Relocated to Account screen after Edit Profi
 /matchmaker/profile/:userId         — MatchMaker profile view
 /matchmaker/connection/:id          — Active connection screen
 /matchmaker/connection/:id/activity — Shared Interest Activity
+/matchmaker/connection/:id/ready    — "I feel ready to meet" signal
 /matchmaker/connection/:id/end      — End Connection flow
-/matchmaker/connection/:id/report   — Misalignment report (single-page form)
-/matchmaker/suspended               — Contact-sharing suspension (7-day) OR rapid-cycler cooldown (30-day)
 /matchmaker/reflect                 — Reflection Period screen (3 days)
 /matchmaker/heal                    — Healing Period questionnaire (3 days)
 /matchmaker/reentry                 — Re-entry screen (day 6+)
 /matchmaker/history                 — Private connection history
+/matchmaker/suspended               — Suspension / cooldown state screen
 /matchmaker/settings                — Update values, dealbreakers, visibility
 ```
-
-Note: "I feel ready to meet" is an inline action on the connection screen, not a separate route.
 
 ---
 
@@ -959,7 +930,7 @@ Note: "I feel ready to meet" is an inline action on the connection screen, not a
 | Notifications | Existing notification system |
 | Contact-sharing enforcement | Existing regex enforcement |
 | Admin review panel | Existing admin dashboard (new tab) |
-| Subscription tier check | `profiles.host_tier` via UpgradeGateContext |
+| Subscription tier check | Existing subscription system |
 
 ---
 
