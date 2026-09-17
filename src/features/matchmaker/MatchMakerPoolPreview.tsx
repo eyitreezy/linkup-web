@@ -16,7 +16,7 @@ export function MatchMakerPoolPreview({ profiles }: Props) {
           kicker="MatchMaker"
           title="Your pool"
           description="One connection at a time. Take your time."
-          icon={<MatchMakerTabIcon size={22} color="#9B1B4B" active />}
+          icon={<MatchMakerTabIcon size={22} className="text-[#9B1B4B]" />}
         />
         <div className="mt-6 space-y-3">
           {profiles.map((p) => (

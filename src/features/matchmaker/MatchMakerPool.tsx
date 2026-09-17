@@ -84,7 +84,7 @@ export function MatchMakerPool() {
           kicker="MatchMaker"
           title="Your pool"
           description="One connection at a time. Take your time."
-          icon={<MatchMakerTabIcon size={22} color="#9B1B4B" active />}
+          icon={<MatchMakerTabIcon size={22} className="text-[#9B1B4B]" />}
         />
 
         {poolQuery.isLoading ? (
@@ -117,7 +117,7 @@ export function MatchMakerPool() {
             className="fixed bottom-24 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-2 text-[13px] font-extrabold text-white shadow-lg"
             style={{ background: MATCHMAKER_THEME.accent }}
           >
-            <MatchMakerTabIcon size={16} color="#fff" active />
+            <MatchMakerTabIcon size={16} color="#fff" />
             {toast}
           </div>
         ) : null}
