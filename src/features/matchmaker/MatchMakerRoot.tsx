@@ -6,7 +6,7 @@ import {
   MatchMakerGateModal,
   type MatchMakerGateModalState,
 } from '@/features/matchmaker/MatchMakerGateModal';
-import { MatchMakerLayout } from '@/features/matchmaker/MatchMakerLayout';
+import { MatchMakerLayout, MatchMakerPageShell } from '@/features/matchmaker/MatchMakerLayout';
 import { MatchMakerPool } from '@/features/matchmaker/MatchMakerPool';
 import { MatchMakerPoolPreview } from '@/features/matchmaker/MatchMakerPoolPreview';
 import type { MatchMakerGate } from '@/lib/matchmaker/gates';

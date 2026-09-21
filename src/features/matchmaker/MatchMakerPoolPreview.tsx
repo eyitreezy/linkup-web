@@ -2,9 +2,8 @@
 
 import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
-import { matchmakerContentClass } from '@/lib/matchmaker/theme';
 import { MatchMakerPoolCard } from '@/features/matchmaker/MatchMakerPoolCard';
-import { MatchMakerLayout } from '@/features/matchmaker/MatchMakerLayout';
+import { MatchMakerLayout, MatchMakerPageShell } from '@/features/matchmaker/MatchMakerLayout';
 import type { PoolProfileRow } from '@/lib/matchmaker/compatibility';
 
 type Props = { profiles: PoolProfileRow[] };

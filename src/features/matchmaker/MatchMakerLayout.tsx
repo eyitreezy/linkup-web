@@ -1,14 +1,39 @@
 'use client';
 
+import {
+  LINKUP_MAIN_CONTENT_GUTTER_BLEED_CLASS,
+  LINKUP_MAIN_CONTENT_GUTTER_CLASS,
+  LINKUP_TAB_PAGE_SHELL_CLASS,
+} from '@/lib/layout/mainContent';
 import { MATCHMAKER_THEME, matchmakerScreenClass } from '@/lib/matchmaker/theme';
+import { cn } from '@/utils/cn';
 import type { ReactNode } from 'react';
 
 export function MatchMakerLayout({ children }: { children: ReactNode }) {
   return (
-    <div className={matchmakerScreenClass()} style={{ color: MATCHMAKER_THEME.textPrimary }}>
+    <div
+      className={cn(
+        matchmakerScreenClass(),
+        'min-h-full',
+        LINKUP_MAIN_CONTENT_GUTTER_BLEED_CLASS,
+        LINKUP_MAIN_CONTENT_GUTTER_CLASS
+      )}
+      style={{ color: MATCHMAKER_THEME.textPrimary }}
+    >
       {children}
     </div>
   );
+}
+
+/** Inner page column — same width and vertical rhythm as Discover. */
+export function MatchMakerPageShell({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return <div className={cn(LINKUP_TAB_PAGE_SHELL_CLASS, className)}>{children}</div>;
 }
 
 export function MatchMakerCard({ children, className = '' }: { children: ReactNode; className?: string }) {

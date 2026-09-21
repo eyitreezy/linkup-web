@@ -2,11 +2,11 @@
 
 import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
-import { MatchMakerLayout } from '@/features/matchmaker/MatchMakerLayout';
+import { MatchMakerLayout, MatchMakerPageShell } from '@/features/matchmaker/MatchMakerLayout';
 import { MatchMakerPoolCard } from '@/features/matchmaker/MatchMakerPoolCard';
 import { MatchMakerPoolEmptyState } from '@/features/matchmaker/MatchMakerPoolEmptyState';
 import { buildCompatibilitySignals } from '@/lib/matchmaker/compatibility';
-import { MATCHMAKER_THEME, matchmakerContentClass } from '@/lib/matchmaker/theme';
+import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { expressMatchMakerInterest, fetchMatchMakerPool } from '@/services/matchmaker.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
