@@ -1,7 +1,9 @@
 'use client';
 
+import { FormCard } from '@/components/settings/FormCard';
+import { GradientChip } from '@/components/settings/GradientChip';
 import { ConfirmDialog } from '@/features/plan-management/ConfirmDialog';
-import { MatchMakerLayout, MatchMakerPrimaryButton } from '@/features/matchmaker/MatchMakerLayout';
+import { MatchMakerLayout } from '@/features/matchmaker/MatchMakerLayout';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { endMatchMakerConnection } from '@/services/matchmaker.service';
 import { createClient } from '@/lib/supabase/client';
@@ -39,41 +41,36 @@ export function MatchMakerEndFlow({ connectionId }: { connectionId: string }) {
   return (
     <MatchMakerLayout>
       <div className="mx-auto max-w-lg px-4 py-10">
-        <h1 className="font-display text-2xl font-extrabold">End this connection?</h1>
-        <p className="mt-3 text-[14px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
-          This cannot be undone. No reason will be shared with the other person.
-        </p>
+        <FormCard>
+          <h1 className="font-display text-2xl font-extrabold">End this connection?</h1>
+          <p className="mt-3 text-[13px] font-semibold text-muted">
+            This cannot be undone. No reason will be shared with the other person.
+          </p>
 
-        <div className="mt-6 space-y-2">
-          {REASONS.map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setReason(r)}
-              className="flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left text-[14px] font-semibold"
-              style={{
-                borderColor: reason === r ? MATCHMAKER_THEME.accent : MATCHMAKER_THEME.border,
-                background: reason === r ? '#FBF5F0' : MATCHMAKER_THEME.surface,
-              }}
-            >
-              <span
-                className="h-4 w-4 rounded-full border-2"
-                style={{
-                  borderColor: reason === r ? MATCHMAKER_THEME.accent : MATCHMAKER_THEME.disabled,
-                  background: reason === r ? MATCHMAKER_THEME.accent : 'transparent',
-                }}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {REASONS.map((r) => (
+              <GradientChip
+                key={r}
+                label={r}
+                selected={reason === r}
+                onClick={() => setReason(r)}
               />
-              {r}
-            </button>
-          ))}
-        </div>
+            ))}
+          </div>
+        </FormCard>
 
         {error ? <p className="mt-4 text-[13px] font-semibold text-[#EF4444]">{error}</p> : null}
 
         <div className="mt-8 space-y-3">
-          <MatchMakerPrimaryButton disabled={!reason || busy} onClick={() => setConfirmOpen(true)}>
+          <button
+            type="button"
+            disabled={!reason || busy}
+            onClick={() => setConfirmOpen(true)}
+            className="w-full min-h-[48px] rounded-full text-[15px] font-extrabold text-white transition hover:opacity-95 active:scale-[0.98] disabled:opacity-50"
+            style={{ background: MATCHMAKER_THEME.accent }}
+          >
             End connection
-          </MatchMakerPrimaryButton>
+          </button>
           <button
             type="button"
             onClick={() => router.back()}

@@ -127,7 +127,7 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
             <p className="text-[14px] font-semibold text-[#9B1B4B]">Plan window is open</p>
           ) : (
             <p className="text-[14px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
-              Plan window opens in {planDaysLeft ?? '—'} days
+              Plan window opens in {planDaysLeft ?? 0} days
             </p>
           )}
         </MatchMakerCard>

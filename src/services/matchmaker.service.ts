@@ -11,13 +11,38 @@ export async function fetchMatchMakerGateState(
   return { data: data as MatchMakerGateState, error: null };
 }
 
+export type MatchMakerPoolEmptyReason =
+  | 'gender_not_set'
+  | 'dealbreakers_strict'
+  | 'location_narrow'
+  | 'genuinely_empty'
+  | null;
+
 export async function fetchMatchMakerPool(
   client: SupabaseClient,
   limit = 12
-): Promise<{ data: PoolProfileRow[]; error: string | null }> {
+): Promise<{
+  data: PoolProfileRow[];
+  emptyReason: MatchMakerPoolEmptyReason;
+  error: string | null;
+}> {
   const { data, error } = await client.rpc('matchmaker_get_pool', { p_limit: limit });
-  if (error) return { data: [], error: error.message };
-  return { data: (data ?? []) as PoolProfileRow[], error: null };
+  if (error) return { data: [], emptyReason: null, error: error.message };
+
+  if (Array.isArray(data)) {
+    return { data: data as PoolProfileRow[], emptyReason: null, error: null };
+  }
+
+  const envelope = (typeof data === 'string' ? JSON.parse(data) : data) as {
+    profiles?: PoolProfileRow[];
+    empty_reason?: string | null;
+  };
+
+  return {
+    data: envelope.profiles ?? [],
+    emptyReason: (envelope.empty_reason ?? null) as MatchMakerPoolEmptyReason,
+    error: null,
+  };
 }
 
 export async function fetchMatchMakerPoolPreview(

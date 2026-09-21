@@ -35,7 +35,7 @@ export function MatchMakerGateModal({
     kyc: {
       icon: <IoShieldCheckmark size={48} color="#6C63FF" />,
       heading: 'Verify your identity first',
-      body: 'MatchMaker requires identity verification before you enter the pool — to protect you and every other member.',
+      body: 'MatchMaker requires identity verification before you enter the pool, to protect you and every other member.',
       cta: 'Complete verification',
       ctaGradient: true,
       onCta: () => router.push('/kyc'),

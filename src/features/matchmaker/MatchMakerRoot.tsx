@@ -162,7 +162,7 @@ export function MatchMakerRoot() {
             {gate === 'cooldown'
               ? `MatchMaker resumes in ${daysUntil(cooldownUntil)} days`
               : gate === 'suspended'
-                ? `MatchMaker suspended — ${daysUntil(suspensionUntil)} days remaining`
+                ? `MatchMaker suspended, ${daysUntil(suspensionUntil)} days remaining`
                 : gate === 'subscription'
                   ? 'Upgrade to Gold to access MatchMaker'
                   : 'Complete verification to access MatchMaker'}

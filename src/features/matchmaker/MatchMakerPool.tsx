@@ -4,7 +4,7 @@ import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
 import { MatchMakerLayout } from '@/features/matchmaker/MatchMakerLayout';
 import { MatchMakerPoolCard } from '@/features/matchmaker/MatchMakerPoolCard';
-import { MatchMakerCard } from '@/features/matchmaker/MatchMakerLayout';
+import { MatchMakerPoolEmptyState } from '@/features/matchmaker/MatchMakerPoolEmptyState';
 import { buildCompatibilitySignals } from '@/lib/matchmaker/compatibility';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { expressMatchMakerInterest, fetchMatchMakerPool } from '@/services/matchmaker.service';
@@ -35,16 +35,17 @@ export function MatchMakerPool() {
     queryKey: ['matchmaker-pool', user?.id],
     queryFn: async () => {
       const client = createClient();
-      const { data, error } = await fetchMatchMakerPool(client, 12);
-      if (error) throw new Error(error);
-      return data;
+      const result = await fetchMatchMakerPool(client, 12);
+      if (result.error) throw new Error(result.error);
+      return result;
     },
     enabled: !!user?.id,
     staleTime: 0,
     refetchOnMount: 'always',
   });
 
-  const cards = poolQuery.data ?? [];
+  const cards = poolQuery.data?.data ?? [];
+  const emptyReason = poolQuery.data?.emptyReason ?? null;
   const current = cards[index] ?? null;
 
   const signals = useMemo(() => {
@@ -92,12 +93,7 @@ export function MatchMakerPool() {
         ) : null}
 
         {!poolQuery.isLoading && !current ? (
-          <MatchMakerCard className="mt-6 text-center">
-            <p className="text-[15px] font-extrabold">No profiles right now</p>
-            <p className="mt-2 text-[13px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
-              Check back soon. Your match may still be in the pool.
-            </p>
-          </MatchMakerCard>
+          <MatchMakerPoolEmptyState reason={emptyReason} className="mt-6" />
         ) : null}
 
         {current ? (

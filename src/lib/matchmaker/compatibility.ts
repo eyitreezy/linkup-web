@@ -13,6 +13,7 @@ export type PoolProfileRow = {
   latitude?: number | null;
   longitude?: number | null;
   verified_badge?: boolean;
+  distance_km?: number | null;
 };
 
 const COMM_LABELS: Record<string, string> = {

@@ -15,7 +15,7 @@ export function MatchMakerHeal() {
           Before you return to MatchMaker, take a moment to update what matters to you.
         </p>
         <p className="mt-8 text-[14px] font-semibold">
-          Healing questionnaire (Phase 2) — placeholder for paginated 5-question flow.
+          Healing questionnaire (Phase 2), placeholder for paginated 5-question flow.
         </p>
         <div className="mt-8">
           <MatchMakerPrimaryButton onClick={() => router.push('/matchmaker/reentry')}>
