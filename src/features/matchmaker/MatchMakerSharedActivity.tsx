@@ -2,8 +2,8 @@
 
 import { FormCard } from '@/components/settings/FormCard';
 import { GradientChip } from '@/components/settings/GradientChip';
-import { MatchMakerLayout } from '@/features/matchmaker/MatchMakerLayout';
-import { MATCHMAKER_THEME, matchmakerContentClass } from '@/lib/matchmaker/theme';
+import { MatchMakerLayout, MatchMakerPageShell } from '@/features/matchmaker/MatchMakerLayout';
+import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { createClient } from '@/lib/supabase/client';
 import { useState } from 'react';
 
@@ -36,7 +36,7 @@ export function MatchMakerSharedActivity({ connectionId }: { connectionId: strin
 
   return (
     <MatchMakerLayout>
-      <div className={`${matchmakerContentClass()} py-10`}>
+      <MatchMakerPageShell className="pt-2">
         <h1 className="font-display text-2xl font-extrabold">Shared Activity</h1>
         <p className="mt-2 text-[13px] font-semibold text-muted">
           Answers are revealed only after you both submit.
@@ -69,7 +69,7 @@ export function MatchMakerSharedActivity({ connectionId }: { connectionId: strin
             Both answers submitted. See what you both said.
           </p>
         )}
-      </div>
+      </MatchMakerPageShell>
     </MatchMakerLayout>
   );
 }

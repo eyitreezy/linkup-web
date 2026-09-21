@@ -10,7 +10,8 @@ import { MatchMakerLayout, MatchMakerPageShell } from '@/features/matchmaker/Mat
 import { MatchMakerPool } from '@/features/matchmaker/MatchMakerPool';
 import { MatchMakerPoolPreview } from '@/features/matchmaker/MatchMakerPoolPreview';
 import type { MatchMakerGate } from '@/lib/matchmaker/gates';
-import { MATCHMAKER_THEME, matchmakerContentClass } from '@/lib/matchmaker/theme';
+import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
+import { cn } from '@/utils/cn';
 import {
   fetchMatchMakerGateState,
   fetchMatchMakerPoolPreview,
@@ -30,7 +31,7 @@ function daysUntil(iso?: string): number {
 function MatchMakerSkeleton() {
   return (
     <MatchMakerLayout>
-      <div className={`${matchmakerContentClass()} pb-10 pt-2`}>
+      <MatchMakerPageShell className="pt-2">
         <TabPageHeader
           kicker="MatchMaker"
           title="Your pool"
@@ -38,7 +39,7 @@ function MatchMakerSkeleton() {
           icon={<MatchMakerTabIcon size={22} />}
         />
         <div className="mt-6 h-80 animate-pulse rounded-3xl bg-[#FBF5F0]" />
-      </div>
+      </MatchMakerPageShell>
     </MatchMakerLayout>
   );
 }
@@ -109,12 +110,14 @@ export function MatchMakerRoot() {
   if (!user) {
     return (
       <MatchMakerLayout>
-        <p className="p-6 text-center text-[14px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
-          <Link href="/login" className="font-extrabold text-primary">
-            Sign in
-          </Link>{' '}
-          to use MatchMaker.
-        </p>
+        <MatchMakerPageShell className="pt-2">
+          <p className="text-center text-[14px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
+            <Link href="/login" className="font-extrabold text-primary">
+              Sign in
+            </Link>{' '}
+            to use MatchMaker.
+          </p>
+        </MatchMakerPageShell>
       </MatchMakerLayout>
     );
   }
@@ -124,7 +127,9 @@ export function MatchMakerRoot() {
   if (error) {
     return (
       <MatchMakerLayout>
-        <p className="p-6 text-center text-[14px] font-semibold text-[#EF4444]">{error}</p>
+        <MatchMakerPageShell className="pt-2">
+          <p className="text-center text-[14px] font-semibold text-[#EF4444]">{error}</p>
+        </MatchMakerPageShell>
       </MatchMakerLayout>
     );
   }
@@ -143,14 +148,10 @@ export function MatchMakerRoot() {
   const gateModal = gate as MatchMakerGateModalState;
 
   return (
-    <div className="relative min-h-screen" style={{ background: MATCHMAKER_THEME.background }}>
+    <div className="relative min-h-full">
       <div
-        className="min-h-screen"
-        style={
-          isGated
-            ? { filter: 'blur(12px)', pointerEvents: 'none', userSelect: 'none' }
-            : undefined
-        }
+        className={cn(isGated && 'pointer-events-none select-none')}
+        style={isGated ? { filter: 'blur(12px)' } : undefined}
       >
         {isGated ? <MatchMakerPoolPreview profiles={poolPreview} /> : <MatchMakerPool />}
       </div>

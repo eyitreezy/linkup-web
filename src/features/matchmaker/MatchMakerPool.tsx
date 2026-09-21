@@ -80,7 +80,7 @@ export function MatchMakerPool() {
 
   return (
     <MatchMakerLayout>
-      <div className={`${matchmakerContentClass()} pb-10 pt-2`}>
+      <MatchMakerPageShell className="pt-2">
         <TabPageHeader
           kicker="MatchMaker"
           title="Your pool"
@@ -117,7 +117,7 @@ export function MatchMakerPool() {
             {toast}
           </div>
         ) : null}
-      </div>
+      </MatchMakerPageShell>
     </MatchMakerLayout>
   );
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import { FormCard } from '@/components/settings/FormCard';
-import { MatchMakerLayout } from '@/features/matchmaker/MatchMakerLayout';
-import { MATCHMAKER_THEME, matchmakerContentClass } from '@/lib/matchmaker/theme';
+import { MatchMakerLayout, MatchMakerPageShell } from '@/features/matchmaker/MatchMakerLayout';
+import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { saveMatchMakerIntent } from '@/services/matchmaker.service';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
@@ -32,7 +32,7 @@ export function MatchMakerDeclare() {
 
   return (
     <MatchMakerLayout>
-      <div className={`${matchmakerContentClass()} py-10`}>
+      <MatchMakerPageShell className="pt-2">
         <h1 className="font-display text-2xl font-extrabold">Before you enter MatchMaker</h1>
         <p className="mt-4 text-[15px] font-semibold leading-relaxed text-muted">
           MatchMaker is built for one purpose: to help serious-minded individuals find a long-term
@@ -82,7 +82,7 @@ export function MatchMakerDeclare() {
         >
           Go back
         </Link>
-      </div>
+      </MatchMakerPageShell>
     </MatchMakerLayout>
   );
 }

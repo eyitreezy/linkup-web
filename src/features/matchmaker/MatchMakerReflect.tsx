@@ -1,14 +1,18 @@
 'use client';
 
-import { MatchMakerLayout, MatchMakerPrimaryButton } from '@/features/matchmaker/MatchMakerLayout';
-import { MATCHMAKER_THEME, matchmakerContentClass } from '@/lib/matchmaker/theme';
+import {
+  MatchMakerLayout,
+  MatchMakerPageShell,
+  MatchMakerPrimaryButton,
+} from '@/features/matchmaker/MatchMakerLayout';
+import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
 import Link from 'next/link';
 
 export function MatchMakerReflect() {
   return (
     <MatchMakerLayout>
-      <div className={`${matchmakerContentClass()} py-16 text-center`}>
+      <MatchMakerPageShell className="py-16 text-center">
         <MatchMakerTabIcon size={40} className="mx-auto text-[#9B1B4B]/60" />
         <h1 className="mt-6 font-display text-2xl font-extrabold">Take a moment.</h1>
         <p className="mt-3 text-[15px] font-semibold leading-relaxed" style={{ color: MATCHMAKER_THEME.textMuted }}>
@@ -26,7 +30,7 @@ export function MatchMakerReflect() {
         <Link href="/discover" className="mt-6 inline-block text-[13px] font-semibold underline text-primary">
           Browse Discover
         </Link>
-      </div>
+      </MatchMakerPageShell>
     </MatchMakerLayout>
   );
 }

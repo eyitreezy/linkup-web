@@ -5,6 +5,7 @@ import { ConfirmDialog } from '@/features/plan-management/ConfirmDialog';
 import {
   MatchMakerCard,
   MatchMakerLayout,
+  MatchMakerPageShell,
   MatchMakerPrimaryButton,
 } from '@/features/matchmaker/MatchMakerLayout';
 import {
@@ -15,7 +16,7 @@ import {
   partnerUserId,
   planWindowDaysRemaining,
 } from '@/lib/matchmaker/connection';
-import { MATCHMAKER_THEME, matchmakerContentClass } from '@/lib/matchmaker/theme';
+import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { useMatchMakerConnection } from '@/hooks/useMatchMakerConnection';
 import { getOrCreateConversation } from '@/lib/conversations';
 import {
@@ -72,9 +73,9 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
   if (isLoading) {
     return (
       <MatchMakerLayout>
-        <div className={`${matchmakerContentClass()} animate-pulse p-6`}>
+        <MatchMakerPageShell className="animate-pulse p-6">
           <div className="h-64 rounded-3xl bg-[#FBF5F0]" />
-        </div>
+        </MatchMakerPageShell>
       </MatchMakerLayout>
     );
   }
@@ -98,7 +99,7 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
 
   return (
     <MatchMakerLayout>
-      <div className={`${matchmakerContentClass()} pb-10 pt-4`}>
+      <MatchMakerPageShell className="pt-2">
         {connection.status === 'paused' ? (
           <div
             className="mb-4 rounded-2xl border px-4 py-3 text-[13px] font-semibold"
@@ -186,7 +187,7 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
         >
           End this connection
         </Link>
-      </div>
+      </MatchMakerPageShell>
 
       <ConfirmDialog
         open={readyConfirmOpen}

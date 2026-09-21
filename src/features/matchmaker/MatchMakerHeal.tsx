@@ -1,7 +1,11 @@
 'use client';
 
-import { MatchMakerLayout, MatchMakerPrimaryButton } from '@/features/matchmaker/MatchMakerLayout';
-import { MATCHMAKER_THEME, matchmakerContentClass } from '@/lib/matchmaker/theme';
+import {
+  MatchMakerLayout,
+  MatchMakerPageShell,
+  MatchMakerPrimaryButton,
+} from '@/features/matchmaker/MatchMakerLayout';
+import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { useRouter } from 'next/navigation';
 
 export function MatchMakerHeal() {
@@ -9,7 +13,7 @@ export function MatchMakerHeal() {
 
   return (
     <MatchMakerLayout>
-      <div className={`${matchmakerContentClass()} py-10`}>
+      <MatchMakerPageShell className="pt-2">
         <h1 className="font-display text-2xl font-extrabold">A moment to refine</h1>
         <p className="mt-3 text-[14px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
           Before you return to MatchMaker, take a moment to update what matters to you.
@@ -22,7 +26,7 @@ export function MatchMakerHeal() {
             Continue
           </MatchMakerPrimaryButton>
         </div>
-      </div>
+      </MatchMakerPageShell>
     </MatchMakerLayout>
   );
 }

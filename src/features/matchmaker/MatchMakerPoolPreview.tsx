@@ -11,7 +11,7 @@ type Props = { profiles: PoolProfileRow[] };
 export function MatchMakerPoolPreview({ profiles }: Props) {
   return (
     <MatchMakerLayout>
-      <div className={`${matchmakerContentClass()} pb-10 pt-2`}>
+      <MatchMakerPageShell className="pt-2">
         <TabPageHeader
           kicker="MatchMaker"
           title="Your pool"
@@ -23,7 +23,7 @@ export function MatchMakerPoolPreview({ profiles }: Props) {
             <MatchMakerPoolCard key={p.user_id} profile={p} preview />
           ))}
         </div>
-      </div>
+      </MatchMakerPageShell>
     </MatchMakerLayout>
   );
 }
