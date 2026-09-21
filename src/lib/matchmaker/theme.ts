@@ -18,3 +18,8 @@ export const MATCHMAKER_THEME = {
 export function matchmakerScreenClass(): string {
   return 'min-h-full bg-[#FDF8F4] text-[#1A1D26]';
 }
+
+/** Full width within AppShell — same cap as Discover (`linkup-main-content-inner`). */
+export function matchmakerContentClass(): string {
+  return 'w-full min-w-0 max-w-full';
+}

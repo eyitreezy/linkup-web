@@ -1,15 +1,15 @@
 'use client';
 
 import { MatchMakerLayout, MatchMakerPrimaryButton } from '@/features/matchmaker/MatchMakerLayout';
-import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
+import { MATCHMAKER_THEME, matchmakerContentClass } from '@/lib/matchmaker/theme';
 import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
 import Link from 'next/link';
 
 export function MatchMakerReflect() {
   return (
     <MatchMakerLayout>
-      <div className="mx-auto max-w-lg px-4 py-16 text-center">
-        <MatchMakerTabIcon size={40} className="mx-auto text-[#9B1B4B]/50" />
+      <div className={`${matchmakerContentClass()} py-16 text-center`}>
+        <MatchMakerTabIcon size={40} className="mx-auto text-[#9B1B4B]/60" />
         <h1 className="mt-6 font-display text-2xl font-extrabold">Take a moment.</h1>
         <p className="mt-3 text-[15px] font-semibold leading-relaxed" style={{ color: MATCHMAKER_THEME.textMuted }}>
           Reflect on what you experienced. We will be here when you are ready. Discover and all other LinkUp

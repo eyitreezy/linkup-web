@@ -15,7 +15,7 @@ import {
   partnerUserId,
   planWindowDaysRemaining,
 } from '@/lib/matchmaker/connection';
-import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
+import { MATCHMAKER_THEME, matchmakerContentClass } from '@/lib/matchmaker/theme';
 import { useMatchMakerConnection } from '@/hooks/useMatchMakerConnection';
 import { getOrCreateConversation } from '@/lib/conversations';
 import {
@@ -72,7 +72,7 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
   if (isLoading) {
     return (
       <MatchMakerLayout>
-        <div className="mx-auto max-w-lg animate-pulse p-6">
+        <div className={`${matchmakerContentClass()} animate-pulse p-6`}>
           <div className="h-64 rounded-3xl bg-[#FBF5F0]" />
         </div>
       </MatchMakerLayout>
@@ -98,7 +98,7 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
 
   return (
     <MatchMakerLayout>
-      <div className="mx-auto max-w-lg px-4 pb-10 pt-4">
+      <div className={`${matchmakerContentClass()} pb-10 pt-4`}>
         {connection.status === 'paused' ? (
           <div
             className="mb-4 rounded-2xl border px-4 py-3 text-[13px] font-semibold"

@@ -25,7 +25,7 @@ export function MatchMakerGateModal({
 
   const config = {
     subscription: {
-      icon: <MatchMakerTabIcon size={48} color="#9B1B4B" />,
+      icon: <MatchMakerTabIcon size={48} className="text-[#9B1B4B]/70" />,
       heading: 'MatchMaker is a Gold feature and above',
       body: 'Upgrade to Gold or a subscription plan higher than Gold to access intentional matchmaking designed for people serious about finding a long-term relationship.',
       cta: 'Upgrade to Gold',

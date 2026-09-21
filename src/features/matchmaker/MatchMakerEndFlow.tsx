@@ -4,7 +4,7 @@ import { FormCard } from '@/components/settings/FormCard';
 import { GradientChip } from '@/components/settings/GradientChip';
 import { ConfirmDialog } from '@/features/plan-management/ConfirmDialog';
 import { MatchMakerLayout } from '@/features/matchmaker/MatchMakerLayout';
-import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
+import { MATCHMAKER_THEME, matchmakerContentClass } from '@/lib/matchmaker/theme';
 import { endMatchMakerConnection } from '@/services/matchmaker.service';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -40,7 +40,7 @@ export function MatchMakerEndFlow({ connectionId }: { connectionId: string }) {
 
   return (
     <MatchMakerLayout>
-      <div className="mx-auto max-w-lg px-4 py-10">
+      <div className={`${matchmakerContentClass()} py-10`}>
         <FormCard>
           <h1 className="font-display text-2xl font-extrabold">End this connection?</h1>
           <p className="mt-3 text-[13px] font-semibold text-muted">

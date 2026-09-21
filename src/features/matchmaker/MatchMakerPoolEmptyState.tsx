@@ -70,7 +70,7 @@ export function MatchMakerPoolEmptyState({ reason, className }: Props) {
       return (
         <AppEmptyState
           className={className}
-          icon={<MatchMakerTabIcon size={40} color="#9B1B4B" />}
+          icon={<MatchMakerTabIcon size={40} className="text-[#9B1B4B]/70" />}
           title="Your pool is quiet right now"
           titleAccent="quiet"
           description="Your match may still be on the way. The pool refreshes as new members join."

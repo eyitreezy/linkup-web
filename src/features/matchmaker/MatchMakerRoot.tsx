@@ -10,7 +10,7 @@ import { MatchMakerLayout } from '@/features/matchmaker/MatchMakerLayout';
 import { MatchMakerPool } from '@/features/matchmaker/MatchMakerPool';
 import { MatchMakerPoolPreview } from '@/features/matchmaker/MatchMakerPoolPreview';
 import type { MatchMakerGate } from '@/lib/matchmaker/gates';
-import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
+import { MATCHMAKER_THEME, matchmakerContentClass } from '@/lib/matchmaker/theme';
 import {
   fetchMatchMakerGateState,
   fetchMatchMakerPoolPreview,
@@ -30,12 +30,12 @@ function daysUntil(iso?: string): number {
 function MatchMakerSkeleton() {
   return (
     <MatchMakerLayout>
-      <div className="mx-auto max-w-lg px-4 pb-10 pt-2">
+      <div className={`${matchmakerContentClass()} pb-10 pt-2`}>
         <TabPageHeader
           kicker="MatchMaker"
           title="Your pool"
           description="One connection at a time. Take your time."
-          icon={<MatchMakerTabIcon size={22} className="text-[#9B1B4B]" />}
+          icon={<MatchMakerTabIcon size={22} />}
         />
         <div className="mt-6 h-80 animate-pulse rounded-3xl bg-[#FBF5F0]" />
       </div>

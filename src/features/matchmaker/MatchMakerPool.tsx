@@ -6,7 +6,7 @@ import { MatchMakerLayout } from '@/features/matchmaker/MatchMakerLayout';
 import { MatchMakerPoolCard } from '@/features/matchmaker/MatchMakerPoolCard';
 import { MatchMakerPoolEmptyState } from '@/features/matchmaker/MatchMakerPoolEmptyState';
 import { buildCompatibilitySignals } from '@/lib/matchmaker/compatibility';
-import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
+import { MATCHMAKER_THEME, matchmakerContentClass } from '@/lib/matchmaker/theme';
 import { expressMatchMakerInterest, fetchMatchMakerPool } from '@/services/matchmaker.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
@@ -80,12 +80,12 @@ export function MatchMakerPool() {
 
   return (
     <MatchMakerLayout>
-      <div className="mx-auto max-w-lg px-4 pb-10 pt-2">
+      <div className={`${matchmakerContentClass()} pb-10 pt-2`}>
         <TabPageHeader
           kicker="MatchMaker"
           title="Your pool"
           description="One connection at a time. Take your time."
-          icon={<MatchMakerTabIcon size={22} className="text-[#9B1B4B]" />}
+          icon={<MatchMakerTabIcon size={22} />}
         />
 
         {poolQuery.isLoading ? (
@@ -113,7 +113,7 @@ export function MatchMakerPool() {
             className="fixed bottom-24 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-2 text-[13px] font-extrabold text-white shadow-lg"
             style={{ background: MATCHMAKER_THEME.accent }}
           >
-            <MatchMakerTabIcon size={16} color="#fff" />
+            <MatchMakerTabIcon size={16} className="text-white" />
             {toast}
           </div>
         ) : null}

@@ -4,6 +4,7 @@ import { FormCard } from '@/components/settings/FormCard';
 import { GradientChip } from '@/components/settings/GradientChip';
 import { ToggleRow } from '@/components/settings/ToggleRow';
 import { MatchMakerLayout } from '@/features/matchmaker/MatchMakerLayout';
+import { matchmakerContentClass } from '@/lib/matchmaker/theme';
 import { onboardingFieldClass } from '@/lib/onboarding/formFieldClass';
 import { saveMatchMakerValues } from '@/services/matchmaker.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
@@ -152,7 +153,7 @@ export function MatchMakerValuesScreen() {
 
   return (
     <MatchMakerLayout>
-      <div className="mx-auto max-w-lg px-4 py-8 pb-10">
+      <div className={`${matchmakerContentClass()} py-8 pb-10`}>
         {step > 1 ? (
           <button
             type="button"
