@@ -4,13 +4,12 @@ import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
 import { DiscoverFilterIconButton } from '@/features/discover/DiscoverMobileFilterBar';
 import { MatchMakerFilterSheet } from '@/features/matchmaker/MatchMakerFilterSheet';
+import { useMatchMakerPage } from '@/features/matchmaker/MatchMakerPageContext';
 import { MatchMakerLayout, MatchMakerPageShell } from '@/features/matchmaker/MatchMakerLayout';
 import { MatchMakerPoolCard } from '@/features/matchmaker/MatchMakerPoolCard';
 import { MatchMakerPoolEmptyState } from '@/features/matchmaker/MatchMakerPoolEmptyState';
 import { buildCompatibilitySignals } from '@/lib/matchmaker/compatibility';
-import { defaultMatchMakerFilter, type MatchMakerFilterState } from '@/lib/matchmaker/filterState';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
-import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import { expressMatchMakerInterest, fetchMatchMakerPool } from '@/services/matchmaker.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
@@ -23,11 +22,10 @@ export function MatchMakerPool() {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { subscriptionState } = useSubscriptionContext();
+  const { filter, baseRadiusKm, sliderMaxKm, effectiveTier, applyFilter } = useMatchMakerPage();
   const [index, setIndex] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filter, setFilter] = useState<MatchMakerFilterState>(defaultMatchMakerFilter());
 
   const viewerQuery = useQuery({
     queryKey: ['profile-bundle', user?.id],
@@ -37,11 +35,6 @@ export function MatchMakerPool() {
     },
     enabled: !!user?.id,
   });
-
-  const baseRadiusKm = viewerQuery.data?.profile?.radius_km
-    ? Number(viewerQuery.data.profile.radius_km)
-    : 50;
-  const effectiveTier = subscriptionState.effectiveTier;
 
   const poolQuery = useQuery({
     queryKey: ['matchmaker-pool', user?.id, filter.maxDistanceKm, filter.sortBy],
@@ -114,7 +107,9 @@ export function MatchMakerPool() {
             {poolCount} member{poolCount === 1 ? '' : 's'} in your pool
             {filter.filterActive ? ' · filtered' : ''}
           </p>
-          <DiscoverFilterIconButton active={filter.filterActive} onClick={() => setFilterOpen(true)} />
+          <div className="xl:hidden">
+            <DiscoverFilterIconButton active={filter.filterActive} onClick={() => setFilterOpen(true)} />
+          </div>
         </div>
 
         {poolQuery.isLoading && !poolQuery.data ? (
@@ -147,11 +142,9 @@ export function MatchMakerPool() {
           onOpenChange={setFilterOpen}
           filter={filter}
           baseRadiusKm={baseRadiusKm}
+          sliderMaxKm={sliderMaxKm}
           effectiveTier={effectiveTier}
-          onApply={(next) => {
-            setFilter(next);
-            void queryClient.invalidateQueries({ queryKey: ['matchmaker-pool', user?.id] });
-          }}
+          onApply={applyFilter}
         />
 
         {toast ? (

@@ -6,6 +6,7 @@ import { PresenceProvider } from '@/contexts/PresenceContext';
 import { MessagesInboxProvider } from '@/contexts/MessagesInboxContext';
 import { NotificationInboxProvider } from '@/contexts/NotificationInboxContext';
 import { DiscoverPageProvider } from '@/features/discover/DiscoverPageContext';
+import { MatchMakerPageProvider } from '@/features/matchmaker/MatchMakerPageContext';
 import { PlanManagementPageProvider } from '@/features/plan-management/PlanManagementPageContext';
 import { useIsMobileDiscoverLayout } from '@/hooks/use-media-query';
 import { isAdminRoute } from '@/lib/navigation/navActive';
@@ -26,6 +27,14 @@ const PlanManagementSortFilterRail = dynamic(
   { loading: () => <div className="animate-pulse space-y-3 p-1" aria-hidden><div className="h-24 rounded-2xl bg-[#EDE8FF]/70" /></div> }
 );
 
+const MatchMakerSortFilterRail = dynamic(
+  () =>
+    import('@/features/matchmaker/MatchMakerSortFilterRail').then((m) => ({
+      default: m.MatchMakerSortFilterRail,
+    })),
+  { loading: () => <div className="animate-pulse space-y-3 p-1" aria-hidden><div className="h-24 rounded-2xl bg-[#FBF5F0]" /></div> }
+);
+
 export function AppShellRouter({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isMobileLayout = useIsMobileDiscoverLayout();
@@ -40,6 +49,7 @@ export function AppShellRouter({ children }: { children: ReactNode }) {
     pathname === '/subscription' || pathname.startsWith('/subscription/');
   const isMatchMaker =
     pathname === '/matchmaker' || pathname.startsWith('/matchmaker/');
+  const isMatchMakerPool = pathname === '/matchmaker';
   const isAdmin = isAdminRoute(pathname);
 
   const shell = (
@@ -50,12 +60,14 @@ export function AppShellRouter({ children }: { children: ReactNode }) {
       fixedMain={isMessages || (isDiscover && isMobileLayout)}
       flushMobileGutter={isPlanManagement}
       warmMain={isMatchMaker}
-      contextTitle={isDiscover || isPlanManagement ? 'Sort and filter' : undefined}
+      contextTitle={isDiscover || isPlanManagement || isMatchMakerPool ? 'Sort and filter' : undefined}
       context={
         isDiscover ? (
           <DiscoverForYouRail />
         ) : isPlanManagement ? (
           <PlanManagementSortFilterRail />
+        ) : isMatchMakerPool ? (
+          <MatchMakerSortFilterRail />
         ) : undefined
       }
     >
@@ -69,6 +81,8 @@ export function AppShellRouter({ children }: { children: ReactNode }) {
     content = <DiscoverPageProvider>{shell}</DiscoverPageProvider>;
   } else if (isPlanManagement) {
     content = <PlanManagementPageProvider>{shell}</PlanManagementPageProvider>;
+  } else if (isMatchMakerPool) {
+    content = <MatchMakerPageProvider>{shell}</MatchMakerPageProvider>;
   }
 
   return (
