@@ -81,7 +81,7 @@ export function MatchMakerPool() {
 
   return (
     <MatchMakerLayout>
-      <MatchMakerPageShell className="pt-2">
+      <MatchMakerPageShell>
         <TabPageHeader
           kicker="MatchMaker"
           title="Your pool"

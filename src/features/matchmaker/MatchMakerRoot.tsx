@@ -31,7 +31,7 @@ function daysUntil(iso?: string): number {
 function MatchMakerSkeleton() {
   return (
     <MatchMakerLayout>
-      <MatchMakerPageShell className="pt-2">
+      <MatchMakerPageShell>
         <TabPageHeader
           kicker="MatchMaker"
           title="Your pool"
@@ -110,7 +110,7 @@ export function MatchMakerRoot() {
   if (!user) {
     return (
       <MatchMakerLayout>
-        <MatchMakerPageShell className="pt-2">
+        <MatchMakerPageShell>
           <p className="text-center text-[14px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
             <Link href="/login" className="font-extrabold text-primary">
               Sign in
@@ -127,7 +127,7 @@ export function MatchMakerRoot() {
   if (error) {
     return (
       <MatchMakerLayout>
-        <MatchMakerPageShell className="pt-2">
+        <MatchMakerPageShell>
           <p className="text-center text-[14px] font-semibold text-[#EF4444]">{error}</p>
         </MatchMakerPageShell>
       </MatchMakerLayout>

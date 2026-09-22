@@ -73,7 +73,7 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
   if (isLoading) {
     return (
       <MatchMakerLayout>
-        <MatchMakerPageShell className="animate-pulse p-6">
+        <MatchMakerPageShell className="animate-pulse">
           <div className="h-64 rounded-3xl bg-[#FBF5F0]" />
         </MatchMakerPageShell>
       </MatchMakerLayout>
@@ -99,7 +99,7 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
 
   return (
     <MatchMakerLayout>
-      <MatchMakerPageShell className="pt-2">
+      <MatchMakerPageShell>
         {connection.status === 'paused' ? (
           <div
             className="mb-4 rounded-2xl border px-4 py-3 text-[13px] font-semibold"

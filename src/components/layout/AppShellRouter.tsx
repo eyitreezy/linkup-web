@@ -49,7 +49,7 @@ export function AppShellRouter({ children }: { children: ReactNode }) {
       wideMain={isSubscription}
       fixedMain={isMessages || (isDiscover && isMobileLayout)}
       flushMobileGutter={isPlanManagement}
-      flushVerticalGutter={isMatchMaker}
+      warmMain={isMatchMaker}
       contextTitle={isDiscover || isPlanManagement ? 'Sort and filter' : undefined}
       context={
         isDiscover ? (

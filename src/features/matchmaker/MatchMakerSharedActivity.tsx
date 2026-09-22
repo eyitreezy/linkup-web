@@ -36,7 +36,7 @@ export function MatchMakerSharedActivity({ connectionId }: { connectionId: strin
 
   return (
     <MatchMakerLayout>
-      <MatchMakerPageShell className="pt-2">
+      <MatchMakerPageShell>
         <h1 className="font-display text-2xl font-extrabold">Shared Activity</h1>
         <p className="mt-2 text-[13px] font-semibold text-muted">
           Answers are revealed only after you both submit.

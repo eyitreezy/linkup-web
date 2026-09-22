@@ -1,26 +1,22 @@
 'use client';
 
-import {
-  LINKUP_MAIN_CONTENT_GUTTER_BLEED_CLASS,
-  LINKUP_MAIN_CONTENT_GUTTER_CLASS,
-  LINKUP_TAB_PAGE_SHELL_CLASS,
-} from '@/lib/layout/mainContent';
+import { LINKUP_TAB_PAGE_SHELL_CLASS } from '@/lib/layout/mainContent';
 import { MATCHMAKER_THEME, matchmakerScreenClass } from '@/lib/matchmaker/theme';
 import { cn } from '@/utils/cn';
 import type { ReactNode } from 'react';
 
+/**
+ * MatchMaker route wrapper — shares AppShell padding with Discover; warm fill comes from AppShell `warmMain`.
+ */
 export function MatchMakerLayout({ children }: { children: ReactNode }) {
   return (
     <div
       className={cn(
         matchmakerScreenClass(),
         'w-full min-h-full',
-        LINKUP_MAIN_CONTENT_GUTTER_BLEED_CLASS,
-        LINKUP_MAIN_CONTENT_GUTTER_CLASS,
-        // Extend warm background through main's mobile bottom-nav clearance band.
         'max-lg:pb-[var(--linkup-bottom-nav-offset)] max-lg:-mb-[var(--linkup-bottom-nav-offset)]'
       )}
-      style={{ color: MATCHMAKER_THEME.textPrimary, backgroundColor: MATCHMAKER_THEME.background }}
+      style={{ color: MATCHMAKER_THEME.textPrimary }}
     >
       {children}
     </div>

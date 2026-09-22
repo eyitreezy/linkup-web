@@ -21,10 +21,10 @@ type Props = {
   fixedMain?: boolean;
   /** Plan management (etc.): page owns horizontal gutters on mobile. */
   flushMobileGutter?: boolean;
-  /** MatchMaker: remove shell vertical padding so page background fills the column. */
-  flushVerticalGutter?: boolean;
   /** Subscription / pricing grids — wider inner cap via --linkup-main-content-max-width-wide. */
   wideMain?: boolean;
+  /** MatchMaker — warm shell background without altering Discover padding rhythm. */
+  warmMain?: boolean;
 };
 
 export function AppShell({
@@ -35,8 +35,8 @@ export function AppShell({
   noContext,
   fixedMain,
   flushMobileGutter,
-  flushVerticalGutter,
   wideMain,
+  warmMain,
 }: Props) {
   const pathname = usePathname();
   const mainRef = useRef<HTMLElement>(null);
@@ -77,6 +77,7 @@ export function AppShell({
               'h-full max-h-full min-h-0 min-w-0 flex-1',
               fixedMain ? 'flex flex-col overflow-hidden' : 'overflow-y-auto overflow-x-hidden overscroll-y-contain',
               !fixedMain && 'max-lg:pb-[var(--linkup-bottom-nav-offset)]',
+              warmMain && !fullWidth && !fixedMain && 'bg-[#FDF8F4]',
               fullWidth && 'w-full min-w-0 max-w-full overflow-x-hidden px-0 py-0'
             )}
           >
@@ -86,11 +87,9 @@ export function AppShell({
               <div
                 className={cn(
                   'linkup-main-content-inner min-h-full overflow-x-hidden px-4 py-6 md:px-6 lg:pb-0',
-                  flushVerticalGutter && '!min-h-full !py-0',
                   mobileGutter,
-                  flushVerticalGutter && 'max-[424px]:!py-0 max-[374px]:!py-0 max-[359px]:!py-0',
-                  flushVerticalGutter && 'bg-[#FDF8F4]',
-                  wideMain && 'linkup-main-content-inner--wide'
+                  wideMain && 'linkup-main-content-inner--wide',
+                  warmMain && 'bg-[#FDF8F4]'
                 )}
               >
                 {children}

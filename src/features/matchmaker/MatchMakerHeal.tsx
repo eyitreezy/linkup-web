@@ -13,7 +13,7 @@ export function MatchMakerHeal() {
 
   return (
     <MatchMakerLayout>
-      <MatchMakerPageShell className="pt-2">
+      <MatchMakerPageShell>
         <h1 className="font-display text-2xl font-extrabold">A moment to refine</h1>
         <p className="mt-3 text-[14px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
           Before you return to MatchMaker, take a moment to update what matters to you.

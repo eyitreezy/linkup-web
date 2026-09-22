@@ -186,7 +186,7 @@ export function MatchMakerValuesScreen() {
 
   return (
     <MatchMakerLayout>
-      <MatchMakerPageShell className="pt-2">
+      <MatchMakerPageShell>
         {step > 1 ? (
           <button
             type="button"

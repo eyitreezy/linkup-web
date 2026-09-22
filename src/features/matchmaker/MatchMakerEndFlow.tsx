@@ -40,7 +40,7 @@ export function MatchMakerEndFlow({ connectionId }: { connectionId: string }) {
 
   return (
     <MatchMakerLayout>
-      <MatchMakerPageShell className="pt-2">
+      <MatchMakerPageShell>
         <FormCard>
           <h1 className="font-display text-2xl font-extrabold">End this connection?</h1>
           <p className="mt-3 text-[13px] font-semibold text-muted">

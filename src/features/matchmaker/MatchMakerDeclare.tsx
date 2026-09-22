@@ -32,7 +32,7 @@ export function MatchMakerDeclare() {
 
   return (
     <MatchMakerLayout>
-      <MatchMakerPageShell className="pt-2">
+      <MatchMakerPageShell>
         <h1 className="font-display text-2xl font-extrabold">Before you enter MatchMaker</h1>
         <p className="mt-4 text-[15px] font-semibold leading-relaxed text-muted">
           MatchMaker is built for one purpose: to help serious-minded individuals find a long-term

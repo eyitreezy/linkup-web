@@ -16,7 +16,7 @@ export const MATCHMAKER_THEME = {
 } as const;
 
 export function matchmakerScreenClass(): string {
-  return 'min-h-full bg-[#FDF8F4] text-[#1A1D26]';
+  return 'min-h-full text-[#1A1D26]';
 }
 
 /** Fills the AppShell scroll column — use on MatchMaker route wrappers without MatchMakerLayout. */
