@@ -42,6 +42,7 @@ export function MatchMakerPool() {
     enabled: !!user?.id,
     staleTime: 0,
     refetchOnMount: 'always',
+    placeholderData: (prev) => prev,
   });
 
   const cards = poolQuery.data?.data ?? [];
@@ -88,8 +89,13 @@ export function MatchMakerPool() {
           icon={<MatchMakerTabIcon size={22} />}
         />
 
-        {poolQuery.isLoading ? (
-          <div className="mt-6 h-80 animate-pulse rounded-3xl bg-[#FBF5F0]" />
+        {poolQuery.isLoading && !poolQuery.data ? (
+          <div className="mt-6 flex flex-col items-center gap-4 px-6 py-10">
+            <div className="h-[118px] w-[118px] animate-pulse rounded-full bg-[#EDE0D4]" />
+            <div className="h-5 w-48 animate-pulse rounded-full bg-[#EDE0D4]" />
+            <div className="h-4 w-64 animate-pulse rounded-full bg-[#EDE0D4]" />
+            <div className="h-4 w-56 animate-pulse rounded-full bg-[#EDE0D4]" />
+          </div>
         ) : null}
 
         {!poolQuery.isLoading && !current ? (

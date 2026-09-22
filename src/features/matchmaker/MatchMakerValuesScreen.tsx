@@ -9,10 +9,10 @@ import { saveMatchMakerValues } from '@/services/matchmaker.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
-import Link from 'next/link';
+import { cn } from '@/utils/cn';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { IoArrowBack } from 'react-icons/io5';
+import { IoArrowBack, IoClose } from 'react-icons/io5';
 
 const TOTAL_STEPS = 4;
 
@@ -37,6 +37,13 @@ const COMMUNICATION_LABELS: Record<string, string> = {
   flexible: 'Flexible',
 };
 
+const FAITH_TYPE_OPTIONS = [
+  { key: 'Christianity', label: 'Christianity' },
+  { key: 'Islam', label: 'Islam' },
+  { key: 'other', label: 'Other faith' },
+  { key: 'Prefer not to specify', label: 'Prefer not to specify' },
+] as const;
+
 function StepProgress({ step, total }: { step: number; total: number }) {
   const pct = Math.round((step / total) * 100);
   return (
@@ -60,12 +67,13 @@ type DealbreakersState = {
   family: boolean;
   location: boolean;
   age: boolean;
+  other: boolean;
   maxDistanceKm: number;
   ageMin: number;
   ageMax: number;
 };
 
-function buildDealbreakers(db: DealbreakersState): Record<string, unknown> {
+function buildDealbreakers(db: DealbreakersState, otherTags: string[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (db.faith) out.faith_alignment = true;
   if (db.family) out.family_goals_alignment = true;
@@ -74,11 +82,21 @@ function buildDealbreakers(db: DealbreakersState): Record<string, unknown> {
     out.age_min = db.ageMin;
     out.age_max = db.ageMax;
   }
+  if (db.other && otherTags.length > 0) {
+    out.other = otherTags;
+  }
   return out;
 }
 
-function faithDbValue(faith: string | null, faithType: string | null): string | null {
-  if (faith === 'yes') return faithType;
+function faithDbValue(
+  faith: string | null,
+  faithType: string | null,
+  otherFaithText: string
+): string | null {
+  if (faith === 'yes') {
+    if (faithType === 'other') return `other:${otherFaithText.trim()}`;
+    return faithType;
+  }
   if (faith === 'open') return 'open';
   if (faith === 'skip') return null;
   return null;
@@ -90,6 +108,7 @@ export function MatchMakerValuesScreen() {
   const [step, setStep] = useState(1);
   const [faith, setFaith] = useState<string | null>(null);
   const [faithType, setFaithType] = useState<string | null>(null);
+  const [otherFaithText, setOtherFaithText] = useState('');
   const [family, setFamily] = useState<string | null>(null);
   const [pace, setPace] = useState<string | null>(null);
   const [dealbreakers, setDealbreakers] = useState<DealbreakersState>({
@@ -97,10 +116,13 @@ export function MatchMakerValuesScreen() {
     family: false,
     location: false,
     age: false,
+    other: false,
     maxDistanceKm: 25,
     ageMin: 22,
     ageMax: 35,
   });
+  const [otherDealbreakers, setOtherDealbreakers] = useState<string[]>([]);
+  const [otherDbInput, setOtherDbInput] = useState('');
   const [communicationStyle, setCommunicationStyle] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,11 +136,23 @@ export function MatchMakerValuesScreen() {
   }, [user?.id]);
 
   const stepValid = useMemo(() => {
-    if (step === 1) return faith !== null && (faith !== 'yes' || faithType !== null);
+    if (step === 1) {
+      if (faith === null) return false;
+      if (faith === 'yes' && !faithType) return false;
+      if (faith === 'yes' && faithType === 'other' && !otherFaithText.trim()) return false;
+      return true;
+    }
     if (step === 2) return family !== null;
     if (step === 3) return pace !== null;
     return true;
-  }, [step, faith, faithType, family, pace]);
+  }, [step, faith, faithType, otherFaithText, family, pace]);
+
+  function addOtherDealbreakerTag() {
+    const trimmed = otherDbInput.trim();
+    if (!trimmed || otherDealbreakers.includes(trimmed) || otherDealbreakers.length >= 10) return;
+    setOtherDealbreakers((prev) => [...prev, trimmed]);
+    setOtherDbInput('');
+  }
 
   function handleContinue() {
     if (step < TOTAL_STEPS) {
@@ -134,11 +168,11 @@ export function MatchMakerValuesScreen() {
     setBusy(true);
     setError(null);
     const { error: saveError } = await saveMatchMakerValues(createClient(), user.id, {
-      faith: faithDbValue(faith, faithType),
+      faith: faithDbValue(faith, faithType, otherFaithText),
       family_goals: FAMILY_DB[family],
       pace_preference: PACE_DB[pace],
       communication_frequency: communicationStyle,
-      dealbreakers: buildDealbreakers(dealbreakers),
+      dealbreakers: buildDealbreakers(dealbreakers, otherDealbreakers),
     });
     setBusy(false);
     if (saveError) {
@@ -157,9 +191,9 @@ export function MatchMakerValuesScreen() {
           <button
             type="button"
             onClick={() => setStep((s) => Math.max(1, s - 1))}
-            className="mb-4 flex items-center gap-1 text-[14px] font-extrabold text-muted"
+            className="mb-4 flex min-h-[40px] items-center gap-2 rounded-full border border-border bg-white px-4 text-[14px] font-extrabold text-foreground transition hover:border-primary/30 hover:bg-[#F8F7FF]"
           >
-            <IoArrowBack size={18} />
+            <IoArrowBack size={16} />
             Back
           </button>
         ) : null}
@@ -169,9 +203,7 @@ export function MatchMakerValuesScreen() {
         {step === 1 ? (
           <FormCard>
             {communicationStyle ? (
-              <div
-                className="mb-5 rounded-xl border border-[#EDE0D4] bg-[#FBF5F0] px-4 py-3"
-              >
+              <div className="mb-5 rounded-xl border border-[#EDE0D4] bg-[#FBF5F0] px-4 py-3">
                 <p className="text-[12px] font-semibold text-muted">From your LinkUp profile</p>
                 <p className="mt-1 text-[14px] font-extrabold text-foreground">
                   Communication style: {COMMUNICATION_LABELS[communicationStyle] ?? communicationStyle}
@@ -199,23 +231,51 @@ export function MatchMakerValuesScreen() {
                   selected={faith === opt.key}
                   onClick={() => {
                     setFaith(opt.key);
-                    if (opt.key !== 'yes') setFaithType(null);
+                    if (opt.key !== 'yes') {
+                      setFaithType(null);
+                      setOtherFaithText('');
+                    }
                   }}
                 />
               ))}
             </div>
 
             {faith === 'yes' ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {['Christianity', 'Islam', 'Other faith', 'Prefer not to specify'].map((f) => (
-                  <GradientChip
-                    key={f}
-                    label={f}
-                    selected={faithType === f}
-                    onClick={() => setFaithType(f)}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {FAITH_TYPE_OPTIONS.map((opt) => (
+                    <GradientChip
+                      key={opt.key}
+                      label={opt.label}
+                      selected={faithType === opt.key}
+                      onClick={() => {
+                        setFaithType(opt.key);
+                        if (opt.key !== 'other') setOtherFaithText('');
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {faithType === 'other' ? (
+                  <div className="mt-4 space-y-1">
+                    <label className="block text-[12px] font-extrabold text-muted">
+                      Please specify your faith
+                    </label>
+                    <input
+                      type="text"
+                      value={otherFaithText}
+                      onChange={(e) => setOtherFaithText(e.target.value.slice(0, 50))}
+                      placeholder="e.g. Hinduism, Buddhism, Sikhism..."
+                      maxLength={50}
+                      className={onboardingFieldClass}
+                      autoFocus
+                    />
+                    <p className="text-right text-[11px] font-semibold text-muted">
+                      {otherFaithText.length}/50
+                    </p>
+                  </div>
+                ) : null}
+              </>
             ) : null}
           </FormCard>
         ) : null}
@@ -356,27 +416,100 @@ export function MatchMakerValuesScreen() {
                   </div>
                 </div>
               ) : null}
+              <ToggleRow
+                label="Other dealbreakers"
+                hint="Add your own specific requirements"
+                checked={dealbreakers.other}
+                onChange={(v) => setDealbreakers((d) => ({ ...d, other: v }))}
+              />
+              {dealbreakers.other ? (
+                <div className="mt-3 space-y-3 rounded-2xl border border-[#EDE0D4] bg-[#FBF5F0] p-4">
+                  <p className="text-[13px] font-extrabold text-foreground">Your dealbreakers</p>
+                  <p className="text-[12px] font-semibold text-muted">
+                    Add specific requirements that matter to you. Max 10.
+                  </p>
+
+                  {otherDealbreakers.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {otherDealbreakers.map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-[#EDE0D4] bg-white px-3 py-1.5 text-[13px] font-extrabold text-foreground"
+                        >
+                          {tag}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOtherDealbreakers((prev) => prev.filter((t) => t !== tag))
+                            }
+                            className="flex h-4 w-4 items-center justify-center rounded-full bg-muted/20 text-muted transition hover:bg-[#EF4444]/15 hover:text-[#EF4444]"
+                            aria-label={`Remove ${tag}`}
+                          >
+                            <IoClose size={10} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {otherDealbreakers.length < 10 ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={otherDbInput}
+                        onChange={(e) => setOtherDbInput(e.target.value.slice(0, 60))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addOtherDealbreakerTag();
+                          }
+                        }}
+                        placeholder="e.g. Must not smoke"
+                        maxLength={60}
+                        className={cn(onboardingFieldClass, 'flex-1')}
+                      />
+                      <button
+                        type="button"
+                        onClick={addOtherDealbreakerTag}
+                        disabled={
+                          !otherDbInput.trim() ||
+                          otherDealbreakers.includes(otherDbInput.trim())
+                        }
+                        className="min-h-[44px] rounded-full linkup-gradient-primary px-5 text-[13px] font-extrabold text-white disabled:opacity-40"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-[12px] font-semibold text-muted">
+                      Maximum of 10 dealbreakers reached.
+                    </p>
+                  )}
+
+                  <p className="text-right text-[11px] font-semibold text-muted">
+                    {otherDbInput.length}/60
+                  </p>
+                </div>
+              ) : null}
             </div>
           </FormCard>
         ) : null}
 
         {error ? <p className="mt-4 text-[13px] font-semibold text-[#EF4444]">{error}</p> : null}
 
-        <button
-          type="button"
-          onClick={handleContinue}
-          disabled={busy || (step < TOTAL_STEPS && !stepValid)}
-          className="mt-6 w-full min-h-[48px] rounded-full linkup-gradient-primary text-[15px] font-extrabold text-white transition hover:opacity-95 active:scale-[0.98] disabled:opacity-50"
-        >
-          {busy ? 'Saving…' : step < TOTAL_STEPS ? 'Continue' : 'Save and enter MatchMaker'}
-        </button>
-
-        <Link
-          href="/matchmaker"
-          className="mt-4 block text-center text-[13px] font-semibold text-muted underline"
-        >
-          Go back
-        </Link>
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={handleContinue}
+            disabled={busy || (step < TOTAL_STEPS && !stepValid)}
+            className={cn(
+              'min-h-[48px] rounded-full linkup-gradient-primary px-8 text-[15px] font-extrabold text-white transition hover:opacity-95 active:scale-[0.98] disabled:opacity-50',
+              step < TOTAL_STEPS ? 'min-w-[160px]' : 'min-w-[280px]'
+            )}
+          >
+            {busy ? 'Saving…' : step < TOTAL_STEPS ? 'Continue' : 'Save and enter MatchMaker'}
+          </button>
+        </div>
       </MatchMakerPageShell>
     </MatchMakerLayout>
   );

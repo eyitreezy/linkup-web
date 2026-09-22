@@ -14,7 +14,7 @@ export function MatchMakerLayout({ children }: { children: ReactNode }) {
     <div
       className={cn(
         matchmakerScreenClass(),
-        'min-h-full',
+        'min-h-screen',
         LINKUP_MAIN_CONTENT_GUTTER_BLEED_CLASS,
         LINKUP_MAIN_CONTENT_GUTTER_CLASS
       )}
