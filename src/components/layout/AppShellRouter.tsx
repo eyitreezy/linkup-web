@@ -38,6 +38,8 @@ export function AppShellRouter({ children }: { children: ReactNode }) {
     pathname === '/plan-management' || pathname.startsWith('/plan-management/');
   const isSubscription =
     pathname === '/subscription' || pathname.startsWith('/subscription/');
+  const isMatchMaker =
+    pathname === '/matchmaker' || pathname.startsWith('/matchmaker/');
   const isAdmin = isAdminRoute(pathname);
 
   const shell = (
@@ -47,6 +49,7 @@ export function AppShellRouter({ children }: { children: ReactNode }) {
       wideMain={isSubscription}
       fixedMain={isMessages || (isDiscover && isMobileLayout)}
       flushMobileGutter={isPlanManagement}
+      flushVerticalGutter={isMatchMaker}
       contextTitle={isDiscover || isPlanManagement ? 'Sort and filter' : undefined}
       context={
         isDiscover ? (

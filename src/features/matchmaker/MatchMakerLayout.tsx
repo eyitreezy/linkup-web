@@ -14,11 +14,13 @@ export function MatchMakerLayout({ children }: { children: ReactNode }) {
     <div
       className={cn(
         matchmakerScreenClass(),
-        'min-h-screen',
+        'w-full min-h-full',
         LINKUP_MAIN_CONTENT_GUTTER_BLEED_CLASS,
-        LINKUP_MAIN_CONTENT_GUTTER_CLASS
+        LINKUP_MAIN_CONTENT_GUTTER_CLASS,
+        // Extend warm background through main's mobile bottom-nav clearance band.
+        'max-lg:pb-[var(--linkup-bottom-nav-offset)] max-lg:-mb-[var(--linkup-bottom-nav-offset)]'
       )}
-      style={{ color: MATCHMAKER_THEME.textPrimary }}
+      style={{ color: MATCHMAKER_THEME.textPrimary, backgroundColor: MATCHMAKER_THEME.background }}
     >
       {children}
     </div>

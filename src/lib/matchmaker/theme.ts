@@ -19,3 +19,8 @@ export function matchmakerScreenClass(): string {
   return 'min-h-full bg-[#FDF8F4] text-[#1A1D26]';
 }
 
+/** Fills the AppShell scroll column — use on MatchMaker route wrappers without MatchMakerLayout. */
+export function matchmakerRouteShellClass(): string {
+  return `${matchmakerScreenClass()} w-full min-h-full max-lg:pb-[var(--linkup-bottom-nav-offset)] max-lg:-mb-[var(--linkup-bottom-nav-offset)]`;
+}
+

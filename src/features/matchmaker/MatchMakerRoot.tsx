@@ -148,7 +148,7 @@ export function MatchMakerRoot() {
   const gateModal = gate as MatchMakerGateModalState;
 
   return (
-    <div className="relative min-h-full">
+    <div className="relative min-h-full w-full">
       <div
         className={cn(isGated && 'pointer-events-none select-none')}
         style={isGated ? { filter: 'blur(12px)' } : undefined}

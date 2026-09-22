@@ -21,6 +21,8 @@ type Props = {
   fixedMain?: boolean;
   /** Plan management (etc.): page owns horizontal gutters on mobile. */
   flushMobileGutter?: boolean;
+  /** MatchMaker: remove shell vertical padding so page background fills the column. */
+  flushVerticalGutter?: boolean;
   /** Subscription / pricing grids — wider inner cap via --linkup-main-content-max-width-wide. */
   wideMain?: boolean;
 };
@@ -33,6 +35,7 @@ export function AppShell({
   noContext,
   fixedMain,
   flushMobileGutter,
+  flushVerticalGutter,
   wideMain,
 }: Props) {
   const pathname = usePathname();
@@ -83,7 +86,10 @@ export function AppShell({
               <div
                 className={cn(
                   'linkup-main-content-inner min-h-full overflow-x-hidden px-4 py-6 md:px-6 lg:pb-0',
+                  flushVerticalGutter && '!min-h-full !py-0',
                   mobileGutter,
+                  flushVerticalGutter && 'max-[424px]:!py-0 max-[374px]:!py-0 max-[359px]:!py-0',
+                  flushVerticalGutter && 'bg-[#FDF8F4]',
                   wideMain && 'linkup-main-content-inner--wide'
                 )}
               >
