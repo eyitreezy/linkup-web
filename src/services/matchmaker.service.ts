@@ -18,15 +18,25 @@ export type MatchMakerPoolEmptyReason =
   | 'genuinely_empty'
   | null;
 
+export type MatchMakerPoolFilter = {
+  maxDistanceKm?: number | null;
+  sortBy?: 'best_match' | 'recently_joined';
+};
+
 export async function fetchMatchMakerPool(
   client: SupabaseClient,
-  limit = 12
+  limit = 12,
+  filter?: MatchMakerPoolFilter
 ): Promise<{
   data: PoolProfileRow[];
   emptyReason: MatchMakerPoolEmptyReason;
   error: string | null;
 }> {
-  const { data, error } = await client.rpc('matchmaker_get_pool', { p_limit: limit });
+  const { data, error } = await client.rpc('matchmaker_get_pool', {
+    p_limit: limit,
+    p_max_distance_km: filter?.maxDistanceKm ?? null,
+    p_sort_by: filter?.sortBy ?? 'best_match',
+  });
   if (error) return { data: [], emptyReason: null, error: error.message };
 
   if (Array.isArray(data)) {

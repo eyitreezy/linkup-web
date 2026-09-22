@@ -2,25 +2,32 @@
 
 import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
+import { DiscoverFilterIconButton } from '@/features/discover/DiscoverMobileFilterBar';
+import { MatchMakerFilterSheet } from '@/features/matchmaker/MatchMakerFilterSheet';
 import { MatchMakerLayout, MatchMakerPageShell } from '@/features/matchmaker/MatchMakerLayout';
 import { MatchMakerPoolCard } from '@/features/matchmaker/MatchMakerPoolCard';
 import { MatchMakerPoolEmptyState } from '@/features/matchmaker/MatchMakerPoolEmptyState';
 import { buildCompatibilitySignals } from '@/lib/matchmaker/compatibility';
+import { defaultMatchMakerFilter, type MatchMakerFilterState } from '@/lib/matchmaker/filterState';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
+import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import { expressMatchMakerInterest, fetchMatchMakerPool } from '@/services/matchmaker.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 export function MatchMakerPool() {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { subscriptionState } = useSubscriptionContext();
   const [index, setIndex] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filter, setFilter] = useState<MatchMakerFilterState>(defaultMatchMakerFilter());
 
   const viewerQuery = useQuery({
     queryKey: ['profile-bundle', user?.id],
@@ -31,11 +38,19 @@ export function MatchMakerPool() {
     enabled: !!user?.id,
   });
 
+  const baseRadiusKm = viewerQuery.data?.profile?.radius_km
+    ? Number(viewerQuery.data.profile.radius_km)
+    : 50;
+  const effectiveTier = subscriptionState.effectiveTier;
+
   const poolQuery = useQuery({
-    queryKey: ['matchmaker-pool', user?.id],
+    queryKey: ['matchmaker-pool', user?.id, filter.maxDistanceKm, filter.sortBy],
     queryFn: async () => {
       const client = createClient();
-      const result = await fetchMatchMakerPool(client, 12);
+      const result = await fetchMatchMakerPool(client, 12, {
+        maxDistanceKm: filter.maxDistanceKm,
+        sortBy: filter.sortBy,
+      });
       if (result.error) throw new Error(result.error);
       return result;
     },
@@ -48,6 +63,11 @@ export function MatchMakerPool() {
   const cards = poolQuery.data?.data ?? [];
   const emptyReason = poolQuery.data?.emptyReason ?? null;
   const current = cards[index] ?? null;
+  const poolCount = cards.length;
+
+  useEffect(() => {
+    setIndex(0);
+  }, [filter.maxDistanceKm, filter.sortBy]);
 
   const signals = useMemo(() => {
     if (!current || !viewerQuery.data?.profile) return [];
@@ -89,6 +109,14 @@ export function MatchMakerPool() {
           icon={<MatchMakerTabIcon size={22} />}
         />
 
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="min-w-0 flex-1 truncate text-[10px] font-extrabold uppercase tracking-wide text-muted min-[360px]:text-[11px] sm:text-[12px]">
+            {poolCount} member{poolCount === 1 ? '' : 's'} in your pool
+            {filter.filterActive ? ' · filtered' : ''}
+          </p>
+          <DiscoverFilterIconButton active={filter.filterActive} onClick={() => setFilterOpen(true)} />
+        </div>
+
         {poolQuery.isLoading && !poolQuery.data ? (
           <div className="mt-6 flex flex-col items-center gap-4 px-6 py-10">
             <div className="h-[118px] w-[118px] animate-pulse rounded-full bg-[#EDE0D4]" />
@@ -113,6 +141,18 @@ export function MatchMakerPool() {
             />
           </div>
         ) : null}
+
+        <MatchMakerFilterSheet
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
+          filter={filter}
+          baseRadiusKm={baseRadiusKm}
+          effectiveTier={effectiveTier}
+          onApply={(next) => {
+            setFilter(next);
+            void queryClient.invalidateQueries({ queryKey: ['matchmaker-pool', user?.id] });
+          }}
+        />
 
         {toast ? (
           <div
