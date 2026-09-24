@@ -68,3 +68,44 @@ export function MatchMakerPrimaryButton({
     </button>
   );
 }
+
+export function MatchMakerSecondaryButton({
+  children,
+  disabled,
+  onClick,
+  className = '',
+  variant = 'filled',
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  onClick?: () => void;
+  className?: string;
+  /** `filled` — white pill (pool cards). `text` — text-only (profile action row). */
+  variant?: 'filled' | 'text';
+}) {
+  if (variant === 'text') {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onClick}
+        className={`min-h-[48px] px-2 text-[15px] font-extrabold transition hover:opacity-80 disabled:opacity-50 ${className}`}
+        style={{ color: MATCHMAKER_THEME.textMuted }}
+      >
+        {children}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`w-full min-h-[48px] rounded-full border bg-white font-extrabold shadow-sm transition hover:opacity-95 active:scale-[0.98] disabled:opacity-50 ${className}`}
+      style={{ borderColor: MATCHMAKER_THEME.disabled, color: MATCHMAKER_THEME.textMuted }}
+    >
+      {children}
+    </button>
+  );
+}

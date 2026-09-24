@@ -7,7 +7,9 @@ import {
 } from '@/features/matchmaker/MatchMakerPoolCardParts';
 import { ageFromBirthDate, type PoolProfileRow } from '@/lib/matchmaker/compatibility';
 import { formatPoolDistanceLabel, poolProfilePhotoUri } from '@/lib/matchmaker/poolCardUtils';
+import { matchmakerProfileHref } from '@/lib/matchmaker/routes';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
+import Link from 'next/link';
 import { IoShieldCheckmark } from 'react-icons/io5';
 
 type Props = {
@@ -18,6 +20,83 @@ type Props = {
   onExpressInterest?: () => void;
   expressBusy?: boolean;
 };
+
+function PoolCardHero({ photo, distanceLabel }: { photo: string | null; distanceLabel: string | null }) {
+  return (
+    <div className="relative">
+      <div
+        className="h-36 min-[360px]:h-44 w-full"
+        style={{ background: `linear-gradient(135deg, ${MATCHMAKER_THEME.surfaceWarm} 0%, #F5E8DF 100%)` }}
+      >
+        {photo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={photo}
+            alt=""
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-[12px] font-semibold text-muted/70">
+            No photo
+          </div>
+        )}
+      </div>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent" />
+      {distanceLabel ? (
+        <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+          <MatchMakerPoolDistancePill label={distanceLabel} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PoolCardSummary({
+  profile,
+  displayName,
+  age,
+  signals,
+  showViewLink,
+}: {
+  profile: PoolProfileRow;
+  displayName: string;
+  age: number | null;
+  signals: string[];
+  showViewLink: boolean;
+}) {
+  return (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <h3
+          className="font-display text-lg font-extrabold leading-snug transition group-hover:opacity-90"
+          style={{ color: MATCHMAKER_THEME.textPrimary }}
+        >
+          {displayName}
+          {age != null ? `, ${age}` : ''}
+        </h3>
+        {profile.verified_badge ? (
+          <span
+            className="inline-flex shrink-0 items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-extrabold"
+            style={{ background: `${MATCHMAKER_THEME.accent}18`, color: MATCHMAKER_THEME.accent }}
+          >
+            <IoShieldCheckmark size={11} />
+            Verified
+          </span>
+        ) : null}
+      </div>
+      {profile.location_label ? (
+        <p className="mt-1 truncate text-[12px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
+          {profile.location_label}
+        </p>
+      ) : null}
+      <MatchMakerPoolCardSignals signals={signals} className="mt-3" />
+      {showViewLink ? (
+        <p className="mt-3 text-right text-[13px] font-extrabold text-primary">View full profile</p>
+      ) : null}
+    </>
+  );
+}
 
 export function MatchMakerPoolGridCard({
   profile,
@@ -31,74 +110,51 @@ export function MatchMakerPoolGridCard({
   const photo = poolProfilePhotoUri(profile);
   const distanceLabel = formatPoolDistanceLabel(profile.distance_km);
   const displayName = profile.display_name?.trim() || 'Member';
+  const profileHref = preview ? null : matchmakerProfileHref(profile.user_id);
 
   return (
     <article
       className="group min-w-0 overflow-hidden rounded-[18px] border bg-white shadow-[0_8px_28px_rgba(155,27,75,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(155,27,75,0.12)] min-[360px]:rounded-[22px]"
       style={{ borderColor: MATCHMAKER_THEME.border }}
     >
-      <div className="relative">
-        <div
-          className="h-36 min-[360px]:h-44 w-full"
-          style={{ background: `linear-gradient(135deg, ${MATCHMAKER_THEME.surfaceWarm} 0%, #F5E8DF 100%)` }}
-        >
-          {photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={photo}
-              alt=""
-              className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-[12px] font-semibold text-muted/70">
-              No photo
-            </div>
-          )}
-        </div>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent" />
-        {distanceLabel ? (
-          <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-            <MatchMakerPoolDistancePill label={distanceLabel} />
-          </div>
-        ) : null}
-      </div>
+      {profileHref ? (
+        <Link href={profileHref} className="block">
+          <PoolCardHero photo={photo} distanceLabel={distanceLabel} />
+        </Link>
+      ) : (
+        <PoolCardHero photo={photo} distanceLabel={distanceLabel} />
+      )}
 
       <div className="p-3 min-[360px]:p-4">
-        <div className="flex items-start justify-between gap-2">
-          <h3
-            className="font-display text-lg font-extrabold leading-snug transition group-hover:opacity-90"
-            style={{ color: MATCHMAKER_THEME.textPrimary }}
-          >
-            {displayName}
-            {age != null ? `, ${age}` : ''}
-          </h3>
-          {profile.verified_badge ? (
-            <span
-              className="inline-flex shrink-0 items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-extrabold"
-              style={{ background: `${MATCHMAKER_THEME.accent}18`, color: MATCHMAKER_THEME.accent }}
-            >
-              <IoShieldCheckmark size={11} />
-              Verified
-            </span>
-          ) : null}
+        {profileHref ? (
+          <Link href={profileHref} className="block">
+            <PoolCardSummary
+              profile={profile}
+              displayName={displayName}
+              age={age}
+              signals={signals}
+              showViewLink
+            />
+          </Link>
+        ) : (
+          <PoolCardSummary
+            profile={profile}
+            displayName={displayName}
+            age={age}
+            signals={signals}
+            showViewLink={false}
+          />
+        )}
+
+        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <MatchMakerPoolCardActions
+            preview={preview}
+            onPass={onPass}
+            onExpressInterest={onExpressInterest}
+            expressBusy={expressBusy}
+            className="mt-4"
+          />
         </div>
-
-        {profile.location_label ? (
-          <p className="mt-1 truncate text-[12px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
-            {profile.location_label}
-          </p>
-        ) : null}
-
-        <MatchMakerPoolCardSignals signals={signals} className="mt-3" />
-
-        <MatchMakerPoolCardActions
-          preview={preview}
-          onPass={onPass}
-          onExpressInterest={onExpressInterest}
-          expressBusy={expressBusy}
-          className="mt-4"
-        />
       </div>
     </article>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { MatchMakerPrimaryButton } from '@/features/matchmaker/MatchMakerLayout';
+import { MatchMakerPrimaryButton, MatchMakerSecondaryButton } from '@/features/matchmaker/MatchMakerLayout';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { cn } from '@/utils/cn';
 
@@ -57,17 +57,12 @@ export function MatchMakerPoolCardActions({
 
   return (
     <div className={cn(compact ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-2 gap-3', className)}>
-      <button
-        type="button"
+      <MatchMakerSecondaryButton
         onClick={onPass}
-        className={cn(
-          'rounded-full border font-extrabold transition hover:opacity-90',
-          compact ? 'min-h-[40px] text-[12px]' : 'min-h-[48px] text-[14px]'
-        )}
-        style={{ borderColor: MATCHMAKER_THEME.disabled, color: MATCHMAKER_THEME.textMuted }}
+        className={compact ? 'min-h-[40px] text-[12px]' : undefined}
       >
         Pass
-      </button>
+      </MatchMakerSecondaryButton>
       <MatchMakerPrimaryButton
         disabled={expressBusy}
         onClick={onExpressInterest}

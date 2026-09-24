@@ -212,8 +212,13 @@ Has user completed MatchMaker values setup?
 │                                     │
 │─────────────────────────────────────│
 │  [Express Interest]    [Pass]       │
+│  [View full profile]                │
 └─────────────────────────────────────┘
 ```
+
+**Web pool (list / grid):** Same card content as mobile summary. Toggle list/grid beside “N members in your pool” (Discover-style pill). Tapping the card or **View full profile** opens `/matchmaker/profile/:userId` (Full MatchMaker Profile) with slide-in-from-right animation. Pass button is white-filled, not transparent. Public profile (`/user/:id`) is not used from the pool — it lacks compatibility signals and MatchMaker actions.
+
+**Full MatchMaker Profile (`/matchmaker/profile/:userId`):** Hero uses the same `HostMediaGallery` photo + intro-video slider as Member Public Profile (swipe/tap pagination, progress segments, video play/mute) — not a single static image. Compatibility, interests, bio, and prompts scroll below; Pass / Express Interest fixed at bottom.
 
 **Compatibility signals (human-language, not a score):**
 Generated from overlap between both users' values inputs, interest tags, activity level, location, and communication style. Examples:

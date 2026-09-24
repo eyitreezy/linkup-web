@@ -521,7 +521,7 @@ Card content:
 - Button tap = same outcome as swipe, same haptic, same card animation
 
 **Web — pool layout:**
-Grid of profile cards (same style as Discover on web). Each card has Express Interest and Pass buttons at the bottom. No swipe — click-based. Cards load in batches of 12.
+List or grid of profile cards (same structure and toggle as Discover on web — list/grid pill beside the member count). Each card uses MatchMaker warm tokens (`#EDE0D4` borders, `#9B1B4B` accent) with Discover-style layout. Cards are tappable: photo, summary, and **View full profile** open the Full MatchMaker Profile screen. Express Interest and Pass stay on the card (white secondary + gradient primary) and do not navigate. Cards load in batches of 12.
 
 ---
 
@@ -555,13 +555,20 @@ in their queue automatically.
 
 ### 2.3 Profile View (Full MatchMaker Profile)
 
-User taps "View full profile" link on a card.
+**Route (web):** `/matchmaker/profile/:userId`
 
-Screen slides in from right. Header has back chevron.
+**When to use this screen (not the public profile):**
+Pool browsing always opens the **Full MatchMaker Profile** — not `/user/:id` (Member Public Profile). The public profile is for general LinkUp (Discover, messaging, reviews). MatchMaker profile adds compatibility context and Pass / Express Interest actions. Values, dealbreakers, and connection history are never shown here.
+
+**Entry:** User taps anywhere on the pool card summary (list or grid), the **View full profile** link, or the list chevron. Screen **slides in from right** (`320ms`, ease-out cubic bezier `(0.25, 0.46, 0.45, 0.94)`). Header has back chevron (returns to pool with slide-out-left `280ms`).
+
+**Pool card secondary button:** Pass uses a **white-filled** pill (`#FFFFFF` surface, `#C8BDB8` border) — not transparent.
+
+**Photo & video slider (web):** Reuses `HostMediaGallery` — the same swipeable photo + intro-video carousel as Member Public Profile (`UserProfileScreen`). Shown edge-to-edge in the top ~45% hero (not a single static image). Progress segments at top, tap left/right thirds to paginate, intro video with play/mute controls, primary-photo badge. Warm cream gradient fades into scroll content below.
 
 ```
-[Full photo — top 45% — edge to edge]
-[Gradient overlay bottom 30% of photo — warm cream fade]
+[Photo + video slider — top ~45% — edge to edge — HostMediaGallery]
+[Gradient overlay bottom 30% — warm cream fade into scroll content]
 
 [Content scrolls below]
 

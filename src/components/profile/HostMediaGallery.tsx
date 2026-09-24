@@ -14,10 +14,12 @@ import { IoCheckmarkCircle, IoPlay, IoVolumeHigh, IoVolumeMute } from 'react-ico
 type Props = {
   profile: Pick<DbProfile, 'primary_photo_url' | 'photo_urls' | 'avatar_url' | 'display_name'> | null;
   videos?: DbProfileVideo[];
+  /** `hero` — edge-to-edge MatchMaker / profile header (~45vh). `default` — card inset gallery. */
+  layout?: 'default' | 'hero';
   className?: string;
 };
 
-export function HostMediaGallery({ profile, videos = [], className }: Props) {
+export function HostMediaGallery({ profile, videos = [], layout = 'default', className }: Props) {
   const items = useMemo(() => buildHostMediaSequence(profile, videos), [profile, videos]);
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState<Record<string, boolean>>({});
@@ -50,11 +52,17 @@ export function HostMediaGallery({ profile, videos = [], className }: Props) {
 
   const displayName = profile?.display_name?.trim() || 'Member';
 
+  const shellClass =
+    layout === 'hero'
+      ? 'relative aspect-auto min-h-[42vh] w-full overflow-hidden sm:min-h-[45vh] md:aspect-[16/10] md:max-h-[50vh]'
+      : 'relative aspect-[4/5] w-full overflow-hidden bg-[#1a1530] min-[400px]:aspect-[3/4] md:aspect-[16/10] md:max-h-[28rem]';
+
   if (count === 0) {
     return (
       <div
         className={cn(
-          'relative aspect-[4/5] w-full overflow-hidden bg-gradient-to-br from-[#EDE8FF] via-[#FFF0F5] to-[#E8FAF4] min-[400px]:aspect-[3/4] md:aspect-[16/10] md:max-h-[28rem]',
+          shellClass,
+          'bg-gradient-to-br from-[#EDE8FF] via-[#FFF0F5] to-[#E8FAF4]',
           className
         )}
       >
@@ -70,10 +78,7 @@ export function HostMediaGallery({ profile, videos = [], className }: Props) {
 
   return (
     <div
-      className={cn(
-        'relative aspect-[4/5] w-full select-none overflow-hidden bg-[#1a1530] min-[400px]:aspect-[3/4] md:aspect-[16/10] md:max-h-[28rem]',
-        className
-      )}
+      className={cn(shellClass, 'select-none bg-[#1a1530]', className)}
       onTouchStart={(e) => {
         touchStartX.current = e.changedTouches[0]?.clientX ?? null;
       }}

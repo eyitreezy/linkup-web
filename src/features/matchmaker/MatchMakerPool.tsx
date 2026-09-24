@@ -12,6 +12,7 @@ import { MatchMakerPoolFeedSkeleton } from '@/features/matchmaker/MatchMakerPool
 import { MatchMakerPoolGridCard } from '@/features/matchmaker/MatchMakerPoolGridCard';
 import { MatchMakerPoolListCard } from '@/features/matchmaker/MatchMakerPoolListCard';
 import { buildCompatibilitySignals } from '@/lib/matchmaker/compatibility';
+import { consumePoolMemberDismissed } from '@/lib/matchmaker/poolNavigation';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { expressMatchMakerInterest, fetchMatchMakerPool } from '@/services/matchmaker.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
@@ -87,6 +88,13 @@ export function MatchMakerPool() {
   useEffect(() => {
     setDismissedIds(new Set());
   }, [filter.maxDistanceKm, filter.sortBy, poolQuery.data]);
+
+  useEffect(() => {
+    const dismissedId = consumePoolMemberDismissed();
+    if (dismissedId) {
+      setDismissedIds((prev) => new Set(prev).add(dismissedId));
+    }
+  }, []);
 
   const visibleCards = useMemo(
     () => cards.filter((card) => !dismissedIds.has(card.user_id)),
