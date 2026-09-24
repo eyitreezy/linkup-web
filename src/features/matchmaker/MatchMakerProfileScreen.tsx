@@ -9,46 +9,67 @@ import {
   MatchMakerSecondaryButton,
 } from '@/features/matchmaker/MatchMakerLayout';
 import { MatchMakerSlideIn } from '@/features/matchmaker/MatchMakerSlideIn';
+import { ageFromBirthDate } from '@/lib/matchmaker/compatibility';
 import {
-  ageFromBirthDate,
-  buildCompatibilitySignals,
-  type PoolProfileRow,
-} from '@/lib/matchmaker/compatibility';
+  buildMatchMakerProfileInsights,
+  communicationStyleLabel,
+  meetingIntentLabel,
+  profileDistanceLabel,
+  sharedLanguages,
+} from '@/lib/matchmaker/profileView';
 import { markPoolMemberDismissed } from '@/lib/matchmaker/poolNavigation';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { expressMatchMakerInterest } from '@/services/matchmaker.service';
 import { fetchProfileVideos } from '@/services/profileMedia.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
-import type { DbProfile } from '@/types/database';
 import { useAuthStore } from '@/stores/auth-store';
+import { cn } from '@/utils/cn';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { IoChevronBack, IoShieldCheckmark } from 'react-icons/io5';
 
-function profileToPoolRow(profile: DbProfile): PoolProfileRow {
-  return {
-    user_id: profile.user_id,
-    display_name: profile.display_name,
-    birth_date: profile.birth_date ?? null,
-    location_label: profile.location_label,
-    photo_urls: profile.photo_urls,
-    primary_photo_url: profile.primary_photo_url,
-    avatar_url: profile.avatar_url,
-    preferences: profile.preferences,
-    communication_style: (profile as { communication_style?: string | null }).communication_style ?? null,
-    latitude: profile.latitude,
-    longitude: profile.longitude,
-    verified_badge: profile.verified_badge,
-  };
+function ProfileSection({
+  title,
+  children,
+  warm = false,
+  className,
+}: {
+  title: string;
+  children: ReactNode;
+  warm?: boolean;
+  className?: string;
+}) {
+  return (
+    <section
+      className={cn('rounded-2xl border p-4', className)}
+      style={{
+        borderColor: MATCHMAKER_THEME.border,
+        background: warm ? MATCHMAKER_THEME.surfaceWarm : MATCHMAKER_THEME.surface,
+      }}
+    >
+      <h2 className="text-[12px] font-extrabold uppercase tracking-wide" style={{ color: MATCHMAKER_THEME.textMuted }}>
+        {title}
+      </h2>
+      <div className="mt-3">{children}</div>
+    </section>
+  );
 }
 
-function signalIcon(signal: string): string {
-  if (signal.startsWith('Shared interest')) return '🏷️';
-  if (signal.includes('communication') || signal.includes('contact')) return '💬';
-  if (signal.startsWith('Located in')) return '📍';
-  return '✨';
+function GlanceChip({ label, accent = false }: { label: string; accent?: boolean }) {
+  return (
+    <span
+      className="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-extrabold"
+      style={{
+        borderColor: accent ? `${MATCHMAKER_THEME.accent}40` : MATCHMAKER_THEME.border,
+        background: accent ? `${MATCHMAKER_THEME.accent}12` : MATCHMAKER_THEME.surface,
+        color: accent ? MATCHMAKER_THEME.accent : MATCHMAKER_THEME.textPrimary,
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 type Props = { userId: string };
@@ -81,18 +102,21 @@ export function MatchMakerProfileScreen({ userId }: Props) {
     enabled: !!userId,
   });
 
-  const signals = useMemo(() => {
-    const viewerProfile = viewerQuery.data?.profile;
+  const viewerProfile = viewerQuery.data?.profile;
+
+  const insights = useMemo(() => {
     const candidate = profileQuery.data?.profile;
     if (!viewerProfile || !candidate) return [];
-    return buildCompatibilitySignals(
-      {
+    return buildMatchMakerProfileInsights({
+      viewer: {
         communication_style: (viewerProfile as { communication_style?: string | null }).communication_style,
         preferences: viewerProfile.preferences,
+        latitude: viewerProfile.latitude,
+        longitude: viewerProfile.longitude,
       },
-      profileToPoolRow(candidate)
-    );
-  }, [viewerQuery.data?.profile, profileQuery.data?.profile]);
+      candidate,
+    });
+  }, [viewerProfile, profileQuery.data?.profile]);
 
   const expressMutation = useMutation({
     mutationFn: async () => {
@@ -121,10 +145,10 @@ export function MatchMakerProfileScreen({ userId }: Props) {
   if (profileQuery.isLoading) {
     return (
       <MatchMakerLayout>
-        <MatchMakerPageShell className="animate-pulse space-y-4">
-          <div className="h-10 w-24 rounded-full" style={{ background: MATCHMAKER_THEME.border }} />
-          <div className="min-h-[42vh] rounded-none sm:min-h-[45vh]" style={{ background: MATCHMAKER_THEME.surfaceWarm }} />
-          <div className="h-40 rounded-2xl" style={{ background: MATCHMAKER_THEME.border }} />
+        <MatchMakerPageShell className="space-y-4">
+          <div className="h-10 w-28 animate-pulse rounded-full" style={{ background: MATCHMAKER_THEME.border }} />
+          <div className="min-h-[42vh] animate-pulse rounded-none sm:min-h-[45vh]" style={{ background: MATCHMAKER_THEME.surfaceWarm }} />
+          <div className="h-40 animate-pulse rounded-2xl" style={{ background: MATCHMAKER_THEME.border }} />
         </MatchMakerPageShell>
       </MatchMakerLayout>
     );
@@ -137,8 +161,8 @@ export function MatchMakerProfileScreen({ userId }: Props) {
           <button
             type="button"
             onClick={() => router.back()}
-            className="inline-flex min-h-[40px] items-center gap-1 text-[13px] font-extrabold"
-            style={{ color: MATCHMAKER_THEME.accent }}
+            className="inline-flex min-h-[40px] items-center gap-1 rounded-full border bg-white px-3 text-[13px] font-extrabold shadow-sm"
+            style={{ borderColor: MATCHMAKER_THEME.border, color: MATCHMAKER_THEME.textPrimary }}
           >
             <IoChevronBack size={18} />
             Back
@@ -154,36 +178,52 @@ export function MatchMakerProfileScreen({ userId }: Props) {
   const displayName = profile.display_name?.trim() || 'Member';
   const prefs = profile.preferences ?? {};
   const interests = Array.isArray(prefs.interests) ? (prefs.interests as string[]) : [];
+  const languages = Array.isArray(prefs.languages) ? (prefs.languages as string[]) : [];
+  const sharedLangs = sharedLanguages(viewerProfile?.preferences, prefs);
   const prompts = Array.isArray(prefs.prompt_answers)
     ? (prefs.prompt_answers as { prompt?: string; answer?: string }[])
     : [];
+  const commLabel = communicationStyleLabel(
+    (profile as { communication_style?: string | null }).communication_style
+  );
+  const intentLabel = meetingIntentLabel(prefs.meeting_intent);
+  const distanceLabel = profileDistanceLabel(viewerProfile, profile);
+
+  const sharedInsights = insights.filter((i) => i.shared);
+  const contextInsights = insights.filter((i) => !i.shared);
 
   return (
     <MatchMakerLayout>
       <MatchMakerSlideIn>
-        <div className="relative pb-28">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="absolute left-4 top-4 z-30 inline-flex min-h-[40px] items-center gap-1 rounded-full border bg-white/95 px-3 text-[13px] font-extrabold shadow-sm backdrop-blur-sm transition hover:bg-white"
-            style={{ borderColor: MATCHMAKER_THEME.border, color: MATCHMAKER_THEME.textPrimary }}
-            aria-label="Back to pool"
-          >
-            <IoChevronBack size={18} />
-            Back
-          </button>
+        <div className="pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]">
+          {/* Back sits above the slider — never overlays gallery controls */}
+          <MatchMakerPageShell className="pb-3 pt-1">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="inline-flex min-h-[40px] items-center gap-1 rounded-full border bg-white px-3 text-[13px] font-extrabold shadow-sm transition hover:opacity-95 active:scale-[0.98]"
+              style={{ borderColor: MATCHMAKER_THEME.border, color: MATCHMAKER_THEME.textPrimary }}
+              aria-label="Back to pool"
+            >
+              <IoChevronBack size={18} />
+              Back to pool
+            </button>
+          </MatchMakerPageShell>
 
           <div className="relative w-full overflow-hidden">
             <HostMediaGallery profile={profile} videos={videos} layout="hero" className="rounded-none" />
             <div
-              className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#FDF8F4] via-[#FDF8F4]/30 to-transparent"
+              className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#FDF8F4] via-[#FDF8F4]/25 to-transparent"
               aria-hidden
             />
           </div>
 
-          <MatchMakerPageShell className="relative -mt-10 space-y-4">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
+          <MatchMakerPageShell className="relative -mt-8 space-y-4">
+            <header>
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.14em]" style={{ color: MATCHMAKER_THEME.accent }}>
+                MatchMaker profile
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
                 <h1 className="font-display text-2xl font-extrabold" style={{ color: MATCHMAKER_THEME.textPrimary }}>
                   {displayName}
                   {age != null ? `, ${age}` : ''}
@@ -201,38 +241,74 @@ export function MatchMakerProfileScreen({ userId }: Props) {
               {profile.location_label ? (
                 <p className="mt-1 text-[14px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
                   {profile.location_label}
+                  {distanceLabel ? ` · ${distanceLabel}` : ''}
+                </p>
+              ) : distanceLabel ? (
+                <p className="mt-1 text-[14px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
+                  {distanceLabel}
                 </p>
               ) : null}
-            </div>
 
-            {signals.length > 0 ? (
-              <div
-                className="rounded-2xl border p-4"
-                style={{ borderColor: MATCHMAKER_THEME.border, background: MATCHMAKER_THEME.surfaceWarm }}
-              >
-                <p className="text-[12px] font-extrabold uppercase tracking-wide" style={{ color: MATCHMAKER_THEME.textMuted }}>
-                  What you have in common
-                </p>
-                <ul className="mt-3 space-y-2">
-                  {signals.map((signal) => (
-                    <li key={signal} className="flex items-start gap-2 text-[14px] font-semibold" style={{ color: MATCHMAKER_THEME.textPrimary }}>
-                      <span aria-hidden>{signalIcon(signal)}</span>
-                      <span>{signal}</span>
+              {(commLabel || intentLabel || profile.verified_badge) ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {commLabel ? <GlanceChip label={commLabel} accent /> : null}
+                  {intentLabel ? <GlanceChip label={`On LinkUp for ${intentLabel.toLowerCase()}`} /> : null}
+                  {profile.verified_badge ? <GlanceChip label="Identity verified" accent /> : null}
+                </div>
+              ) : null}
+            </header>
+
+            {sharedInsights.length > 0 ? (
+              <ProfileSection title="What you have in common" warm>
+                <ul className="space-y-2.5">
+                  {sharedInsights.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-start gap-2.5 text-[14px] font-semibold leading-snug"
+                      style={{ color: MATCHMAKER_THEME.textPrimary }}
+                    >
+                      <span className="mt-0.5 shrink-0 text-base" aria-hidden>{item.icon}</span>
+                      <span>{item.label}</span>
                     </li>
                   ))}
                 </ul>
-              </div>
+              </ProfileSection>
+            ) : (
+              <ProfileSection title="What you have in common" warm>
+                <p className="text-[14px] font-semibold leading-relaxed" style={{ color: MATCHMAKER_THEME.textMuted }}>
+                  Explore their bio and prompts below — shared signals appear here when your profiles overlap.
+                </p>
+              </ProfileSection>
+            )}
+
+            {contextInsights.length > 0 ? (
+              <ProfileSection title="How they communicate">
+                <ul className="space-y-2">
+                  {contextInsights.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-start gap-2 text-[14px] font-semibold"
+                      style={{ color: MATCHMAKER_THEME.textPrimary }}
+                    >
+                      <span aria-hidden>{item.icon}</span>
+                      <span>{item.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              </ProfileSection>
+            ) : null}
+
+            {profile.bio?.trim() ? (
+              <ProfileSection title="About">
+                <p className="text-[14px] font-semibold leading-relaxed" style={{ color: MATCHMAKER_THEME.textPrimary }}>
+                  {profile.bio.trim()}
+                </p>
+              </ProfileSection>
             ) : null}
 
             {interests.length > 0 ? (
-              <div
-                className="rounded-2xl border p-4"
-                style={{ borderColor: MATCHMAKER_THEME.border, background: MATCHMAKER_THEME.surface }}
-              >
-                <p className="text-[12px] font-extrabold uppercase tracking-wide" style={{ color: MATCHMAKER_THEME.textMuted }}>
-                  Interests
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
+              <ProfileSection title="Interests">
+                <div className="flex flex-wrap gap-2">
                   {interests.map((tag) => (
                     <span
                       key={tag}
@@ -247,32 +323,45 @@ export function MatchMakerProfileScreen({ userId }: Props) {
                     </span>
                   ))}
                 </div>
-              </div>
+              </ProfileSection>
             ) : null}
 
-            {profile.bio?.trim() ? (
-              <div
-                className="rounded-2xl border p-4"
-                style={{ borderColor: MATCHMAKER_THEME.border, background: MATCHMAKER_THEME.surface }}
-              >
-                <p className="text-[12px] font-extrabold uppercase tracking-wide" style={{ color: MATCHMAKER_THEME.textMuted }}>
-                  About
-                </p>
-                <p className="mt-2 text-[14px] font-semibold leading-relaxed" style={{ color: MATCHMAKER_THEME.textPrimary }}>
-                  {profile.bio.trim()}
-                </p>
-              </div>
+            {languages.length > 0 ? (
+              <ProfileSection title="Languages">
+                <div className="flex flex-wrap gap-2">
+                  {languages.map((lang) => {
+                    const isShared = sharedLangs.includes(lang);
+                    return (
+                      <span
+                        key={lang}
+                        className="rounded-full border px-3 py-1 text-[12px] font-extrabold"
+                        style={{
+                          borderColor: isShared ? `${MATCHMAKER_THEME.accent}50` : MATCHMAKER_THEME.border,
+                          background: isShared ? `${MATCHMAKER_THEME.accent}14` : MATCHMAKER_THEME.surfaceWarm,
+                          color: isShared ? MATCHMAKER_THEME.accent : MATCHMAKER_THEME.textPrimary,
+                        }}
+                      >
+                        {lang}
+                        {isShared ? ' · shared' : ''}
+                      </span>
+                    );
+                  })}
+                </div>
+              </ProfileSection>
             ) : null}
 
             {prompts.length > 0 ? (
               <div className="space-y-3">
+                <h2 className="text-[12px] font-extrabold uppercase tracking-wide" style={{ color: MATCHMAKER_THEME.textMuted }}>
+                  Profile prompts
+                </h2>
                 {prompts.map((prompt, index) => (
                   <div
                     key={`${prompt.prompt ?? 'prompt'}-${index}`}
                     className="rounded-2xl border p-4"
                     style={{ borderColor: MATCHMAKER_THEME.border, background: MATCHMAKER_THEME.surface }}
                   >
-                    <p className="text-[13px] font-extrabold" style={{ color: MATCHMAKER_THEME.accent }}>
+                    <p className="text-[13px] font-extrabold leading-snug" style={{ color: MATCHMAKER_THEME.accent }}>
                       {prompt.prompt}
                     </p>
                     <p className="mt-2 text-[14px] font-semibold leading-relaxed" style={{ color: MATCHMAKER_THEME.textPrimary }}>
@@ -282,20 +371,23 @@ export function MatchMakerProfileScreen({ userId }: Props) {
                 ))}
               </div>
             ) : null}
+
+            <p className="pb-2 text-center text-[11px] font-semibold leading-relaxed" style={{ color: MATCHMAKER_THEME.textMuted }}>
+              Values and dealbreakers stay private — only compatibility signals and public profile details are shown here.
+            </p>
           </MatchMakerPageShell>
 
           <div
             className="fixed inset-x-0 bottom-0 z-30 border-t bg-white px-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-3 shadow-[0_-8px_24px_rgba(155,27,75,0.08)]"
             style={{ borderColor: MATCHMAKER_THEME.border }}
           >
-            <div className="mx-auto flex max-w-3xl items-center gap-3">
-              <MatchMakerSecondaryButton variant="text" onClick={handlePass} className="shrink-0">
+            <div className="mx-auto grid max-w-3xl grid-cols-2 gap-3">
+              <MatchMakerSecondaryButton onClick={handlePass}>
                 Pass
               </MatchMakerSecondaryButton>
               <MatchMakerPrimaryButton
                 disabled={expressMutation.isPending}
                 onClick={() => expressMutation.mutate()}
-                className="flex-1"
               >
                 {expressMutation.isPending ? 'Sending…' : 'Express Interest'}
               </MatchMakerPrimaryButton>

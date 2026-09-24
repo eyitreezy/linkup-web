@@ -560,46 +560,47 @@ in their queue automatically.
 **When to use this screen (not the public profile):**
 Pool browsing always opens the **Full MatchMaker Profile** — not `/user/:id` (Member Public Profile). The public profile is for general LinkUp (Discover, messaging, reviews). MatchMaker profile adds compatibility context and Pass / Express Interest actions. Values, dealbreakers, and connection history are never shown here.
 
-**Entry:** User taps anywhere on the pool card summary (list or grid), the **View full profile** link, or the list chevron. Screen **slides in from right** (`320ms`, ease-out cubic bezier `(0.25, 0.46, 0.45, 0.94)`). Header has back chevron (returns to pool with slide-out-left `280ms`).
+**Entry:** User taps anywhere on the pool card summary (list or grid), the **View full profile** link, or the list chevron. Screen **slides in from right** (`320ms`, ease-out cubic bezier `(0.25, 0.46, 0.45, 0.94)`). **Back control sits in a toolbar row above the media slider** (never overlaid on photos/video or progress segments). Returns to pool with slide-out-left `280ms`.
 
 **Pool card secondary button:** Pass uses a **white-filled** pill (`#FFFFFF` surface, `#C8BDB8` border) — not transparent.
 
-**Photo & video slider (web):** Reuses `HostMediaGallery` — the same swipeable photo + intro-video carousel as Member Public Profile (`UserProfileScreen`). Shown edge-to-edge in the top ~45% hero (not a single static image). Progress segments at top, tap left/right thirds to paginate, intro video with play/mute controls, primary-photo badge. Warm cream gradient fades into scroll content below.
+**Photo & video slider (web):** Reuses `HostMediaGallery` — the same swipeable photo + intro-video carousel as Member Public Profile (`UserProfileScreen`). Shown edge-to-edge below the back toolbar (~45% viewport height). Progress segments at top, tap left/right thirds to paginate, intro video with play/mute controls, primary-photo badge. Warm cream gradient fades into scroll content below.
+
+**Shown on profile (MatchMaker-safe public fields only):**
+- Identity: name, age, verified badge, location label, approximate distance
+- At-a-glance chips: communication style, LinkUp meeting intent, identity verified
+- Compatibility: shared interests, aligned communication style, shared languages, proximity (human-language — no numeric score)
+- About (bio), interests, languages (shared languages highlighted), profile prompts
+- **Never shown:** `matchmaker_values`, dealbreakers, faith/family goals inputs, connection history, subscription tier, host reviews
 
 ```
-[Photo + video slider — top ~45% — edge to edge — HostMediaGallery]
-[Gradient overlay bottom 30% — warm cream fade into scroll content]
+[Back to pool — toolbar above slider — not on media]
 
-[Content scrolls below]
+[Photo + video slider — HostMediaGallery — edge to edge]
 
+[MatchMaker profile kicker]
 [Name], [Age]    [Verified badge]
-[Location]
+[Location · distance]
 
-[Spacing: 16pt]
+[At-a-glance chips — communication style, meeting intent, verified]
 
-[Compatibility section — card — warm surface]
-  Heading: "What you have in common"
-  [2 to 3 signal lines — each with small icon]
-  e.g. "💬 Both prefer regular communication"
-       "👨‍👩‍👧 Similar family goals"
-       "📍 8 km away"
+[What you have in common — warm card]
+  Shared interests, communication alignment, shared languages, distance
 
-[Spacing: 16pt]
+[How they communicate — when not already in common card]
 
-[Interests section]
-  [Tag chips — horizontal wrap]
+[About — bio]
 
-[Spacing: 16pt]
+[Interests — tag chips]
 
-[Profile prompts — from existing profile setup]
-  Each prompt as a card with question and answer
-  Same style as main LinkUp profile view
-  BUT: only prompts the user added — no empty states
+[Languages — chips; shared languages marked]
 
-[Spacing: 32pt]
+[Profile prompts — Q&A cards]
 
-[Action row — fixed bottom]
-  [Pass — text button — left]    [Express Interest — primary CTA — right]
+[Privacy note — values/dealbreakers stay private]
+
+[Fixed bottom — equal-width row]
+  [Pass — white pill]    [Express Interest — gradient pill]
 ```
 
 ---
