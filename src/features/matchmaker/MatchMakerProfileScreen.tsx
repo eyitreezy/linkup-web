@@ -196,7 +196,7 @@ export function MatchMakerProfileScreen({ userId }: Props) {
     <MatchMakerLayout>
       <MatchMakerSlideIn>
         <div className="pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]">
-          {/* Back sits above the slider — never overlays gallery controls */}
+          {/* Back toolbar sits above the slider, not on media */}
           <MatchMakerPageShell className="pb-3 pt-1">
             <button
               type="button"
@@ -241,7 +241,7 @@ export function MatchMakerProfileScreen({ userId }: Props) {
               {profile.location_label ? (
                 <p className="mt-1 text-[14px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
                   {profile.location_label}
-                  {distanceLabel ? ` · ${distanceLabel}` : ''}
+                  {distanceLabel ? `, ${distanceLabel}` : ''}
                 </p>
               ) : distanceLabel ? (
                 <p className="mt-1 text-[14px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
@@ -276,7 +276,7 @@ export function MatchMakerProfileScreen({ userId }: Props) {
             ) : (
               <ProfileSection title="What you have in common" warm>
                 <p className="text-[14px] font-semibold leading-relaxed" style={{ color: MATCHMAKER_THEME.textMuted }}>
-                  Explore their bio and prompts below — shared signals appear here when your profiles overlap.
+                  Explore their bio and prompts below. Shared signals appear here when your profiles overlap.
                 </p>
               </ProfileSection>
             )}
@@ -342,7 +342,7 @@ export function MatchMakerProfileScreen({ userId }: Props) {
                         }}
                       >
                         {lang}
-                        {isShared ? ' · shared' : ''}
+                        {isShared ? ' (shared)' : ''}
                       </span>
                     );
                   })}
@@ -373,7 +373,7 @@ export function MatchMakerProfileScreen({ userId }: Props) {
             ) : null}
 
             <p className="pb-2 text-center text-[11px] font-semibold leading-relaxed" style={{ color: MATCHMAKER_THEME.textMuted }}>
-              Values and dealbreakers stay private — only compatibility signals and public profile details are shown here.
+              Values and dealbreakers stay private. Only compatibility signals and public profile details are shown here.
             </p>
           </MatchMakerPageShell>
 

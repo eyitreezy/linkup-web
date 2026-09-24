@@ -497,8 +497,6 @@ Card content:
   [Interest tags — horizontal scroll — same chip style as main app]
 
   [Spacing: auto]
-
-  ["View full profile" — text link — right aligned — #6C63FF]
 ```
 
 **TWO SEPARATE CLOCKS — explicitly stated:**
@@ -521,7 +519,7 @@ Card content:
 - Button tap = same outcome as swipe, same haptic, same card animation
 
 **Web — pool layout:**
-List or grid of profile cards (same structure and toggle as Discover on web — list/grid pill beside the member count). Each card uses MatchMaker warm tokens (`#EDE0D4` borders, `#9B1B4B` accent) with Discover-style layout. Cards are tappable: photo, summary, and **View full profile** open the Full MatchMaker Profile screen. Express Interest and Pass stay on the card (white secondary + gradient primary) and do not navigate. Cards load in batches of 12.
+List or grid of profile cards (same structure and toggle as Discover on web — list/grid pill beside the member count). Each card uses MatchMaker warm tokens (`#EDE0D4` borders, `#9B1B4B` accent) with Discover-style layout. Cards are tappable: photo, summary, and list chevron open the Full MatchMaker Profile screen. Express Interest and Pass stay on the card (white secondary + gradient primary) and do not navigate. Cards load in batches of 12.
 
 ---
 
@@ -560,7 +558,7 @@ in their queue automatically.
 **When to use this screen (not the public profile):**
 Pool browsing always opens the **Full MatchMaker Profile** — not `/user/:id` (Member Public Profile). The public profile is for general LinkUp (Discover, messaging, reviews). MatchMaker profile adds compatibility context and Pass / Express Interest actions. Values, dealbreakers, and connection history are never shown here.
 
-**Entry:** User taps anywhere on the pool card summary (list or grid), the **View full profile** link, or the list chevron. Screen **slides in from right** (`320ms`, ease-out cubic bezier `(0.25, 0.46, 0.45, 0.94)`). **Back control sits in a toolbar row above the media slider** (never overlaid on photos/video or progress segments). Returns to pool with slide-out-left `280ms`.
+**Entry:** User taps anywhere on the pool card photo or summary (list or grid), or the list chevron. Screen **slides in from right** (`320ms`, ease-out cubic bezier `(0.25, 0.46, 0.45, 0.94)`). **Back control sits in a toolbar row above the media slider** (never overlaid on photos/video or progress segments). Returns to pool with slide-out-left `280ms`.
 
 **Pool card secondary button:** Pass uses a **white-filled** pill (`#FFFFFF` surface, `#C8BDB8` border) — not transparent.
 

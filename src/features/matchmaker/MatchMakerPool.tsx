@@ -168,7 +168,7 @@ export function MatchMakerPool() {
         <div className="flex min-w-0 items-center gap-2">
           <p className="min-w-0 flex-1 truncate text-[10px] font-extrabold uppercase tracking-wide text-muted min-[360px]:text-[11px] sm:text-[12px]">
             {poolCount} member{poolCount === 1 ? '' : 's'} in your pool
-            {filter.filterActive ? ' · filtered' : ''}
+            {filter.filterActive ? ', filtered' : ''}
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <div className="xl:hidden">

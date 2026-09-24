@@ -57,13 +57,11 @@ function PoolCardSummary({
   displayName,
   age,
   signals,
-  showViewLink,
 }: {
   profile: PoolProfileRow;
   displayName: string;
   age: number | null;
   signals: string[];
-  showViewLink: boolean;
 }) {
   return (
     <>
@@ -91,9 +89,6 @@ function PoolCardSummary({
         </p>
       ) : null}
       <MatchMakerPoolCardSignals signals={signals} className="mt-3" />
-      {showViewLink ? (
-        <p className="mt-3 text-right text-[13px] font-extrabold text-primary">View full profile</p>
-      ) : null}
     </>
   );
 }
@@ -128,22 +123,10 @@ export function MatchMakerPoolGridCard({
       <div className="p-3 min-[360px]:p-4">
         {profileHref ? (
           <Link href={profileHref} className="block">
-            <PoolCardSummary
-              profile={profile}
-              displayName={displayName}
-              age={age}
-              signals={signals}
-              showViewLink
-            />
+            <PoolCardSummary profile={profile} displayName={displayName} age={age} signals={signals} />
           </Link>
         ) : (
-          <PoolCardSummary
-            profile={profile}
-            displayName={displayName}
-            age={age}
-            signals={signals}
-            showViewLink={false}
-          />
+          <PoolCardSummary profile={profile} displayName={displayName} age={age} signals={signals} />
         )}
 
         <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>

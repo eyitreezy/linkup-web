@@ -21,6 +21,9 @@ type Props = {
   expressBusy?: boolean;
 };
 
+const LIST_IMAGE_CLASS =
+  'relative aspect-[16/10] w-full shrink-0 overflow-hidden sm:aspect-auto sm:w-[38%] sm:max-w-[220px] sm:min-h-[128px] sm:self-stretch md:w-[40%] md:max-w-[240px]';
+
 export function MatchMakerPoolListCard({
   profile,
   signals = [],
@@ -35,10 +38,8 @@ export function MatchMakerPoolListCard({
   const displayName = profile.display_name?.trim() || 'Member';
   const profileHref = preview ? null : matchmakerProfileHref(profile.user_id);
 
-  const imageBlock = (
-    <div
-      className="relative aspect-[16/10] w-full shrink-0 sm:aspect-auto sm:w-[38%] sm:max-w-[220px] sm:min-h-[128px] md:w-[40%] md:max-w-[240px]"
-    >
+  const imageInner = (
+    <>
       <div
         className="absolute inset-0"
         style={{ background: `linear-gradient(135deg, ${MATCHMAKER_THEME.surfaceWarm} 0%, #F5E8DF 100%)` }}
@@ -65,10 +66,10 @@ export function MatchMakerPoolListCard({
           />
         </span>
       ) : null}
-    </div>
+    </>
   );
 
-  const summaryBlock = (
+  const summaryInner = (
     <>
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
@@ -95,9 +96,6 @@ export function MatchMakerPoolListCard({
         ) : null}
       </div>
       <MatchMakerPoolCardSignals signals={signals} compact />
-      {profileHref ? (
-        <p className="text-right text-[12px] font-extrabold text-primary sm:text-[13px]">View full profile</p>
-      ) : null}
     </>
   );
 
@@ -107,20 +105,20 @@ export function MatchMakerPoolListCard({
       style={{ borderColor: MATCHMAKER_THEME.border }}
     >
       {profileHref ? (
-        <Link href={profileHref} className="relative block shrink-0 sm:w-[38%] md:w-[40%]">
-          {imageBlock}
+        <Link href={profileHref} className={LIST_IMAGE_CLASS}>
+          {imageInner}
         </Link>
       ) : (
-        imageBlock
+        <div className={LIST_IMAGE_CLASS}>{imageInner}</div>
       )}
 
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-2 p-3.5 sm:gap-2.5 sm:px-4 sm:py-3.5">
         {profileHref ? (
           <Link href={profileHref} className="block space-y-2">
-            {summaryBlock}
+            {summaryInner}
           </Link>
         ) : (
-          <div className="space-y-2">{summaryBlock}</div>
+          <div className="space-y-2">{summaryInner}</div>
         )}
 
         <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
@@ -138,8 +136,7 @@ export function MatchMakerPoolListCard({
       {profileHref ? (
         <Link
           href={profileHref}
-          className="hidden w-9 shrink-0 items-center justify-center border-l text-muted transition group-hover:text-primary sm:flex"
-          style={{ borderColor: `${MATCHMAKER_THEME.border}66`, background: MATCHMAKER_THEME.surfaceWarm }}
+          className="hidden w-9 shrink-0 items-center justify-center border-l border-[#EDE0D4]/40 bg-[#FBF5F0] text-muted transition group-hover:text-[#9B1B4B] sm:flex"
           aria-hidden
         >
           <IoChevronForward size={18} className="opacity-50 group-hover:opacity-100" />
