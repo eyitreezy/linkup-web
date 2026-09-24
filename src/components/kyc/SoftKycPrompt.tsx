@@ -72,12 +72,12 @@ export function SoftKycPrompt({ open, onOpenChange, onVerify }: Props) {
             <span className="font-extrabold text-primary">✔</span> Use secure escrow
           </li>
         </ul>
-        <div className="mt-6 flex flex-col gap-2">
+        <div className="mt-6 grid min-w-0 grid-cols-2 gap-2">
           <button
             type="button"
             disabled={busy}
             onClick={() => void verify()}
-            className="w-full rounded-full linkup-gradient-primary py-3 text-[14px] font-extrabold text-white disabled:opacity-50"
+            className="min-h-[48px] w-full min-w-0 rounded-full linkup-gradient-primary px-3 text-[13px] font-extrabold text-white disabled:opacity-50 sm:text-[14px]"
           >
             Verify now
           </button>
@@ -85,7 +85,7 @@ export function SoftKycPrompt({ open, onOpenChange, onVerify }: Props) {
             type="button"
             disabled={busy}
             onClick={() => void dismiss()}
-            className="w-full rounded-full border border-border py-3 text-[14px] font-extrabold text-muted disabled:opacity-50"
+            className="min-h-[48px] w-full min-w-0 rounded-full border border-border px-3 text-[13px] font-extrabold text-muted disabled:opacity-50 sm:text-[14px]"
           >
             Skip for now
           </button>

@@ -169,6 +169,7 @@ export async function saveOnboardingStep(args: {
       patch.primary_photo_url = media.primary_photo_url;
       patch.avatar_url = media.avatar_url;
       patch.birth_date = birthIso(draft.birthDate);
+      patch.gender = normalizeProfileGender(draft.selfGender);
     } catch (e) {
       return { error: e instanceof Error ? e.message : 'Media upload failed' };
     }

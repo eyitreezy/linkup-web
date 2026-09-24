@@ -145,7 +145,7 @@ export function MatchMakerFilterPanel({
 
       <div>
         <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-muted">Sort by</p>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid min-w-0 grid-cols-2 gap-2">
           {(
             [
               { id: 'best_match' as const, label: 'Best match' },
@@ -157,6 +157,7 @@ export function MatchMakerFilterPanel({
               label={opt.label}
               selected={sortBy === opt.id}
               onClick={() => setSortBy(opt.id)}
+              className="w-full min-w-0 px-2 py-2 text-[11px] leading-tight min-[360px]:px-3 min-[360px]:text-[12px] sm:text-[13px]"
             />
           ))}
         </div>

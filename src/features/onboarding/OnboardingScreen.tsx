@@ -31,6 +31,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import type { MeetingIntent } from '@/types/onboarding';
 import { defaultOnboardingDraft, preferencesFromDraft, type OnboardingDraft } from '@/types/onboarding';
 import type { ProfilePreferences } from '@/types/database';
+import { PROFILE_GENDER_OPTIONS } from '@/lib/profile/gender';
 import { cn } from '@/utils/cn';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -535,6 +536,24 @@ export function OnboardingScreen({ invitationToken }: { invitationToken?: string
               if (y && m && day) setDraft((d) => ({ ...d, birthDate: new Date(y, m - 1, day) }));
             }}
           />
+          <div className="mt-5">
+            <p className="mb-2 text-[13px] font-extrabold uppercase tracking-wide text-muted">I am</p>
+            <div className="flex flex-wrap gap-2">
+              {PROFILE_GENDER_OPTIONS.map((opt) => (
+                <GradientChip
+                  key={opt.value}
+                  label={opt.label}
+                  selected={draft.selfGender === opt.value}
+                  onClick={() =>
+                    setDraft((d) => ({
+                      ...d,
+                      selfGender: d.selfGender === opt.value ? null : opt.value,
+                    }))
+                  }
+                />
+              ))}
+            </div>
+          </div>
           <ToggleRow
             label="I confirm I am 18 or older"
             checked={draft.adultConfirmed}

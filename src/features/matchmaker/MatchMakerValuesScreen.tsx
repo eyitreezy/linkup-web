@@ -68,19 +68,31 @@ type DealbreakersState = {
   location: boolean;
   age: boolean;
   other: boolean;
-  maxDistanceKm: number;
-  ageMin: number;
-  ageMax: number;
+  maxDistanceKm: string;
+  ageMin: string;
+  ageMax: string;
 };
+
+function sanitizeDigitsInput(value: string, maxLength = 3): string {
+  return value.replace(/\D/g, '').slice(0, maxLength);
+}
+
+function parseBoundedInt(value: string, min: number, max: number, fallback: number): number {
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
 
 function buildDealbreakers(db: DealbreakersState, otherTags: string[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (db.faith) out.faith_alignment = true;
   if (db.family) out.family_goals_alignment = true;
-  if (db.location) out.max_distance_km = db.maxDistanceKm;
+  if (db.location) out.max_distance_km = parseBoundedInt(db.maxDistanceKm, 5, 200, 25);
   if (db.age) {
-    out.age_min = db.ageMin;
-    out.age_max = db.ageMax;
+    out.age_min = parseBoundedInt(db.ageMin, 18, 80, 22);
+    out.age_max = parseBoundedInt(db.ageMax, 18, 80, 35);
   }
   if (db.other && otherTags.length > 0) {
     out.other = otherTags;
@@ -117,9 +129,9 @@ export function MatchMakerValuesScreen() {
     location: false,
     age: false,
     other: false,
-    maxDistanceKm: 25,
-    ageMin: 22,
-    ageMax: 35,
+    maxDistanceKm: '25',
+    ageMin: '22',
+    ageMax: '35',
   });
   const [otherDealbreakers, setOtherDealbreakers] = useState<string[]>([]);
   const [otherDbInput, setOtherDbInput] = useState('');
@@ -361,17 +373,18 @@ export function MatchMakerValuesScreen() {
                 <div className="px-1 pb-3">
                   <label className="text-[12px] font-extrabold text-muted">Maximum distance (km)</label>
                   <input
-                    type="number"
-                    min={5}
-                    max={200}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={dealbreakers.maxDistanceKm}
                     onChange={(e) =>
                       setDealbreakers((d) => ({
                         ...d,
-                        maxDistanceKm: Number(e.target.value) || d.maxDistanceKm,
+                        maxDistanceKm: sanitizeDigitsInput(e.target.value, 3),
                       }))
                     }
                     className={onboardingFieldClass}
+                    aria-label="Maximum distance in kilometres"
                   />
                 </div>
               ) : null}
@@ -385,33 +398,35 @@ export function MatchMakerValuesScreen() {
                   <div className="flex-1">
                     <label className="text-[12px] font-extrabold text-muted">Min age</label>
                     <input
-                      type="number"
-                      min={18}
-                      max={80}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={dealbreakers.ageMin}
                       onChange={(e) =>
                         setDealbreakers((d) => ({
                           ...d,
-                          ageMin: Number(e.target.value) || d.ageMin,
+                          ageMin: sanitizeDigitsInput(e.target.value, 2),
                         }))
                       }
                       className={onboardingFieldClass}
+                      aria-label="Minimum age"
                     />
                   </div>
                   <div className="flex-1">
                     <label className="text-[12px] font-extrabold text-muted">Max age</label>
                     <input
-                      type="number"
-                      min={18}
-                      max={80}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={dealbreakers.ageMax}
                       onChange={(e) =>
                         setDealbreakers((d) => ({
                           ...d,
-                          ageMax: Number(e.target.value) || d.ageMax,
+                          ageMax: sanitizeDigitsInput(e.target.value, 2),
                         }))
                       }
                       className={onboardingFieldClass}
+                      aria-label="Maximum age"
                     />
                   </div>
                 </div>

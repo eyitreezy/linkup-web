@@ -9,6 +9,7 @@ import {
   activePhotoCount,
 } from '@/lib/profile/media/validation';
 import { PROFILE_MEDIA_MIN_PHOTOS } from '@/lib/profile/media/constants';
+import { normalizeProfileGender } from '@/lib/profile/gender';
 import type { OnboardingDraft } from '@/types/onboarding';
 
 /** Strict validation against the current in-memory draft only — no DB fallbacks. */
@@ -21,6 +22,9 @@ export function getOnboardingFinishBlocker(draft: OnboardingDraft): string | nul
   }
   if (ageFromBirthDate(draft.birthDate) < 18) {
     return 'You must be 18 or older to use LinkUp.';
+  }
+  if (!normalizeProfileGender(draft.selfGender)) {
+    return 'Select how you identify before completing onboarding.';
   }
 
   const mediaMsg = profileMediaValidationMessage(draft.profileMedia);
@@ -55,6 +59,7 @@ export function getOnboardingFinishBlockerStep(draft: OnboardingDraft): number {
     draft.displayName.trim().length < 1 ||
     !draft.adultConfirmed ||
     ageFromBirthDate(draft.birthDate) < 18 ||
+    !normalizeProfileGender(draft.selfGender) ||
     activePhotoCount(draft.profileMedia) < PROFILE_MEDIA_MIN_PHOTOS ||
     !hasProfileVideo(draft.profileMedia) ||
     profileMediaValidationMessage(draft.profileMedia)
@@ -83,6 +88,7 @@ export function getOnboardingStepBlocker(draft: OnboardingDraft, stepIndex: numb
     if (draft.displayName.trim().length < 1) return 'Add a display name to continue.';
     if (!draft.adultConfirmed) return 'Confirm you are 18+ to continue.';
     if (ageFromBirthDate(draft.birthDate) < 18) return 'You must be 18 or older.';
+    if (!normalizeProfileGender(draft.selfGender)) return 'Select how you identify to continue.';
     if (activePhotoCount(draft.profileMedia) < PROFILE_MEDIA_MIN_PHOTOS) {
       return `Add at least ${PROFILE_MEDIA_MIN_PHOTOS} profile photos (${activePhotoCount(draft.profileMedia)}/${PROFILE_MEDIA_MIN_PHOTOS}).`;
     }
