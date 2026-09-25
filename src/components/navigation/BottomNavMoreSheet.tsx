@@ -2,6 +2,8 @@
 
 import { TabIcon, type TabIconName } from '@/components/navigation/TabIcon';
 import type { NavTabItem } from '@/components/navigation/tabNavConfig';
+import { useMatchMakerInterestBadge } from '@/hooks/useMatchMakerInterestBadge';
+import { useAuthStore } from '@/stores/auth-store';
 import { isMainNavItemActive } from '@/lib/navigation/navActive';
 import { shouldPrefetchNavRoute } from '@/lib/navigation/prefetchNav';
 import { NavItemUnreadIndicator } from '@/components/navigation/NavItemUnreadIndicator';
@@ -19,6 +21,8 @@ type Props = {
 
 export function BottomNavMoreSheet({ open, onClose, items }: Props) {
   const pathname = usePathname();
+  const user = useAuthStore((s) => s.user);
+  const matchmakerInterestCount = useMatchMakerInterestBadge(user?.id);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -61,6 +65,8 @@ export function BottomNavMoreSheet({ open, onClose, items }: Props) {
         <ul className="grid grid-cols-2 gap-2 overflow-y-auto p-3 min-[400px]:grid-cols-3">
           {items.map((item) => {
             const active = isMainNavItemActive(pathname, item.href);
+            const isMatchMaker = item.href === '/matchmaker';
+            const badgeCount = isMatchMaker ? matchmakerInterestCount : 0;
             return (
               <li key={item.href}>
                 <Link
@@ -74,11 +80,19 @@ export function BottomNavMoreSheet({ open, onClose, items }: Props) {
                       : 'border-border bg-white text-muted hover:border-primary/25 hover:text-foreground'
                   )}
                 >
-                  <TabIcon
-                    name={item.icon as TabIconName}
-                    size={26}
-                    className={active ? 'text-white' : 'text-primary'}
-                  />
+                  <NavItemUnreadIndicator
+                    count={badgeCount}
+                    badgeVariant={isMatchMaker ? 'pill' : undefined}
+                    showDot={false}
+                    active={active}
+                    ringClassName={active ? 'ring-white' : 'ring-surface'}
+                  >
+                    <TabIcon
+                      name={item.icon as TabIconName}
+                      size={26}
+                      className={active ? 'text-white' : 'text-primary'}
+                    />
+                  </NavItemUnreadIndicator>
                   <span className="text-center text-[12px] font-extrabold leading-tight">{item.label}</span>
                 </Link>
               </li>

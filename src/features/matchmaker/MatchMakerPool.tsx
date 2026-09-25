@@ -12,11 +12,15 @@ import { MatchMakerPoolFeedSkeleton } from '@/features/matchmaker/MatchMakerPool
 import { MatchMakerPoolGridCard } from '@/features/matchmaker/MatchMakerPoolGridCard';
 import { MatchMakerPoolListCard } from '@/features/matchmaker/MatchMakerPoolListCard';
 import { useMatchMakerInterestBadge } from '@/hooks/useMatchMakerInterestBadge';
+import { useMatchMakerInterestRealtime } from '@/hooks/useMatchMakerInterestRealtime';
 import { buildCompatibilitySignals } from '@/lib/matchmaker/compatibility';
-import { consumePoolMemberDismissed } from '@/lib/matchmaker/poolNavigation';
 import { matchmakerInterestsHref } from '@/lib/matchmaker/routes';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
-import { expressMatchMakerInterest, fetchMatchMakerPool } from '@/services/matchmaker.service';
+import {
+  expressMatchMakerInterest,
+  fetchMatchMakerPool,
+  passMatchMakerPoolProfile,
+} from '@/services/matchmaker.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
@@ -24,7 +28,7 @@ import { cn } from '@/utils/cn';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { IoHeart } from 'react-icons/io5';
 
 const VIEW_STORAGE_KEY = 'linkup_matchmaker_pool_view_mode';
@@ -46,11 +50,13 @@ export function MatchMakerPool() {
   const queryClient = useQueryClient();
   const { filter, baseRadiusKm, sliderMaxKm, effectiveTier, applyFilter } = useMatchMakerPage();
   const [view, setView] = useState<ListGridViewMode>(() => loadStoredView());
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => new Set());
   const [expressingUserId, setExpressingUserId] = useState<string | null>(null);
+  const [passingUserId, setPassingUserId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const receivedInterestCount = useMatchMakerInterestBadge(user?.id);
+
+  useMatchMakerInterestRealtime(user?.id);
 
   const setViewPersisted = useCallback((next: ListGridViewMode) => {
     setView(next);
@@ -89,30 +95,13 @@ export function MatchMakerPool() {
 
   const cards = poolQuery.data?.data ?? [];
   const emptyReason = poolQuery.data?.emptyReason ?? null;
-
-  useEffect(() => {
-    setDismissedIds(new Set());
-  }, [filter.maxDistanceKm, filter.sortBy, poolQuery.data]);
-
-  useEffect(() => {
-    const dismissedId = consumePoolMemberDismissed();
-    if (dismissedId) {
-      setDismissedIds((prev) => new Set(prev).add(dismissedId));
-    }
-  }, []);
-
-  const visibleCards = useMemo(
-    () => cards.filter((card) => !dismissedIds.has(card.user_id)),
-    [cards, dismissedIds]
-  );
-
-  const poolCount = visibleCards.length;
+  const poolCount = cards.length;
 
   const signalsByUserId = useMemo(() => {
     const viewer = viewerQuery.data?.profile;
     if (!viewer) return {};
     return Object.fromEntries(
-      visibleCards.map((card) => [
+      cards.map((card) => [
         card.user_id,
         buildCompatibilitySignals(
           {
@@ -123,15 +112,23 @@ export function MatchMakerPool() {
         ),
       ])
     );
-  }, [visibleCards, viewerQuery.data?.profile]);
+  }, [cards, viewerQuery.data?.profile]);
 
-  const dismissCard = useCallback((userId: string) => {
-    setDismissedIds((prev) => {
-      const next = new Set(prev);
-      next.add(userId);
-      return next;
-    });
-  }, []);
+  const passMutation = useMutation({
+    mutationFn: async (toUserId: string) => {
+      setPassingUserId(toUserId);
+      const client = createClient();
+      const result = await passMatchMakerPoolProfile(client, toUserId);
+      if (result.error) throw new Error(result.error);
+      return result;
+    },
+    onSuccess: () => {
+      setPassingUserId(null);
+      void queryClient.invalidateQueries({ queryKey: ['matchmaker-pool', user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['matchmaker-member-interaction'] });
+    },
+    onError: () => setPassingUserId(null),
+  });
 
   const expressMutation = useMutation({
     mutationFn: async (toUserId: string) => {
@@ -147,14 +144,17 @@ export function MatchMakerPool() {
         router.push(`/matchmaker/connection/${result.connectionId}`);
         return;
       }
-      if (!result.queued) {
+      if (result.alreadySent) {
+        setToast('You already expressed interest in this member');
+        setTimeout(() => setToast(null), 2200);
+      } else if (!result.queued) {
         setToast('Interest sent');
         setTimeout(() => setToast(null), 2000);
       }
-      dismissCard(toUserId);
       void queryClient.invalidateQueries({ queryKey: ['matchmaker-pool', user?.id] });
       void queryClient.invalidateQueries({ queryKey: ['matchmaker-interest-queue'] });
       void queryClient.invalidateQueries({ queryKey: ['matchmaker-interest-badge'] });
+      void queryClient.invalidateQueries({ queryKey: ['matchmaker-member-interaction', toUserId] });
     },
     onError: () => {
       setExpressingUserId(null);
@@ -162,7 +162,7 @@ export function MatchMakerPool() {
   });
 
   const showInitialLoading = poolQuery.isLoading && !poolQuery.data;
-  const showEmpty = !showInitialLoading && visibleCards.length === 0;
+  const showEmpty = !showInitialLoading && cards.length === 0;
 
   return (
     <MatchMakerLayout>
@@ -211,35 +211,37 @@ export function MatchMakerPool() {
 
         {showEmpty ? <MatchMakerPoolEmptyState reason={emptyReason} className="mt-6" /> : null}
 
-        {!showInitialLoading && visibleCards.length > 0 ? (
+        {!showInitialLoading && cards.length > 0 ? (
           view === 'list' ? (
             <ul className="mt-4 flex w-full min-w-0 max-w-full flex-col gap-3 overflow-hidden">
-              {visibleCards.map((profile) => (
+              {cards.map((profile) => (
                 <li key={profile.user_id}>
                   <MatchMakerPoolListCard
                     profile={profile}
                     signals={signalsByUserId[profile.user_id] ?? []}
-                    onPass={() => dismissCard(profile.user_id)}
+                    onPass={() => passMutation.mutate(profile.user_id)}
                     onExpressInterest={() => expressMutation.mutate(profile.user_id)}
-                    expressBusy={expressingUserId === profile.user_id && expressMutation.isPending}
+                    expressBusy={
+                      (expressingUserId === profile.user_id && expressMutation.isPending) ||
+                      (passingUserId === profile.user_id && passMutation.isPending)
+                    }
                   />
                 </li>
               ))}
             </ul>
           ) : (
-            <div
-              className={cn(
-                'mt-4 grid grid-cols-1 gap-3 min-[400px]:gap-5 sm:grid-cols-2'
-              )}
-            >
-              {visibleCards.map((profile) => (
+            <div className={cn('mt-4 grid grid-cols-1 gap-3 min-[400px]:gap-5 sm:grid-cols-2')}>
+              {cards.map((profile) => (
                 <MatchMakerPoolGridCard
                   key={profile.user_id}
                   profile={profile}
                   signals={signalsByUserId[profile.user_id] ?? []}
-                  onPass={() => dismissCard(profile.user_id)}
+                  onPass={() => passMutation.mutate(profile.user_id)}
                   onExpressInterest={() => expressMutation.mutate(profile.user_id)}
-                  expressBusy={expressingUserId === profile.user_id && expressMutation.isPending}
+                  expressBusy={
+                    (expressingUserId === profile.user_id && expressMutation.isPending) ||
+                    (passingUserId === profile.user_id && passMutation.isPending)
+                  }
                 />
               ))}
             </div>

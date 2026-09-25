@@ -14,6 +14,8 @@ export function useMatchMakerInterestRealtime(userId: string | undefined) {
       () => {
         void queryClient.invalidateQueries({ queryKey: ['matchmaker-interest-queue', userId] });
         void queryClient.invalidateQueries({ queryKey: ['matchmaker-interest-badge', userId] });
+        void queryClient.invalidateQueries({ queryKey: ['matchmaker-pool', userId] });
+        void queryClient.invalidateQueries({ queryKey: ['matchmaker-member-interaction'] });
       },
       { table: 'matchmaker_interests' },
       { channelPrefix: 'matchmaker-interests-rt' }

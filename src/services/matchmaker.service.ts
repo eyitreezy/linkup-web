@@ -2,10 +2,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { MatchMakerGateState } from '@/lib/matchmaker/gates';
 import type { MatchMakerConnectionRow } from '@/lib/matchmaker/connection';
 import type { PoolProfileRow } from '@/lib/matchmaker/compatibility';
+import { parseMemberInteractionPayload } from '@/lib/matchmaker/interaction';
 import type {
   MatchMakerInterestQueue,
   MatchMakerInterestQueueRow,
 } from '@/types/matchmaker-interests';
+import type { MatchMakerMemberInteraction } from '@/types/matchmaker-interaction';
 
 export async function fetchMatchMakerGateState(
   client: SupabaseClient
@@ -74,6 +76,7 @@ export type ExpressMatchMakerInterestResult = {
   queued?: boolean;
   surfaced?: boolean;
   alreadySent?: boolean;
+  interestStatus?: string;
   error: string | null;
 };
 
@@ -89,6 +92,7 @@ export async function expressMatchMakerInterest(
     queued?: boolean;
     surfaced?: boolean;
     already_sent?: boolean;
+    interest_status?: string;
   };
   return {
     matched: !!payload.matched,
@@ -96,8 +100,30 @@ export async function expressMatchMakerInterest(
     queued: payload.queued,
     surfaced: payload.surfaced,
     alreadySent: payload.already_sent,
+    interestStatus: payload.interest_status,
     error: null,
   };
+}
+
+export async function passMatchMakerPoolProfile(
+  client: SupabaseClient,
+  toUserId: string
+): Promise<{ ok: boolean; error: string | null }> {
+  const { data, error } = await client.rpc('matchmaker_pass_pool_profile', { p_to_user_id: toUserId });
+  if (error) return { ok: false, error: error.message };
+  const payload = data as { ok?: boolean };
+  return { ok: !!payload.ok, error: null };
+}
+
+export async function fetchMatchMakerMemberInteraction(
+  client: SupabaseClient,
+  memberUserId: string
+): Promise<{ data: MatchMakerMemberInteraction | null; error: string | null }> {
+  const { data, error } = await client.rpc('matchmaker_get_member_interaction', {
+    p_member_user_id: memberUserId,
+  });
+  if (error) return { data: null, error: error.message };
+  return { data: parseMemberInteractionPayload(data), error: null };
 }
 
 type InterestQueueRpcPayload = {

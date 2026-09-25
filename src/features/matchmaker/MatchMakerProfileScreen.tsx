@@ -17,9 +17,13 @@ import {
   profileDistanceLabel,
   sharedLanguages,
 } from '@/lib/matchmaker/profileView';
-import { markPoolMemberDismissed } from '@/lib/matchmaker/poolNavigation';
+import { interactionStatusLabel } from '@/lib/matchmaker/interaction';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
-import { expressMatchMakerInterest } from '@/services/matchmaker.service';
+import {
+  expressMatchMakerInterest,
+  fetchMatchMakerMemberInteraction,
+  passMatchMakerPoolProfile,
+} from '@/services/matchmaker.service';
 import { fetchProfileVideos } from '@/services/profileMedia.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
@@ -89,6 +93,17 @@ export function MatchMakerProfileScreen({ userId }: Props) {
     enabled: !!viewer?.id,
   });
 
+  const interactionQuery = useQuery({
+    queryKey: ['matchmaker-member-interaction', userId, viewer?.id],
+    queryFn: async () => {
+      const client = createClient();
+      const result = await fetchMatchMakerMemberInteraction(client, userId);
+      if (result.error) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: !!viewer?.id && !!userId,
+  });
+
   const profileQuery = useQuery({
     queryKey: ['matchmaker-profile', userId],
     queryFn: async () => {
@@ -129,21 +144,42 @@ export function MatchMakerProfileScreen({ userId }: Props) {
         router.replace(`/matchmaker/connection/${result.connectionId}`);
         return;
       }
-      if (!result.queued) {
+      if (result.alreadySent) {
+        setToast('You already expressed interest in this member');
+        setTimeout(() => setToast(null), 2200);
+      } else if (!result.queued) {
         setToast('Interest sent');
         setTimeout(() => setToast(null), 2000);
       }
-      markPoolMemberDismissed(userId);
       void queryClient.invalidateQueries({ queryKey: ['matchmaker-pool', viewer?.id] });
       void queryClient.invalidateQueries({ queryKey: ['matchmaker-interest-queue'] });
       void queryClient.invalidateQueries({ queryKey: ['matchmaker-interest-badge'] });
+      void queryClient.invalidateQueries({ queryKey: ['matchmaker-member-interaction', userId] });
       router.back();
     },
   });
 
+  const passMutation = useMutation({
+    mutationFn: async () => {
+      const result = await passMatchMakerPoolProfile(createClient(), userId);
+      if (result.error) throw new Error(result.error);
+      return result;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['matchmaker-pool', viewer?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['matchmaker-member-interaction', userId] });
+      router.back();
+    },
+  });
+
+  const interaction = interactionQuery.data;
+  const statusLabel = interaction ? interactionStatusLabel(interaction.viewerState) : null;
+  const canExpress = interaction?.canExpress ?? true;
+  const canPass = interaction?.canPass ?? true;
+  const interestSent = interaction?.viewerState === 'interest_sent';
+
   function handlePass() {
-    markPoolMemberDismissed(userId);
-    router.back();
+    passMutation.mutate();
   }
 
   if (profileQuery.isLoading) {
@@ -385,16 +421,38 @@ export function MatchMakerProfileScreen({ userId }: Props) {
             className="fixed inset-x-0 bottom-0 z-30 border-t bg-white px-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-3 shadow-[0_-8px_24px_rgba(155,27,75,0.08)]"
             style={{ borderColor: MATCHMAKER_THEME.border }}
           >
-            <div className="mx-auto grid max-w-3xl grid-cols-2 gap-3">
-              <MatchMakerSecondaryButton onClick={handlePass}>
-                Pass
-              </MatchMakerSecondaryButton>
-              <MatchMakerPrimaryButton
-                disabled={expressMutation.isPending}
-                onClick={() => expressMutation.mutate()}
-              >
-                {expressMutation.isPending ? 'Sending…' : 'Express Interest'}
-              </MatchMakerPrimaryButton>
+            <div className="mx-auto max-w-3xl">
+              {statusLabel && !canExpress && !canPass ? (
+                <p
+                  className="rounded-full border px-4 py-3 text-center text-[13px] font-extrabold"
+                  style={{
+                    borderColor: MATCHMAKER_THEME.border,
+                    background: MATCHMAKER_THEME.surfaceWarm,
+                    color: MATCHMAKER_THEME.accent,
+                  }}
+                >
+                  {statusLabel}
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <MatchMakerSecondaryButton
+                    onClick={handlePass}
+                    disabled={!canPass || passMutation.isPending || expressMutation.isPending}
+                  >
+                    {passMutation.isPending ? 'Passing…' : 'Pass'}
+                  </MatchMakerSecondaryButton>
+                  <MatchMakerPrimaryButton
+                    disabled={expressMutation.isPending || !canExpress || interestSent}
+                    onClick={() => expressMutation.mutate()}
+                  >
+                    {expressMutation.isPending
+                      ? 'Sending…'
+                      : interestSent
+                        ? 'Interest sent'
+                        : 'Express Interest'}
+                  </MatchMakerPrimaryButton>
+                </div>
+              )}
             </div>
           </div>
 

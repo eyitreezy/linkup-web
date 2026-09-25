@@ -45,6 +45,7 @@ export function Sidebar() {
               ? matchmakerInterestCount
               : 0;
           const showDot = isMessages;
+          const badgeVariant = isMatchMaker ? 'pill' : undefined;
           return (
             <Link
               key={item.href}
@@ -60,6 +61,7 @@ export function Sidebar() {
               <NavItemUnreadIndicator
                 count={unreadCount}
                 showDot={showDot}
+                badgeVariant={badgeVariant}
                 active={active}
                 ringClassName={active ? 'ring-white' : 'ring-surface'}
               >

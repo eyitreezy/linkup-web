@@ -630,11 +630,11 @@ User taps the interests icon/tab within MatchMaker (top-right of pool screen, ba
 
 Users should recieve an inapp notification and a email notification when a pending interests is recieved but only when they are yet to match with anyone
 
-Users should also see an indicator/notification on the MatchMaker sidetab just as we have it  on Messages and View Profile Sidetabs
+Users should also see an indicator/notification on the MatchMaker sidetab just as we have it  on Messages and View Profile Sidetabs when they have a Pending Interests Queue (Received)
 
 ```
 [Screen title: "People who expressed interest"]
-Back button to route the user back to the previous screen
+[Back button] to route the user back to the previous screen
 The back button should be located at the top of the header just like it is located on the edit profile screen
 The back button with arrow should be designed as it is designed in the edit profile screen, though with MatchMaker color tokens
 

@@ -54,7 +54,7 @@ export function HostMediaGallery({ profile, videos = [], layout = 'default', cla
 
   const shellClass =
     layout === 'hero'
-      ? 'relative aspect-auto min-h-[min(52vh,520px)] w-full overflow-hidden sm:min-h-[min(55vh,560px)] lg:min-h-[min(58vh,620px)]'
+      ? 'relative aspect-[3/4] w-full max-h-[min(48vh,480px)] overflow-hidden sm:aspect-[4/5] md:aspect-[16/10] md:max-h-[min(52vh,520px)]'
       : 'relative aspect-[4/5] w-full overflow-hidden bg-[#1a1530] min-[400px]:aspect-[3/4] md:aspect-[16/10] md:max-h-[28rem]';
 
   if (count === 0) {
@@ -78,7 +78,7 @@ export function HostMediaGallery({ profile, videos = [], layout = 'default', cla
 
   return (
     <div
-      className={cn(shellClass, 'select-none bg-[#1a1530]', className)}
+      className={cn(shellClass, 'select-none', layout === 'hero' ? 'bg-[#1a1530]' : 'bg-[#1a1530]', className)}
       onTouchStart={(e) => {
         touchStartX.current = e.changedTouches[0]?.clientX ?? null;
       }}
@@ -190,12 +190,6 @@ function PhotoSlide({
   const isHero = layout === 'hero';
   return (
     <>
-      {isHero ? (
-        <div
-          className="absolute inset-0 bg-gradient-to-br from-[#2a1f55] via-[#1a1530] to-[#3d1a2e]"
-          aria-hidden
-        />
-      ) : null}
       {!loaded ? (
         <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#EDE8FF]/80 to-[#FFF0F5]/60" />
       ) : null}
@@ -204,8 +198,8 @@ function PhotoSlide({
         src={item.url}
         alt=""
         className={cn(
-          'relative h-full w-full transition-opacity duration-300',
-          isHero ? 'object-contain object-center' : 'object-cover',
+          'absolute inset-0 h-full w-full transition-opacity duration-300',
+          isHero ? 'object-cover object-[center_22%]' : 'object-cover',
           loaded ? 'opacity-100' : 'opacity-0'
         )}
         draggable={false}
@@ -260,20 +254,14 @@ function VideoSlide({
 
   return (
     <div className="relative h-full w-full bg-black">
-      {isHero ? (
-        <div
-          className="absolute inset-0 bg-gradient-to-br from-[#2a1f55] via-[#1a1530] to-[#3d1a2e]"
-          aria-hidden
-        />
-      ) : null}
       {item.thumbnailUrl && !playing ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={item.thumbnailUrl}
           alt=""
           className={cn(
-            'absolute inset-0 h-full w-full',
-            isHero ? 'object-contain object-center' : 'object-cover'
+            'absolute inset-0 z-0 h-full w-full',
+            isHero ? 'object-cover object-[center_22%]' : 'object-cover'
           )}
           draggable={false}
         />
@@ -281,7 +269,11 @@ function VideoSlide({
       <video
         ref={videoRef}
         src={item.url}
-        className={cn('h-full w-full', isHero ? 'object-contain object-center' : 'object-cover')}
+        className={cn(
+          'absolute inset-0 z-[1] h-full w-full',
+          isHero ? 'object-cover object-[center_22%]' : 'object-cover',
+          playing ? 'opacity-100' : 'opacity-0'
+        )}
         playsInline
         muted={muted}
         preload="metadata"

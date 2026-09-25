@@ -45,6 +45,10 @@ export function MatchMakerPoolCardActions({
   preview = false,
   compact = false,
   className,
+  interestSent = false,
+  canPass = true,
+  canExpress = true,
+  statusLabel,
 }: {
   onPass?: () => void;
   onExpressInterest?: () => void;
@@ -52,23 +56,46 @@ export function MatchMakerPoolCardActions({
   preview?: boolean;
   compact?: boolean;
   className?: string;
+  interestSent?: boolean;
+  canPass?: boolean;
+  canExpress?: boolean;
+  statusLabel?: string | null;
 }) {
   if (preview) return null;
+
+  if (statusLabel && !canExpress && !canPass) {
+    return (
+      <p
+        className={cn(
+          'rounded-full border px-3 py-2 text-center text-[12px] font-extrabold',
+          compact ? 'text-[11px]' : undefined
+        )}
+        style={{
+          borderColor: MATCHMAKER_THEME.border,
+          background: MATCHMAKER_THEME.surfaceWarm,
+          color: MATCHMAKER_THEME.accent,
+        }}
+      >
+        {statusLabel}
+      </p>
+    );
+  }
 
   return (
     <div className={cn(compact ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-2 gap-3', className)}>
       <MatchMakerSecondaryButton
         onClick={onPass}
+        disabled={!canPass || expressBusy}
         className={compact ? 'min-h-[40px] text-[12px]' : undefined}
       >
         Pass
       </MatchMakerSecondaryButton>
       <MatchMakerPrimaryButton
-        disabled={expressBusy}
+        disabled={expressBusy || !canExpress || interestSent}
         onClick={onExpressInterest}
         className={compact ? 'min-h-[40px] text-[12px]' : undefined}
       >
-        {expressBusy ? 'Sending…' : 'Express Interest'}
+        {expressBusy ? 'Sending…' : interestSent ? 'Interest sent' : 'Express Interest'}
       </MatchMakerPrimaryButton>
     </div>
   );

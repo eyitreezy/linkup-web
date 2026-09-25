@@ -91,15 +91,17 @@ export function MatchMakerInterestQueueScreen() {
       if (result.error) throw new Error(result.error);
       return result;
     },
-    onSuccess: (result) => {
+    onSuccess: (result, toUserId) => {
       setBusyUserId(null);
       if (result.matched && result.connectionId) {
         router.push(`/matchmaker/connection/${result.connectionId}`);
         return;
       }
+      if (result.alreadySent) return;
       void queryClient.invalidateQueries({ queryKey: ['matchmaker-interest-queue'] });
       void queryClient.invalidateQueries({ queryKey: ['matchmaker-interest-badge'] });
       void queryClient.invalidateQueries({ queryKey: ['matchmaker-pool'] });
+      void queryClient.invalidateQueries({ queryKey: ['matchmaker-member-interaction', toUserId] });
     },
     onError: () => setBusyUserId(null),
   });

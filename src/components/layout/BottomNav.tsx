@@ -32,12 +32,14 @@ function BottomNavTabLink({
   active,
   unreadCount,
   showDot,
+  badgeVariant,
   onNavigate,
 }: {
   item: NavTabItem;
   active: boolean;
   unreadCount: number;
   showDot: boolean;
+  badgeVariant?: 'dot' | 'pill';
   onNavigate?: (e: MouseEvent<HTMLAnchorElement>) => void;
 }) {
   return (
@@ -54,6 +56,7 @@ function BottomNavTabLink({
       <NavItemUnreadIndicator
         count={unreadCount}
         showDot={showDot}
+        badgeVariant={badgeVariant}
         active={active}
         ringClassName="ring-surface/95"
       >
@@ -150,6 +153,7 @@ export function BottomNav() {
           {primary.map((item) => {
             const active = isMainNavItemActive(pathname, item.href);
             const isMessages = item.href === '/messages';
+            const isMatchMaker = item.href === '/matchmaker';
             return (
               <li key={item.href} className="min-w-0 flex-1">
                 <BottomNavTabLink
@@ -157,6 +161,7 @@ export function BottomNav() {
                   active={active}
                   unreadCount={unreadFor(item)}
                   showDot={isMessages}
+                  badgeVariant={isMatchMaker ? 'pill' : undefined}
                   onNavigate={
                     isMessages && isMobileShell
                       ? (e) => {
