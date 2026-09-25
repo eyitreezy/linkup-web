@@ -25,7 +25,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { IoHeartOutline } from 'react-icons/io5';
+import { IoHeart } from 'react-icons/io5';
 
 const VIEW_STORAGE_KEY = 'linkup_matchmaker_pool_view_mode';
 
@@ -186,11 +186,11 @@ export function MatchMakerPool() {
               style={{ borderColor: MATCHMAKER_THEME.border, background: MATCHMAKER_THEME.surface }}
               aria-label={
                 receivedInterestCount > 0
-                  ? `People who expressed interest, ${receivedInterestCount} new`
+                  ? `People who expressed interest, ${receivedInterestCount} unopened`
                   : 'People who expressed interest'
               }
             >
-              <IoHeartOutline size={18} style={{ color: MATCHMAKER_THEME.accent }} />
+              <IoHeart size={18} style={{ color: MATCHMAKER_THEME.accent }} />
               {receivedInterestCount > 0 ? (
                 <span
                   className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-extrabold tabular-nums text-white"

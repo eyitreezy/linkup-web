@@ -100,24 +100,171 @@ export async function expressMatchMakerInterest(
   };
 }
 
-export async function fetchMatchMakerInterestQueue(
-  client: SupabaseClient
-): Promise<{ data: MatchMakerInterestQueue | null; error: string | null }> {
-  const { data, error } = await client.rpc('matchmaker_get_interest_queue');
-  if (error) return { data: null, error: error.message };
-  const payload = data as {
-    sent?: MatchMakerInterestQueueRow[];
-    received?: MatchMakerInterestQueueRow[];
-    received_count?: number;
+type InterestQueueRpcPayload = {
+  sent?: MatchMakerInterestQueueRow[] | null;
+  received?: MatchMakerInterestQueueRow[] | null;
+  received_count?: number;
+  received_unopened_count?: number;
+};
+
+function parseInterestQueuePayload(payload: InterestQueueRpcPayload): MatchMakerInterestQueue {
+  const received = payload.received ?? [];
+  const receivedUnopened =
+    payload.received_unopened_count ??
+    received.filter((row) => !row.opened_at).length;
+  return {
+    sent: payload.sent ?? [],
+    received,
+    receivedCount: payload.received_count ?? received.length,
+    receivedUnopenedCount: receivedUnopened,
   };
+}
+
+type RawInterestRow = {
+  id: string;
+  from_user_id: string;
+  to_user_id: string;
+  status: string;
+  expressed_at: string;
+  expires_at: string;
+  opened_at?: string | null;
+  surfaced_at?: string | null;
+};
+
+async function fetchMatchMakerInterestQueueFallback(
+  client: SupabaseClient,
+  userId: string
+): Promise<{ data: MatchMakerInterestQueue | null; error: string | null }> {
+  const now = new Date().toISOString();
+
+  const [sentRes, receivedRes] = await Promise.all([
+    client
+      .from('matchmaker_interests')
+      .select('id, to_user_id, status, expressed_at, expires_at, opened_at')
+      .eq('from_user_id', userId)
+      .eq('status', 'pending')
+      .gt('expires_at', now)
+      .order('expressed_at', { ascending: false }),
+    client
+      .from('matchmaker_interests')
+      .select('id, from_user_id, status, expressed_at, expires_at, opened_at, surfaced_at')
+      .eq('to_user_id', userId)
+      .eq('status', 'pending')
+      .gt('expires_at', now)
+      .order('expressed_at', { ascending: false }),
+  ]);
+
+  if (sentRes.error || receivedRes.error) {
+    return {
+      data: null,
+      error: sentRes.error?.message ?? receivedRes.error?.message ?? 'Failed to load interest queue',
+    };
+  }
+
+  const sentRaw = (sentRes.data ?? []) as RawInterestRow[];
+  const receivedRaw = ((receivedRes.data ?? []) as RawInterestRow[]).filter(
+    (row) => row.surfaced_at != null
+  );
+
+  const profileIds = [
+    ...new Set([
+      ...sentRaw.map((r) => r.to_user_id),
+      ...receivedRaw.map((r) => r.from_user_id),
+    ]),
+  ];
+
+  if (profileIds.length === 0) {
+    return {
+      data: {
+        sent: [],
+        received: [],
+        receivedCount: 0,
+        receivedUnopenedCount: 0,
+      },
+      error: null,
+    };
+  }
+
+  const { data: profiles, error: profileError } = await client
+    .from('profiles')
+    .select(
+      'user_id, display_name, birth_date, location_label, photo_urls, primary_photo_url, avatar_url, preferences, communication_style, verified_badge'
+    )
+    .in('user_id', profileIds);
+
+  if (profileError) {
+    return { data: null, error: profileError.message };
+  }
+
+  const profileById = new Map((profiles ?? []).map((p) => [p.user_id, p]));
+
+  function toQueueRow(
+    interest: RawInterestRow,
+    otherUserId: string
+  ): MatchMakerInterestQueueRow | null {
+    const profile = profileById.get(otherUserId);
+    if (!profile) return null;
+    return {
+      interest_id: interest.id,
+      user_id: otherUserId,
+      status: interest.status as MatchMakerInterestQueueRow['status'],
+      expressed_at: interest.expressed_at,
+      expires_at: interest.expires_at,
+      opened_at: interest.opened_at ?? null,
+      display_name: profile.display_name,
+      birth_date: profile.birth_date,
+      location_label: profile.location_label,
+      photo_urls: profile.photo_urls,
+      primary_photo_url: profile.primary_photo_url,
+      avatar_url: profile.avatar_url,
+      preferences: profile.preferences,
+      communication_style: profile.communication_style,
+      verified_badge: profile.verified_badge,
+    };
+  }
+
+  const sent = sentRaw
+    .map((row) => toQueueRow(row, row.to_user_id))
+    .filter((row): row is MatchMakerInterestQueueRow => row != null);
+  const received = receivedRaw
+    .map((row) => toQueueRow(row, row.from_user_id))
+    .filter((row): row is MatchMakerInterestQueueRow => row != null);
+
   return {
     data: {
-      sent: payload.sent ?? [],
-      received: payload.received ?? [],
-      receivedCount: payload.received_count ?? 0,
+      sent,
+      received,
+      receivedCount: received.length,
+      receivedUnopenedCount: received.filter((row) => !row.opened_at).length,
     },
     error: null,
   };
+}
+
+export async function fetchMatchMakerInterestQueue(
+  client: SupabaseClient,
+  userId?: string
+): Promise<{ data: MatchMakerInterestQueue | null; error: string | null }> {
+  const { data, error } = await client.rpc('matchmaker_get_interest_queue');
+
+  if (!error && data != null) {
+    const payload = (typeof data === 'string' ? JSON.parse(data) : data) as InterestQueueRpcPayload;
+    return { data: parseInterestQueuePayload(payload), error: null };
+  }
+
+  if (userId) {
+    const fallback = await fetchMatchMakerInterestQueueFallback(client, userId);
+    if (fallback.data) return fallback;
+  }
+
+  return { data: null, error: error?.message ?? 'Failed to load interest queue' };
+}
+
+export async function markMatchMakerInterestsOpened(
+  client: SupabaseClient
+): Promise<{ error: string | null }> {
+  const { error } = await client.rpc('matchmaker_mark_interests_opened');
+  return { error: error?.message ?? null };
 }
 
 export async function passMatchMakerInterest(

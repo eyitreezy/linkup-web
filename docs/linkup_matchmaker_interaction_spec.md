@@ -626,11 +626,17 @@ When a user has an active connection and someone expresses interest in them:
 ### 2.4 Pending Interests Queue (Received)
 
 User taps the interests icon/tab within MatchMaker (top-right of pool screen, badge count shown). before the list and grid tab
+[Interest icon] The interest icon should be a filled icon and should show a notification/indicator counter on it, the notification/indicator counter number on it should be the number of Pending Interests Queue (Received) that are yet to be opened
+
+Users should recieve an inapp notification and a email notification when a pending interests is recieved but only when they are yet to match with anyone
 
 Users should also see an indicator/notification on the MatchMaker sidetab just as we have it  on Messages and View Profile Sidetabs
 
 ```
 [Screen title: "People who expressed interest"]
+Back button to route the user back to the previous screen
+The back button should be located at the top of the header just like it is located on the edit profile screen
+The back button with arrow should be designed as it is designed in the edit profile screen, though with MatchMaker color tokens
 
 [Sent and Received Interests Tab] 
 The tab should take up Negotiations (offers) screen Sent(Numbers of interest sent count) and Recieved(Numbers of interest recieved cont) design with the MatchMaker colors

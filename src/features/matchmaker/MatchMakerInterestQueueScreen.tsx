@@ -1,16 +1,16 @@
 'use client';
 
-import { TabPageHeader } from '@/components/layout/TabPageHeader';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { MatchMakerInterestQueueCard } from '@/features/matchmaker/MatchMakerInterestQueueCard';
 import { MatchMakerLayout, MatchMakerPageShell } from '@/features/matchmaker/MatchMakerLayout';
-import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
+import { MatchMakerPageHeader } from '@/features/matchmaker/MatchMakerPageHeader';
 import { useMatchMakerInterestRealtime } from '@/hooks/useMatchMakerInterestRealtime';
 import { buildCompatibilitySignals } from '@/lib/matchmaker/compatibility';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import {
   expressMatchMakerInterest,
   fetchMatchMakerInterestQueue,
+  markMatchMakerInterestsOpened,
   passMatchMakerInterest,
 } from '@/services/matchmaker.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
@@ -20,8 +20,8 @@ import { cn } from '@/utils/cn';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
-import { IoHeartOutline } from 'react-icons/io5';
+import { useEffect, useMemo, useState } from 'react';
+import { IoHeart } from 'react-icons/io5';
 
 type Segment = 'sent' | 'received';
 
@@ -47,12 +47,20 @@ export function MatchMakerInterestQueueScreen() {
     queryKey: ['matchmaker-interest-queue', user?.id],
     queryFn: async () => {
       const client = createClient();
-      const result = await fetchMatchMakerInterestQueue(client);
+      const result = await fetchMatchMakerInterestQueue(client, user?.id);
       if (result.error) throw new Error(result.error);
       return result.data;
     },
     enabled: !!user?.id,
   });
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const client = createClient();
+    void markMatchMakerInterestsOpened(client).then(() => {
+      void queryClient.invalidateQueries({ queryKey: ['matchmaker-interest-badge', user.id] });
+    });
+  }, [user?.id, queryClient]);
 
   const sent = queueQuery.data?.sent ?? [];
   const received = queueQuery.data?.received ?? [];
@@ -83,7 +91,7 @@ export function MatchMakerInterestQueueScreen() {
       if (result.error) throw new Error(result.error);
       return result;
     },
-    onSuccess: (result, toUserId) => {
+    onSuccess: (result) => {
       setBusyUserId(null);
       if (result.matched && result.connectionId) {
         router.push(`/matchmaker/connection/${result.connectionId}`);
@@ -132,42 +140,51 @@ export function MatchMakerInterestQueueScreen() {
 
   return (
     <MatchMakerLayout>
-      <MatchMakerPageShell>
-        <TabPageHeader
+      <MatchMakerPageShell className="space-y-6 pb-10">
+        <MatchMakerPageHeader
           kicker="MatchMaker"
           title="People who expressed interest"
-          description="Review who has reached out and respond when you are ready."
-          icon={<MatchMakerTabIcon size={22} />}
+          subtitle="Review who has reached out and respond when you are ready."
+          backLabel="Back to pool"
+          onBack={() => router.push('/matchmaker')}
         />
 
-        <div
-          className="flex rounded-2xl border p-1"
-          style={{ borderColor: MATCHMAKER_THEME.border, background: MATCHMAKER_THEME.surfaceWarm }}
-        >
-          {(['sent', 'received'] as const).map((seg) => (
-            <button
-              key={seg}
-              type="button"
-              onClick={() => setSegment(seg)}
-              className={cn(
-                'min-w-0 flex-1 rounded-xl px-2 py-2.5 text-[12px] font-extrabold transition min-[360px]:px-4 min-[360px]:text-[13px]',
-                segment === seg ? 'text-white shadow-sm' : 'text-muted hover:opacity-90'
-              )}
-              style={
-                segment === seg
-                  ? { background: `linear-gradient(135deg, ${MATCHMAKER_THEME.accent} 0%, #6C63FF 100%)` }
-                  : { color: MATCHMAKER_THEME.textMuted }
-              }
-            >
-              <span className="block truncate">
-                {seg === 'sent' ? `Sent (${sent.length})` : `Received (${received.length})`}
-              </span>
-            </button>
-          ))}
-        </div>
+        <section className="space-y-3">
+          <h2
+            className="text-[12px] font-extrabold uppercase tracking-wide"
+            style={{ color: MATCHMAKER_THEME.textMuted }}
+          >
+            Sent and received
+          </h2>
+          <div
+            className="flex rounded-2xl border p-1"
+            style={{ borderColor: MATCHMAKER_THEME.border, background: MATCHMAKER_THEME.surfaceWarm }}
+          >
+            {(['sent', 'received'] as const).map((seg) => (
+              <button
+                key={seg}
+                type="button"
+                onClick={() => setSegment(seg)}
+                className={cn(
+                  'min-w-0 flex-1 rounded-xl px-2 py-2.5 text-[12px] font-extrabold transition min-[360px]:px-4 min-[360px]:text-[13px]',
+                  segment === seg ? 'text-white shadow-sm' : 'hover:opacity-90'
+                )}
+                style={
+                  segment === seg
+                    ? { background: `linear-gradient(135deg, ${MATCHMAKER_THEME.accent} 0%, #6C63FF 100%)` }
+                    : { color: MATCHMAKER_THEME.textMuted }
+                }
+              >
+                <span className="block truncate">
+                  {seg === 'sent' ? `Sent (${sent.length})` : `Received (${received.length})`}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
 
         {showLoading ? (
-          <ul className="mt-4 space-y-3">
+          <ul className="space-y-3">
             {[0, 1, 2].map((i) => (
               <li key={i} className="h-28 animate-pulse rounded-2xl bg-[#FBF5F0]" />
             ))}
@@ -175,15 +192,24 @@ export function MatchMakerInterestQueueScreen() {
         ) : null}
 
         {queueQuery.error ? (
-          <p className="mt-4 text-center text-[14px] font-semibold text-[#EF4444]">
-            Could not load your interest queue. Please try again.
-          </p>
+          <div className="rounded-2xl border p-4 text-center" style={{ borderColor: MATCHMAKER_THEME.border }}>
+            <p className="text-[14px] font-semibold text-[#EF4444]">
+              Could not load your interest queue. Please try again.
+            </p>
+            <button
+              type="button"
+              onClick={() => void queueQuery.refetch()}
+              className="mt-3 rounded-full px-4 py-2 text-[13px] font-extrabold text-white"
+              style={{ background: MATCHMAKER_THEME.accent }}
+            >
+              Retry
+            </button>
+          </div>
         ) : null}
 
         {!showLoading && !queueQuery.error && list.length === 0 ? (
           <AppEmptyState
-            className="mt-6"
-            icon={<IoHeartOutline size={40} style={{ color: MATCHMAKER_THEME.accent }} />}
+            icon={<IoHeart size={40} style={{ color: MATCHMAKER_THEME.accent }} />}
             title={segment === 'received' ? 'No one has expressed interest yet' : 'No interests sent yet'}
             description={
               segment === 'received'
@@ -198,8 +224,8 @@ export function MatchMakerInterestQueueScreen() {
           />
         ) : null}
 
-        {!showLoading && list.length > 0 ? (
-          <ul className="mt-4 space-y-3">
+        {!showLoading && !queueQuery.error && list.length > 0 ? (
+          <ul className="space-y-3">
             {list.map((row) => (
               <li key={row.interest_id}>
                 <MatchMakerInterestQueueCard

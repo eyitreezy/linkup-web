@@ -12,9 +12,9 @@ export function useMatchMakerInterestBadge(userId: string | undefined) {
     queryKey: ['matchmaker-interest-badge', userId],
     queryFn: async () => {
       const client = createClient();
-      const result = await fetchMatchMakerInterestQueue(client);
+      const result = await fetchMatchMakerInterestQueue(client, userId);
       if (result.error) throw new Error(result.error);
-      return result.data?.receivedCount ?? 0;
+      return result.data?.receivedUnopenedCount ?? 0;
     },
     enabled: !!userId,
     staleTime: 30_000,
