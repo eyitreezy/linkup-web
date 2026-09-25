@@ -11,8 +11,10 @@ import { MatchMakerPoolEmptyState } from '@/features/matchmaker/MatchMakerPoolEm
 import { MatchMakerPoolFeedSkeleton } from '@/features/matchmaker/MatchMakerPoolCardSkeleton';
 import { MatchMakerPoolGridCard } from '@/features/matchmaker/MatchMakerPoolGridCard';
 import { MatchMakerPoolListCard } from '@/features/matchmaker/MatchMakerPoolListCard';
+import { useMatchMakerInterestBadge } from '@/hooks/useMatchMakerInterestBadge';
 import { buildCompatibilitySignals } from '@/lib/matchmaker/compatibility';
 import { consumePoolMemberDismissed } from '@/lib/matchmaker/poolNavigation';
+import { matchmakerInterestsHref } from '@/lib/matchmaker/routes';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { expressMatchMakerInterest, fetchMatchMakerPool } from '@/services/matchmaker.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
@@ -21,7 +23,9 @@ import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/utils/cn';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { IoHeartOutline } from 'react-icons/io5';
 
 const VIEW_STORAGE_KEY = 'linkup_matchmaker_pool_view_mode';
 
@@ -46,6 +50,7 @@ export function MatchMakerPool() {
   const [expressingUserId, setExpressingUserId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const receivedInterestCount = useMatchMakerInterestBadge(user?.id);
 
   const setViewPersisted = useCallback((next: ListGridViewMode) => {
     setView(next);
@@ -142,10 +147,14 @@ export function MatchMakerPool() {
         router.push(`/matchmaker/connection/${result.connectionId}`);
         return;
       }
-      setToast('Interest sent');
-      setTimeout(() => setToast(null), 2000);
+      if (!result.queued) {
+        setToast('Interest sent');
+        setTimeout(() => setToast(null), 2000);
+      }
       dismissCard(toUserId);
       void queryClient.invalidateQueries({ queryKey: ['matchmaker-pool', user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['matchmaker-interest-queue'] });
+      void queryClient.invalidateQueries({ queryKey: ['matchmaker-interest-badge'] });
     },
     onError: () => {
       setExpressingUserId(null);
@@ -171,6 +180,26 @@ export function MatchMakerPool() {
             {filter.filterActive ? ', filtered' : ''}
           </p>
           <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href={matchmakerInterestsHref()}
+              className="relative flex h-9 w-9 items-center justify-center rounded-full border transition hover:opacity-95 active:scale-[0.98]"
+              style={{ borderColor: MATCHMAKER_THEME.border, background: MATCHMAKER_THEME.surface }}
+              aria-label={
+                receivedInterestCount > 0
+                  ? `People who expressed interest, ${receivedInterestCount} new`
+                  : 'People who expressed interest'
+              }
+            >
+              <IoHeartOutline size={18} style={{ color: MATCHMAKER_THEME.accent }} />
+              {receivedInterestCount > 0 ? (
+                <span
+                  className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-extrabold tabular-nums text-white"
+                  style={{ background: MATCHMAKER_THEME.accent }}
+                >
+                  {receivedInterestCount > 99 ? '99+' : receivedInterestCount}
+                </span>
+              ) : null}
+            </Link>
             <div className="xl:hidden">
               <DiscoverFilterIconButton active={filter.filterActive} onClick={() => setFilterOpen(true)} />
             </div>

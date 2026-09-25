@@ -2,9 +2,14 @@
 
 import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
 import { useRouter } from 'next/navigation';
-import { IoShieldCheckmark, IoTimeOutline, IoWarningOutline } from 'react-icons/io5';
+import { IoPersonOutline, IoShieldCheckmark, IoTimeOutline, IoWarningOutline } from 'react-icons/io5';
 
-export type MatchMakerGateModalState = 'subscription' | 'kyc' | 'cooldown' | 'suspended';
+export type MatchMakerGateModalState =
+  | 'subscription'
+  | 'kyc'
+  | 'cooldown'
+  | 'suspended'
+  | 'gender_not_set';
 
 type Props = {
   gate: MatchMakerGateModalState;
@@ -57,6 +62,14 @@ export function MatchMakerGateModal({
       cta: 'Got it',
       ctaGradient: false,
       onCta: onDismiss,
+    },
+    gender_not_set: {
+      icon: <IoPersonOutline size={48} color="#9B1B4B" />,
+      heading: 'Complete your profile first',
+      body: 'Add your gender to your profile so we can find the right matches for you. You can update this in Edit Profile without repeating onboarding.',
+      cta: 'Update profile',
+      ctaGradient: true,
+      onCta: () => router.push('/settings/edit-profile'),
     },
   }[gate];
 

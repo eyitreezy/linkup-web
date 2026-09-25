@@ -27,7 +27,7 @@ export function MatchMakerPoolEmptyState({ reason, className }: Props) {
           description="Add your gender to your profile so we can find the right matches for you."
           action={{
             label: 'Update profile',
-            href: '/profile/edit',
+            href: '/settings/edit-profile',
             variant: 'primary',
           }}
         />

@@ -129,10 +129,14 @@ export function MatchMakerProfileScreen({ userId }: Props) {
         router.replace(`/matchmaker/connection/${result.connectionId}`);
         return;
       }
-      setToast('Interest sent');
-      setTimeout(() => setToast(null), 2000);
+      if (!result.queued) {
+        setToast('Interest sent');
+        setTimeout(() => setToast(null), 2000);
+      }
       markPoolMemberDismissed(userId);
       void queryClient.invalidateQueries({ queryKey: ['matchmaker-pool', viewer?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['matchmaker-interest-queue'] });
+      void queryClient.invalidateQueries({ queryKey: ['matchmaker-interest-badge'] });
       router.back();
     },
   });

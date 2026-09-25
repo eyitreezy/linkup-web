@@ -625,10 +625,18 @@ When a user has an active connection and someone expresses interest in them:
 
 ### 2.4 Pending Interests Queue (Received)
 
-User taps the interests icon/tab within MatchMaker (top-right of pool screen, badge count shown).
+User taps the interests icon/tab within MatchMaker (top-right of pool screen, badge count shown). before the list and grid tab
+
+Users should also see an indicator/notification on the MatchMaker sidetab just as we have it  on Messages and View Profile Sidetabs
 
 ```
 [Screen title: "People who expressed interest"]
+
+[Sent and Received Interests Tab] 
+The tab should take up Negotiations (offers) screen Sent(Numbers of interest sent count) and Recieved(Numbers of interest recieved cont) design with the MatchMaker colors
+
+Sent tab: shows the list of people you have express interest in.
+Recieved tab: Shows the list of people that have expressed interest in you
 
 [List of profile cards — stacked list view]
   Each card:

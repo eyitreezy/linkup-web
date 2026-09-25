@@ -19,7 +19,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { IoTimeOutline } from 'react-icons/io5';
 
@@ -44,11 +44,18 @@ function MatchMakerSkeleton() {
   );
 }
 
-const GATED_MODAL: MatchMakerGateModalState[] = ['subscription', 'kyc', 'cooldown', 'suspended'];
+const GATED_MODAL: MatchMakerGateModalState[] = [
+  'subscription',
+  'kyc',
+  'cooldown',
+  'suspended',
+  'gender_not_set',
+];
 
 export function MatchMakerRoot() {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
+  const pathname = usePathname();
   const [gate, setGate] = useState<MatchMakerGate | 'loading'>('loading');
   const [cooldownUntil, setCooldownUntil] = useState<string | undefined>();
   const [suspensionUntil, setSuspensionUntil] = useState<string | undefined>();
@@ -92,7 +99,7 @@ export function MatchMakerRoot() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [user?.id, pathname]);
 
   useEffect(() => {
     if (gate !== 'connection' || !connectionId) return;
@@ -166,7 +173,9 @@ export function MatchMakerRoot() {
                 ? `MatchMaker suspended, ${daysUntil(suspensionUntil)} days remaining`
                 : gate === 'subscription'
                   ? 'Upgrade to Gold to access MatchMaker'
-                  : 'Complete verification to access MatchMaker'}
+                  : gate === 'gender_not_set'
+                    ? 'Add your gender in Edit Profile to access MatchMaker'
+                    : 'Complete verification to access MatchMaker'}
           </p>
         </div>
       ) : null}
@@ -177,7 +186,7 @@ export function MatchMakerRoot() {
           cooldownDaysRemaining={daysUntil(cooldownUntil)}
           cooldownUntil={cooldownUntil}
           suspensionDaysRemaining={daysUntil(suspensionUntil)}
-          onDismiss={() => setModalDismissed(true)}
+          onDismiss={gate === 'gender_not_set' ? undefined : () => setModalDismissed(true)}
         />
       ) : null}
     </div>

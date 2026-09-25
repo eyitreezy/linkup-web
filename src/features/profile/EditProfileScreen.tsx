@@ -9,6 +9,7 @@ import { ToggleRow } from '@/components/settings/ToggleRow';
 import { AppStatusDialog } from '@/components/ui/AppStatusDialog';
 import { PremiumSectionHead } from '@/features/premium/PremiumSectionHead';
 import { INTEREST_TAGS, LANGUAGE_OPTIONS } from '@/lib/onboarding/constants';
+import { PROFILE_GENDER_OPTIONS } from '@/lib/profile/gender';
 import { validatePromptAnswers } from '@/lib/onboarding/promptAnswers';
 import { ProfilePromptEditor } from '@/components/profile/ProfilePromptEditor';
 import { ageFromBirthDate, draftFromProfile } from '@/lib/onboarding/hydrate';
@@ -84,6 +85,7 @@ export function EditProfileScreen() {
     const photos = draft.profileMedia.photos.filter((p) => p.url || p.localFile).length;
     return (
       draft.displayName.trim().length >= 1 &&
+      draft.selfGender != null &&
       photos >= 1 &&
       age >= 18 &&
       draft.bio.trim().length <= 150 &&
@@ -140,6 +142,9 @@ export function EditProfileScreen() {
     }
     await queryClient.invalidateQueries({ queryKey: ['profile-bundle'] });
     await queryClient.refetchQueries({ queryKey: ['profile-bundle', user.id] });
+    await queryClient.invalidateQueries({ queryKey: ['matchmaker-gate'] });
+    await queryClient.invalidateQueries({ queryKey: ['matchmaker-pool'] });
+    await queryClient.invalidateQueries({ queryKey: ['matchmaker-interest-queue'] });
     setSaving(false);
     setStatusDialog({
       variant: 'success',
@@ -202,6 +207,17 @@ export function EditProfileScreen() {
             if (y && m && day) setDraft((d) => ({ ...d, birthDate: new Date(y, m - 1, day) }));
           }}
         />
+        <p className="mt-4 text-[13px] font-extrabold">I am</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {PROFILE_GENDER_OPTIONS.map((opt) => (
+            <GradientChip
+              key={opt.value}
+              label={opt.label}
+              selected={draft.selfGender === opt.value}
+              onClick={() => setDraft((d) => ({ ...d, selfGender: opt.value }))}
+            />
+          ))}
+        </div>
         <label className="mt-4 block text-[13px] font-extrabold">Bio ({draft.bio.length}/150)</label>
         <TextareaWithEmoji
           maxLength={150}

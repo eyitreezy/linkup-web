@@ -14,7 +14,7 @@ import { IoCheckmarkCircle, IoPlay, IoVolumeHigh, IoVolumeMute } from 'react-ico
 type Props = {
   profile: Pick<DbProfile, 'primary_photo_url' | 'photo_urls' | 'avatar_url' | 'display_name'> | null;
   videos?: DbProfileVideo[];
-  /** `hero` — edge-to-edge MatchMaker / profile header (~45vh). `default` — card inset gallery. */
+  /** `hero` — edge-to-edge MatchMaker profile header (taller, less crop). `default` — card inset gallery. */
   layout?: 'default' | 'hero';
   className?: string;
 };
@@ -54,7 +54,7 @@ export function HostMediaGallery({ profile, videos = [], layout = 'default', cla
 
   const shellClass =
     layout === 'hero'
-      ? 'relative aspect-auto min-h-[42vh] w-full overflow-hidden sm:min-h-[45vh] md:aspect-[16/10] md:max-h-[50vh]'
+      ? 'relative aspect-auto min-h-[min(52vh,520px)] w-full overflow-hidden sm:min-h-[min(55vh,560px)] lg:min-h-[min(58vh,620px)]'
       : 'relative aspect-[4/5] w-full overflow-hidden bg-[#1a1530] min-[400px]:aspect-[3/4] md:aspect-[16/10] md:max-h-[28rem]';
 
   if (count === 0) {
@@ -116,11 +116,12 @@ export function HostMediaGallery({ profile, videos = [], layout = 'default', cla
             {item.kind === 'photo' ? (
               <PhotoSlide
                 item={item}
+                layout={layout}
                 loaded={!!loaded[item.id]}
                 onLoad={() => setLoaded((m) => ({ ...m, [item.id]: true }))}
               />
             ) : (
-              <VideoSlide item={item} active={i === safeIndex} />
+              <VideoSlide item={item} active={i === safeIndex} layout={layout} />
             )}
           </div>
         ))}
@@ -177,15 +178,24 @@ export function HostMediaGallery({ profile, videos = [], layout = 'default', cla
 
 function PhotoSlide({
   item,
+  layout,
   loaded,
   onLoad,
 }: {
   item: Extract<HostMediaItem, { kind: 'photo' }>;
+  layout: 'default' | 'hero';
   loaded: boolean;
   onLoad: () => void;
 }) {
+  const isHero = layout === 'hero';
   return (
     <>
+      {isHero ? (
+        <div
+          className="absolute inset-0 bg-gradient-to-br from-[#2a1f55] via-[#1a1530] to-[#3d1a2e]"
+          aria-hidden
+        />
+      ) : null}
       {!loaded ? (
         <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#EDE8FF]/80 to-[#FFF0F5]/60" />
       ) : null}
@@ -193,7 +203,11 @@ function PhotoSlide({
       <img
         src={item.url}
         alt=""
-        className={cn('h-full w-full object-cover transition-opacity duration-300', loaded ? 'opacity-100' : 'opacity-0')}
+        className={cn(
+          'relative h-full w-full transition-opacity duration-300',
+          isHero ? 'object-contain object-center' : 'object-cover',
+          loaded ? 'opacity-100' : 'opacity-0'
+        )}
         draggable={false}
         onLoad={onLoad}
       />
@@ -204,10 +218,13 @@ function PhotoSlide({
 function VideoSlide({
   item,
   active,
+  layout,
 }: {
   item: Extract<HostMediaItem, { kind: 'video' }>;
   active: boolean;
+  layout: 'default' | 'hero';
 }) {
+  const isHero = layout === 'hero';
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
@@ -243,14 +260,28 @@ function VideoSlide({
 
   return (
     <div className="relative h-full w-full bg-black">
+      {isHero ? (
+        <div
+          className="absolute inset-0 bg-gradient-to-br from-[#2a1f55] via-[#1a1530] to-[#3d1a2e]"
+          aria-hidden
+        />
+      ) : null}
       {item.thumbnailUrl && !playing ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={item.thumbnailUrl} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+        <img
+          src={item.thumbnailUrl}
+          alt=""
+          className={cn(
+            'absolute inset-0 h-full w-full',
+            isHero ? 'object-contain object-center' : 'object-cover'
+          )}
+          draggable={false}
+        />
       ) : null}
       <video
         ref={videoRef}
         src={item.url}
-        className="h-full w-full object-cover"
+        className={cn('h-full w-full', isHero ? 'object-contain object-center' : 'object-cover')}
         playsInline
         muted={muted}
         preload="metadata"

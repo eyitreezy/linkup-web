@@ -2,3 +2,7 @@
 export function matchmakerProfileHref(userId: string): string {
   return `/matchmaker/profile/${userId}`;
 }
+
+export function matchmakerInterestsHref(): string {
+  return '/matchmaker/interests';
+}

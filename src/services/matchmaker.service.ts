@@ -2,6 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { MatchMakerGateState } from '@/lib/matchmaker/gates';
 import type { MatchMakerConnectionRow } from '@/lib/matchmaker/connection';
 import type { PoolProfileRow } from '@/lib/matchmaker/compatibility';
+import type {
+  MatchMakerInterestQueue,
+  MatchMakerInterestQueueRow,
+} from '@/types/matchmaker-interests';
 
 export async function fetchMatchMakerGateState(
   client: SupabaseClient
@@ -64,18 +68,66 @@ export async function fetchMatchMakerPoolPreview(
   return { data: (data ?? []) as PoolProfileRow[], error: null };
 }
 
+export type ExpressMatchMakerInterestResult = {
+  matched: boolean;
+  connectionId?: string;
+  queued?: boolean;
+  surfaced?: boolean;
+  alreadySent?: boolean;
+  error: string | null;
+};
+
 export async function expressMatchMakerInterest(
   client: SupabaseClient,
   toUserId: string
-): Promise<{ matched: boolean; connectionId?: string; error: string | null }> {
+): Promise<ExpressMatchMakerInterestResult> {
   const { data, error } = await client.rpc('matchmaker_express_interest', { p_to_user_id: toUserId });
   if (error) return { matched: false, error: error.message };
-  const payload = data as { matched?: boolean; connection_id?: string };
+  const payload = data as {
+    matched?: boolean;
+    connection_id?: string;
+    queued?: boolean;
+    surfaced?: boolean;
+    already_sent?: boolean;
+  };
   return {
     matched: !!payload.matched,
     connectionId: payload.connection_id,
+    queued: payload.queued,
+    surfaced: payload.surfaced,
+    alreadySent: payload.already_sent,
     error: null,
   };
+}
+
+export async function fetchMatchMakerInterestQueue(
+  client: SupabaseClient
+): Promise<{ data: MatchMakerInterestQueue | null; error: string | null }> {
+  const { data, error } = await client.rpc('matchmaker_get_interest_queue');
+  if (error) return { data: null, error: error.message };
+  const payload = data as {
+    sent?: MatchMakerInterestQueueRow[];
+    received?: MatchMakerInterestQueueRow[];
+    received_count?: number;
+  };
+  return {
+    data: {
+      sent: payload.sent ?? [],
+      received: payload.received ?? [],
+      receivedCount: payload.received_count ?? 0,
+    },
+    error: null,
+  };
+}
+
+export async function passMatchMakerInterest(
+  client: SupabaseClient,
+  fromUserId: string
+): Promise<{ ok: boolean; error: string | null }> {
+  const { data, error } = await client.rpc('matchmaker_pass_interest', { p_from_user_id: fromUserId });
+  if (error) return { ok: false, error: error.message };
+  const payload = data as { ok?: boolean };
+  return { ok: !!payload.ok, error: null };
 }
 
 export async function fetchMatchMakerConnection(

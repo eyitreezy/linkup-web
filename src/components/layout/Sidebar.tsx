@@ -4,7 +4,9 @@ import { LinkUpLogo } from '@/components/brand/LinkUpLogo';
 import { NavItemUnreadIndicator } from '@/components/navigation/NavItemUnreadIndicator';
 import { TabIcon } from '@/components/navigation/TabIcon';
 import { ADMIN_NAV_ITEM, MOBILE_TAB_NAV } from '@/components/navigation/tabNavConfig';
+import { useMatchMakerInterestBadge } from '@/hooks/useMatchMakerInterestBadge';
 import { useMessagesInboxOptional } from '@/contexts/MessagesInboxContext';
+import { useAuthStore } from '@/stores/auth-store';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
 import { isMainNavItemActive } from '@/lib/navigation/navActive';
 import { shouldPrefetchNavRoute } from '@/lib/navigation/prefetchNav';
@@ -16,6 +18,8 @@ import { usePathname } from 'next/navigation';
 export function Sidebar() {
   const pathname = usePathname();
   const messagesInbox = useMessagesInboxOptional();
+  const user = useAuthStore((s) => s.user);
+  const matchmakerInterestCount = useMatchMakerInterestBadge(user?.id);
   const { isAdmin } = useAdminAccess();
 
   const navItems = isAdmin ? [...MOBILE_TAB_NAV, ADMIN_NAV_ITEM] : [...MOBILE_TAB_NAV];
@@ -34,7 +38,12 @@ export function Sidebar() {
         {navItems.map((item) => {
           const active = isMainNavItemActive(pathname, item.href);
           const isMessages = item.href === '/messages';
-          const unreadCount = isMessages ? (messagesInbox?.unreadCount ?? 0) : 0;
+          const isMatchMaker = item.href === '/matchmaker';
+          const unreadCount = isMessages
+            ? (messagesInbox?.unreadCount ?? 0)
+            : isMatchMaker
+              ? matchmakerInterestCount
+              : 0;
           const showDot = isMessages;
           return (
             <Link

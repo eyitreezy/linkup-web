@@ -3,6 +3,7 @@ export type MatchMakerGate =
   | 'kyc'
   | 'cooldown'
   | 'suspended'
+  | 'gender_not_set'
   | 'intent'
   | 'values'
   | 'connection'

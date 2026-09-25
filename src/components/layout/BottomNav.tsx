@@ -13,9 +13,11 @@ import {
 } from '@/components/navigation/tabNavConfig';
 import { useBottomNavVisibleCount } from '@/hooks/use-bottom-nav-visible-count';
 import { useIsMobileShellLayout } from '@/hooks/use-media-query';
+import { useMatchMakerInterestBadge } from '@/hooks/useMatchMakerInterestBadge';
 import { useMessagesInboxOptional } from '@/contexts/MessagesInboxContext';
 import { useNotificationInboxOptional } from '@/contexts/NotificationInboxContext';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
+import { useAuthStore } from '@/stores/auth-store';
 import { isMainNavItemActive } from '@/lib/navigation/navActive';
 import { shouldPrefetchNavRoute } from '@/lib/navigation/prefetchNav';
 import { cn } from '@/utils/cn';
@@ -88,6 +90,8 @@ export function BottomNav() {
   const router = useRouter();
   const isMobileShell = useIsMobileShellLayout();
   const messagesInbox = useMessagesInboxOptional();
+  const user = useAuthStore((s) => s.user);
+  const matchmakerInterestCount = useMatchMakerInterestBadge(user?.id);
   const { isAdmin } = useAdminAccess();
   const [moreOpen, setMoreOpen] = useState(false);
   const maxVisible = useBottomNavVisibleCount();
@@ -112,6 +116,7 @@ export function BottomNav() {
 
   function unreadFor(item: NavTabItem) {
     if (item.href === '/messages') return messagesInbox?.unreadCount ?? 0;
+    if (item.href === '/matchmaker') return matchmakerInterestCount;
     return 0;
   }
 

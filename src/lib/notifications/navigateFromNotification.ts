@@ -239,6 +239,22 @@ export function navigateFromNotification(
     push('/wallet');
     return;
   }
+  if (t === 'matchmaker_interest_received') {
+    push('/matchmaker/interests');
+    return;
+  }
+  if (t === 'matchmaker_mutual_connection') {
+    if (data?.connectionId && typeof data.connectionId === 'string') {
+      push(`/matchmaker/connection/${data.connectionId}`);
+      return;
+    }
+    push('/matchmaker');
+    return;
+  }
+  if (t === 'matchmaker_connection_ended') {
+    push('/matchmaker/reflect');
+    return;
+  }
   if (t.trim()) {
     push('/notifications');
   }
