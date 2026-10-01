@@ -51,7 +51,7 @@ import type { DbMeetType, EscrowPattern } from '@/types/database';
 import { cn } from '@/utils/cn';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { IoArrowBack, IoInformationCircleOutline, IoLocationOutline, IoLockClosed, IoShieldCheckmark, IoSparkles } from 'react-icons/io5';
 
@@ -92,6 +92,8 @@ function toLocalInputValue(d: Date): string {
 export function CreatePlanScreen() {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const matchmakerConnectionId = searchParams.get('matchmakerConnectionId');
   const queryClient = useQueryClient();
 
   const [meetTypeId, setMeetTypeId] = useState<string | null>(null);
@@ -308,6 +310,7 @@ export function CreatePlanScreen() {
       multiCity: isGroupPlan && multiCity,
       cityIds: isGroupPlan ? cityIds : [],
       isNegotiable,
+      matchmakerConnectionId,
     });
     setBusy(false);
 
@@ -356,6 +359,16 @@ export function CreatePlanScreen() {
           <h1 className="font-display text-3xl font-extrabold tracking-tight text-foreground">Create plan</h1>
         </header>
       </div>
+
+      {matchmakerConnectionId ? (
+        <div className="rounded-2xl border px-4 py-4 text-center" style={{ borderColor: '#EDE0D4', background: '#FDF8F4' }}>
+          <IoSparkles className="mx-auto text-[#9B1B4B]" size={28} />
+          <p className="mt-2 font-display text-lg font-extrabold text-foreground">Propose a meetup</p>
+          <p className="mt-1 text-[13px] font-semibold text-muted">
+            Set the details. Your match reviews and agrees before anything is confirmed or charged.
+          </p>
+        </div>
+      ) : null}
 
       {verificationBlocked ? (
         <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] font-semibold text-amber-900">

@@ -244,12 +244,23 @@ export function navigateFromNotification(
     return;
   }
   if (t === 'matchmaker_mutual_connection') {
-    if (data?.connectionId && typeof data.connectionId === 'string') {
-      push(`/matchmaker/connection/${data.connectionId}`);
+    const connId =
+      (typeof data?.connectionId === 'string' && data.connectionId) ||
+      (typeof data?.connection_id === 'string' && data.connection_id) ||
+      null;
+    if (connId) {
+      push(`/matchmaker/connection/${connId}`);
       return;
     }
     push('/matchmaker');
     return;
+  }
+  if (t === 'matchmaker_ready_signal' || t === 'matchmaker_activity_revealed') {
+    const href = hrefFromNotificationPayload(data);
+    if (href) {
+      push(href);
+      return;
+    }
   }
   if (t === 'matchmaker_connection_ended') {
     push('/matchmaker/reflect');

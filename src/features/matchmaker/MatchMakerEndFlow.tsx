@@ -77,7 +77,7 @@ export function MatchMakerEndFlow({ connectionId }: { connectionId: string }) {
             className="w-full text-center text-[14px] font-semibold underline"
             style={{ color: MATCHMAKER_THEME.textMuted }}
           >
-            Go back
+            Go back, keep this connection
           </button>
         </div>
       </MatchMakerPageShell>

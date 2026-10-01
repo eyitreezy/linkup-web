@@ -104,6 +104,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
 import {
   IoCheckmarkCircle,
   IoChevronBack,
@@ -938,7 +939,12 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
 
       <header
         className="relative z-10 flex shrink-0 items-center gap-1.5 border-b bg-gradient-to-r from-white/[0.98] via-[#f3eeff]/95 to-[#fff8fc]/92 px-2 py-2 backdrop-blur-sm min-[360px]:gap-3 min-[360px]:px-3 min-[360px]:py-3 lg:px-4"
-        style={{ borderColor: chatPreset.headerHairline }}
+        style={{
+          borderColor: chatPreset.headerHairline,
+          ...(peer.matchmakerConnectionId
+            ? { background: 'linear-gradient(90deg, #FDF8F4 0%, #fff8fc 55%, #f3eeff 100%)' }
+            : undefined),
+        }}
       >
         {onBack ? (
           <button
@@ -1016,12 +1022,21 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
                 className="block min-w-0"
                 aria-label={`View ${peer.name}'s profile`}
               >
-                <div className="flex items-center gap-1">
+                <div className="flex min-w-0 flex-wrap items-center gap-1">
                   <span className="truncate font-display text-base font-extrabold text-foreground min-[360px]:text-lg">
                     {peer.name}
                   </span>
                   {peer.verified ? (
                     <IoCheckmarkCircle className="shrink-0 text-primary" size={17} aria-label="Verified" />
+                  ) : null}
+                  {peer.matchmakerConnectionId ? (
+                    <span
+                      className="inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-extrabold min-[360px]:text-[11px]"
+                      style={{ color: '#9B1B4B' }}
+                    >
+                      <MatchMakerTabIcon size={14} />
+                      MatchMaker
+                    </span>
                   ) : null}
                 </div>
               </Link>
@@ -1052,6 +1067,15 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
         </div>
             {user?.id ? (
           <div className="flex shrink-0 items-center gap-1">
+                {peer.matchmakerConnectionId ? (
+                  <Link
+                    href={`/matchmaker/connection/${peer.matchmakerConnectionId}`}
+                    className="rounded-full p-2 text-[#9B1B4B] transition hover:bg-[#FDF8F4]"
+                    aria-label="MatchMaker connection"
+                  >
+                    <MatchMakerTabIcon size={22} />
+                  </Link>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => setSearchOpen(true)}

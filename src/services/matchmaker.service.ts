@@ -397,3 +397,108 @@ export async function hasReadySignal(
     .maybeSingle();
   return !!data;
 }
+
+export type MatchMakerSharedActivityState = {
+  weekNumber: number;
+  mySubmitted: boolean;
+  partnerSubmitted: boolean;
+  revealed: boolean;
+  myAnswer: string | null;
+  partnerAnswer: string | null;
+};
+
+export async function fetchMatchMakerSharedActivityState(
+  client: SupabaseClient,
+  connectionId: string,
+  weekNumber = 1
+): Promise<{ data: MatchMakerSharedActivityState | null; error: string | null }> {
+  const { data, error } = await client.rpc('matchmaker_get_shared_activity_state', {
+    p_connection_id: connectionId,
+    p_week_number: weekNumber,
+  });
+  if (error) return { data: null, error: error.message };
+  const payload = data as Record<string, unknown> | null;
+  if (!payload) return { data: null, error: null };
+  return {
+    data: {
+      weekNumber,
+      mySubmitted: !!payload.my_submitted,
+      partnerSubmitted: !!payload.partner_submitted,
+      revealed: !!payload.revealed,
+      myAnswer: (payload.my_answer as string | null) ?? null,
+      partnerAnswer: (payload.partner_answer as string | null) ?? null,
+    },
+    error: null,
+  };
+}
+
+export async function fetchMatchMakerConversationId(
+  client: SupabaseClient,
+  connectionId: string
+): Promise<string | null> {
+  const { data } = await client
+    .from('conversations')
+    .select('id')
+    .eq('matchmaker_connection_id', connectionId)
+    .maybeSingle();
+  return (data?.id as string | undefined) ?? null;
+}
+
+export async function fetchLastMessageTimesForConversation(
+  client: SupabaseClient,
+  conversationId: string,
+  viewerId: string,
+  partnerId: string
+): Promise<{ viewerLast: string | null; partnerLast: string | null }> {
+  const { data } = await client
+    .from('messages')
+    .select('sender_id, created_at')
+    .eq('conversation_id', conversationId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(80);
+
+  let viewerLast: string | null = null;
+  let partnerLast: string | null = null;
+  for (const row of data ?? []) {
+    const sid = row.sender_id as string;
+    const at = row.created_at as string;
+    if (sid === viewerId && !viewerLast) viewerLast = at;
+    if (sid === partnerId && !partnerLast) partnerLast = at;
+    if (viewerLast && partnerLast) break;
+  }
+  return { viewerLast, partnerLast };
+}
+
+export async function shouldShowPostMeetupPrompt(
+  client: SupabaseClient,
+  connectionId: string,
+  userId: string
+): Promise<boolean> {
+  const { data, error } = await client.rpc('matchmaker_should_show_post_meetup', {
+    p_connection_id: connectionId,
+  });
+  if (error) return false;
+  const payload = data as { show?: boolean } | null;
+  return !!payload?.show;
+}
+
+export async function saveMatchMakerPostMeetupReflection(
+  client: SupabaseClient,
+  connectionId: string,
+  input: {
+    feeling?: string | null;
+    quality?: string | null;
+    skipped?: boolean;
+    path?: 'continue' | 'end';
+  }
+): Promise<{ error: string | null }> {
+  const { error } = await client.rpc('matchmaker_save_post_meetup_reflection', {
+    p_connection_id: connectionId,
+    p_feeling: input.feeling ?? null,
+    p_quality: input.quality ?? null,
+    p_skipped: !!input.skipped,
+    p_path: input.path ?? null,
+  });
+  return { error: error?.message ?? null };
+}

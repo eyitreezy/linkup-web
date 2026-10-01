@@ -37,6 +37,7 @@ export type PublishPlanDraft = {
   multiCity?: boolean;
   cityIds?: string[];
   isNegotiable?: boolean;
+  matchmakerConnectionId?: string | null;
 };
 
 export function validatePublishDraft(draft: PublishPlanDraft): string | null {
@@ -142,6 +143,7 @@ export async function publishPlan(
       draft.isPaid && (draft.escrowPattern === 'B' || draft.escrowPattern === 'C')
         ? draft.isNegotiable !== false
         : true,
+    matchmaker_connection_id: draft.matchmakerConnectionId?.trim() || null,
   };
 
   const { data: planIdRaw, error } = await client.rpc('publish_plan', { payload: insertRow });

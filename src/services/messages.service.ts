@@ -82,6 +82,7 @@ export type InboxRow = {
   memberCount?: number;
   memberPreviews?: InboxMemberPreview[];
   planId?: string | null;
+  matchmakerConnectionId?: string | null;
 };
 
 /** Unread conversations (last message from other party, not read locally). */
@@ -118,7 +119,7 @@ export async function fetchInbox(
   const dmFilter = `user_a.eq.${userId},user_b.eq.${userId}`;
   let convQuery = client
     .from('conversations')
-    .select('id, user_a, user_b, created_at, is_group_chat, group_name, group_avatar_url, plan_id');
+    .select('id, user_a, user_b, created_at, is_group_chat, group_name, group_avatar_url, plan_id, matchmaker_connection_id');
   if (groupConvIds.length > 0) {
     convQuery = convQuery.or(`${dmFilter},id.in.(${groupConvIds.join(',')})`);
   } else {
@@ -288,6 +289,7 @@ export async function fetchInbox(
       memberCount: groupMemberCounts.get(c.id as string),
       memberPreviews: groupMemberPreviews.get(c.id as string),
       planId: (c.plan_id as string | null) ?? null,
+      matchmakerConnectionId: (c.matchmaker_connection_id as string | null) ?? null,
     };
   });
 
