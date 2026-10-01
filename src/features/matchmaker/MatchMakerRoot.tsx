@@ -111,6 +111,14 @@ export function MatchMakerRoot() {
       router.replace('/matchmaker/declare');
     } else if (gate === 'values') {
       router.replace('/matchmaker/values');
+    } else if (gate === 'reflection') {
+      router.replace('/matchmaker/reflect');
+    } else if (gate === 'healing') {
+      router.replace('/matchmaker/heal');
+    } else if (gate === 'reentry') {
+      router.replace('/matchmaker/reentry');
+    } else if (gate === 'cooldown') {
+      router.replace('/matchmaker/cooldown');
     }
   }, [gate, router]);
 
@@ -141,7 +149,15 @@ export function MatchMakerRoot() {
     );
   }
 
-  if (gate === 'connection' || gate === 'intent' || gate === 'values') {
+  if (
+    gate === 'connection' ||
+    gate === 'intent' ||
+    gate === 'values' ||
+    gate === 'reflection' ||
+    gate === 'healing' ||
+    gate === 'reentry' ||
+    gate === 'cooldown'
+  ) {
     return (
       <MatchMakerLayout>
         <div className="flex min-h-[40vh] items-center justify-center">
@@ -167,7 +183,7 @@ export function MatchMakerRoot() {
         <div className="fixed left-0 right-0 top-0 z-40 flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3">
           <IoTimeOutline size={16} className="shrink-0 text-amber-600" />
           <p className="flex-1 text-[13px] font-extrabold text-amber-900">
-            {gate === 'cooldown'
+            {(gate as string) === 'cooldown'
               ? `MatchMaker resumes in ${daysUntil(cooldownUntil)} days`
               : gate === 'suspended'
                 ? `MatchMaker suspended, ${daysUntil(suspensionUntil)} days remaining`

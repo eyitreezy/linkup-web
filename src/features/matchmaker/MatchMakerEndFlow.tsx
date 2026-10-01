@@ -3,7 +3,12 @@
 import { FormCard } from '@/components/settings/FormCard';
 import { GradientChip } from '@/components/settings/GradientChip';
 import { ConfirmDialog } from '@/features/plan-management/ConfirmDialog';
-import { MatchMakerLayout, MatchMakerPageShell } from '@/features/matchmaker/MatchMakerLayout';
+import {
+  MatchMakerAccentButton,
+  MatchMakerLayout,
+  MatchMakerOutlinedButton,
+  MatchMakerPageShell,
+} from '@/features/matchmaker/MatchMakerLayout';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { endMatchMakerConnection } from '@/services/matchmaker.service';
 import { createClient } from '@/lib/supabase/client';
@@ -35,7 +40,7 @@ export function MatchMakerEndFlow({ connectionId }: { connectionId: string }) {
       setConfirmOpen(false);
       return;
     }
-    router.replace('/matchmaker/reflect');
+    router.replace('/matchmaker');
   }
 
   return (
@@ -62,23 +67,10 @@ export function MatchMakerEndFlow({ connectionId }: { connectionId: string }) {
         {error ? <p className="mt-4 text-[13px] font-semibold text-[#EF4444]">{error}</p> : null}
 
         <div className="mt-8 space-y-3">
-          <button
-            type="button"
-            disabled={!reason || busy}
-            onClick={() => setConfirmOpen(true)}
-            className="w-full min-h-[48px] rounded-full text-[15px] font-extrabold text-white transition hover:opacity-95 active:scale-[0.98] disabled:opacity-50"
-            style={{ background: MATCHMAKER_THEME.accent }}
-          >
+          <MatchMakerAccentButton disabled={!reason || busy} onClick={() => setConfirmOpen(true)}>
             End connection
-          </button>
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="w-full text-center text-[14px] font-semibold underline"
-            style={{ color: MATCHMAKER_THEME.textMuted }}
-          >
-            Go back, keep this connection
-          </button>
+          </MatchMakerAccentButton>
+          <MatchMakerOutlinedButton onClick={() => router.back()}>Keep this connection</MatchMakerOutlinedButton>
         </div>
       </MatchMakerPageShell>
 

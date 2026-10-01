@@ -11,8 +11,9 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/utils/cn';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { IoArrowBack, IoClose } from 'react-icons/io5';
+import { useQuery } from '@tanstack/react-query';
 
 const TOTAL_STEPS = 4;
 
@@ -36,6 +37,12 @@ const COMMUNICATION_LABELS: Record<string, string> = {
   few_times_week: 'A few times a week',
   flexible: 'Flexible',
 };
+
+const COMMUNICATION_OPTIONS = [
+  { value: 'daily', label: 'Daily contact', sub: 'I like staying in touch regularly' },
+  { value: 'few_times_week', label: 'A few times a week', sub: 'Regular but not every day' },
+  { value: 'flexible', label: 'Flexible', sub: 'I go with the flow' },
+] as const;
 
 const FAITH_TYPE_OPTIONS = [
   { key: 'Christianity', label: 'Christianity' },
@@ -136,28 +143,44 @@ export function MatchMakerValuesScreen() {
   const [otherDealbreakers, setOtherDealbreakers] = useState<string[]>([]);
   const [otherDbInput, setOtherDbInput] = useState('');
   const [communicationStyle, setCommunicationStyle] = useState<string | null>(null);
+  const [showCommEditor, setShowCommEditor] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const commStyleRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!user?.id) return;
-    void fetchUserProfileBundle(createClient(), user.id).then((bundle) => {
-      const style = bundle.profile?.communication_style ?? null;
-      if (style) setCommunicationStyle(style);
-    });
-  }, [user?.id]);
+  const { data: profileBundle } = useQuery({
+    queryKey: ['profile-bundle', user?.id],
+    enabled: !!user?.id,
+    queryFn: () => fetchUserProfileBundle(createClient(), user!.id),
+  });
+
+  const profileCommunicationStyle =
+    (profileBundle?.profile as { communication_style?: string | null } | undefined)?.communication_style ??
+    null;
+
+  const effectiveCommunicationStyle = communicationStyle ?? profileCommunicationStyle;
 
   const stepValid = useMemo(() => {
     if (step === 1) {
       if (faith === null) return false;
       if (faith === 'yes' && !faithType) return false;
       if (faith === 'yes' && faithType === 'other' && !otherFaithText.trim()) return false;
+      if (!effectiveCommunicationStyle) return false;
       return true;
     }
     if (step === 2) return family !== null;
     if (step === 3) return pace !== null;
+    if (step === TOTAL_STEPS) return effectiveCommunicationStyle !== null;
     return true;
-  }, [step, faith, faithType, otherFaithText, family, pace]);
+  }, [
+    step,
+    faith,
+    faithType,
+    otherFaithText,
+    family,
+    pace,
+    effectiveCommunicationStyle,
+  ]);
 
   function addOtherDealbreakerTag() {
     const trimmed = otherDbInput.trim();
@@ -176,14 +199,14 @@ export function MatchMakerValuesScreen() {
   }
 
   async function submit() {
-    if (!user?.id || !family || !pace) return;
+    if (!user?.id || !family || !pace || !effectiveCommunicationStyle) return;
     setBusy(true);
     setError(null);
     const { error: saveError } = await saveMatchMakerValues(createClient(), user.id, {
       faith: faithDbValue(faith, faithType, otherFaithText),
       family_goals: FAMILY_DB[family],
       pace_preference: PACE_DB[pace],
-      communication_frequency: communicationStyle,
+      communication_frequency: effectiveCommunicationStyle,
       dealbreakers: buildDealbreakers(dealbreakers, otherDealbreakers),
     });
     setBusy(false);
@@ -214,15 +237,28 @@ export function MatchMakerValuesScreen() {
 
         {step === 1 ? (
           <FormCard>
-            {communicationStyle ? (
+            {profileCommunicationStyle && !showCommEditor ? (
               <div className="mb-5 rounded-xl border border-[#EDE0D4] bg-[#FBF5F0] px-4 py-3">
-                <p className="text-[12px] font-semibold text-muted">From your LinkUp profile</p>
-                <p className="mt-1 text-[14px] font-extrabold text-foreground">
-                  Communication style: {COMMUNICATION_LABELS[communicationStyle] ?? communicationStyle}
-                </p>
-                <p className="mt-1 text-[12px] font-semibold text-muted">
-                  You can update this in MatchMaker settings anytime.
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[12px] font-semibold text-muted">From your LinkUp profile</p>
+                    <p className="mt-1 text-[14px] font-extrabold text-foreground">
+                      Communication style:{' '}
+                      {COMMUNICATION_LABELS[effectiveCommunicationStyle ?? ''] ??
+                        effectiveCommunicationStyle}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCommEditor(true);
+                      commStyleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                    className="shrink-0 text-[12px] font-extrabold text-primary"
+                  >
+                    Edit
+                  </button>
+                </div>
               </div>
             ) : null}
 
@@ -288,6 +324,53 @@ export function MatchMakerValuesScreen() {
                   </div>
                 ) : null}
               </>
+            ) : null}
+
+            {!profileCommunicationStyle || showCommEditor ? (
+              <div
+                id="communication-style"
+                ref={commStyleRef}
+                className={cn(profileCommunicationStyle || faith !== null ? 'mt-6 border-t border-border pt-6' : '')}
+              >
+                <h3 className="text-[15px] font-extrabold text-foreground">
+                  How do you prefer to communicate?
+                </h3>
+                <p className="mt-1 text-[12px] font-semibold text-muted">
+                  Required for MatchMaker. This stays private on your profile.
+                </p>
+                <div className="mt-3 space-y-2">
+                  {COMMUNICATION_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setCommunicationStyle(opt.value)}
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition',
+                        effectiveCommunicationStyle === opt.value
+                          ? 'border-primary bg-[#F0EEFF]'
+                          : 'border-border bg-surface'
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
+                          effectiveCommunicationStyle === opt.value
+                            ? 'border-primary bg-primary'
+                            : 'border-border'
+                        )}
+                      >
+                        {effectiveCommunicationStyle === opt.value ? (
+                          <span className="h-2 w-2 rounded-full bg-white" />
+                        ) : null}
+                      </span>
+                      <span>
+                        <span className="block text-[14px] font-extrabold text-foreground">{opt.label}</span>
+                        <span className="block text-[11px] font-semibold text-muted">{opt.sub}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             ) : null}
           </FormCard>
         ) : null}
@@ -516,7 +599,7 @@ export function MatchMakerValuesScreen() {
           <button
             type="button"
             onClick={handleContinue}
-            disabled={busy || (step < TOTAL_STEPS && !stepValid)}
+            disabled={busy || !stepValid}
             className={cn(
               'min-h-[48px] rounded-full linkup-gradient-primary px-8 text-[15px] font-extrabold text-white transition hover:opacity-95 active:scale-[0.98] disabled:opacity-50',
               step < TOTAL_STEPS ? 'min-w-[160px]' : 'min-w-[280px]'

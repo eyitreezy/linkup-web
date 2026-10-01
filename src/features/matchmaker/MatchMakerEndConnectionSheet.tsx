@@ -2,6 +2,7 @@
 
 import { GradientChip } from '@/components/settings/GradientChip';
 import { ConfirmDialog } from '@/features/plan-management/ConfirmDialog';
+import { MatchMakerAccentButton, MatchMakerOutlinedButton } from '@/features/matchmaker/MatchMakerLayout';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { endMatchMakerConnection } from '@/services/matchmaker.service';
 import { createClient } from '@/lib/supabase/client';
@@ -44,7 +45,7 @@ export function MatchMakerEndConnectionSheet({ open, onClose, connectionId, part
       return;
     }
     onClose();
-    router.replace('/matchmaker/reflect');
+    router.replace('/matchmaker');
   }
 
   return (
@@ -82,23 +83,14 @@ export function MatchMakerEndConnectionSheet({ open, onClose, connectionId, part
             ))}
           </div>
           {error ? <p className="mt-3 text-[13px] font-semibold text-[#EF4444]">{error}</p> : null}
-          <button
-            type="button"
-            disabled={!reason || busy}
-            onClick={() => setConfirmOpen(true)}
-            className="mt-6 w-full min-h-[48px] rounded-full text-[15px] font-extrabold text-white transition hover:opacity-95 disabled:opacity-50"
-            style={{ background: MATCHMAKER_THEME.accent }}
-          >
-            End connection
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-4 w-full text-center text-[14px] font-semibold underline"
-            style={{ color: MATCHMAKER_THEME.textMuted }}
-          >
-            Go back, keep this connection
-          </button>
+          <div className="mt-6">
+            <MatchMakerAccentButton disabled={!reason || busy} onClick={() => setConfirmOpen(true)}>
+              End connection
+            </MatchMakerAccentButton>
+          </div>
+          <div className="mt-4">
+            <MatchMakerOutlinedButton onClick={onClose}>Keep this connection</MatchMakerOutlinedButton>
+          </div>
         </div>
       </div>
 

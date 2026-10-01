@@ -381,7 +381,17 @@ export async function saveMatchMakerValues(
     ...values,
     updated_at: new Date().toISOString(),
   });
-  return { error: error?.message ?? null };
+  if (error) return { error: error.message };
+
+  if (values.communication_frequency) {
+    const { error: profileError } = await client
+      .from('profiles')
+      .update({ communication_style: values.communication_frequency })
+      .eq('user_id', userId);
+    if (profileError) return { error: profileError.message };
+  }
+
+  return { error: null };
 }
 
 export async function hasReadySignal(
@@ -500,5 +510,81 @@ export async function saveMatchMakerPostMeetupReflection(
     p_skipped: !!input.skipped,
     p_path: input.path ?? null,
   });
+  return { error: error?.message ?? null };
+}
+
+export async function saveMatchMakerReflectionPeriod(
+  client: SupabaseClient,
+  text: string,
+  skip: boolean
+): Promise<{ error: string | null }> {
+  const { error } = await client.rpc('matchmaker_save_reflection_period', {
+    p_text: text,
+    p_skip: skip,
+  });
+  return { error: error?.message ?? null };
+}
+
+export async function saveMatchMakerHealingAnswers(
+  client: SupabaseClient,
+  answers: Record<string, unknown>,
+  options: { complete?: boolean; skipAll?: boolean }
+): Promise<{ error: string | null }> {
+  const { error } = await client.rpc('matchmaker_save_healing_answers', {
+    p_answers: answers,
+    p_complete: !!options.complete,
+    p_skip_all: !!options.skipAll,
+  });
+  return { error: error?.message ?? null };
+}
+
+export async function enterMatchMakerPool(
+  client: SupabaseClient
+): Promise<{ error: string | null }> {
+  const { error } = await client.rpc('matchmaker_enter_matchmaker_pool');
+  return { error: error?.message ?? null };
+}
+
+export type MatchMakerConnectionHistoryRow = {
+  connection_id: string;
+  ended_at: string;
+  connected_at: string;
+  first_plan_created_at: string | null;
+  partner_id: string;
+  partner_name: string | null;
+  partner_avatar_url: string | null;
+  primary_photo_url: string | null;
+  outcome_label: string;
+};
+
+export async function fetchMatchMakerConnectionHistory(
+  client: SupabaseClient
+): Promise<{ data: MatchMakerConnectionHistoryRow[]; error: string | null }> {
+  const { data, error } = await client.rpc('matchmaker_get_connection_history');
+  if (error) return { data: [], error: error.message };
+  return { data: (data ?? []) as MatchMakerConnectionHistoryRow[], error: null };
+}
+
+export async function fetchMatchMakerPoolVisibility(
+  client: SupabaseClient
+): Promise<{ visible: boolean; error: string | null }> {
+  const { data, error } = await client.rpc('matchmaker_get_pool_visibility');
+  if (error) return { visible: true, error: error.message };
+  const payload = data as { visible?: boolean } | null;
+  return { visible: payload?.visible !== false, error: null };
+}
+
+export async function setMatchMakerPoolVisibility(
+  client: SupabaseClient,
+  visible: boolean
+): Promise<{ error: string | null }> {
+  const { error } = await client.rpc('matchmaker_set_pool_visibility', { p_visible: visible });
+  return { error: error?.message ?? null };
+}
+
+export async function deleteMatchMakerProfile(
+  client: SupabaseClient
+): Promise<{ error: string | null }> {
+  const { error } = await client.rpc('matchmaker_delete_profile');
   return { error: error?.message ?? null };
 }

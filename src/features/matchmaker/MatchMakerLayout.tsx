@@ -69,6 +69,52 @@ export function MatchMakerPrimaryButton({
   );
 }
 
+/** Outlined pill — white background (MatchMaker standard for secondary actions). */
+export function MatchMakerOutlinedButton({
+  children,
+  disabled,
+  onClick,
+  className = '',
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  onClick?: () => void;
+  className?: string;
+}) {
+  const cls = `flex min-h-[48px] w-full items-center justify-center rounded-full border bg-white font-extrabold shadow-sm transition hover:opacity-95 active:scale-[0.98] disabled:opacity-50 ${className}`;
+  const style = { borderColor: MATCHMAKER_THEME.border, color: MATCHMAKER_THEME.textPrimary };
+  return (
+    <button type="button" disabled={disabled} onClick={onClick} className={cls} style={style}>
+      {children}
+    </button>
+  );
+}
+
+/** Destructive / end-connection CTA (accent fill). */
+export function MatchMakerAccentButton({
+  children,
+  disabled,
+  onClick,
+  className = '',
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  onClick?: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`w-full min-h-[48px] rounded-full text-[15px] font-extrabold text-white transition hover:opacity-95 active:scale-[0.98] disabled:opacity-50 ${className}`}
+      style={{ background: disabled ? MATCHMAKER_THEME.disabled : MATCHMAKER_THEME.accent }}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function MatchMakerSecondaryButton({
   children,
   disabled,

@@ -27,7 +27,7 @@ export function MatchMakerPoolCardSignals({
           )}
           style={{
             borderColor: MATCHMAKER_THEME.border,
-            background: MATCHMAKER_THEME.surfaceWarm,
+            background: MATCHMAKER_THEME.surface,
             color: MATCHMAKER_THEME.accent,
           }}
         >

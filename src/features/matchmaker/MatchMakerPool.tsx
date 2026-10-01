@@ -29,7 +29,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
-import { IoHeart } from 'react-icons/io5';
+import { IoHeart, IoSettingsOutline, IoTimeOutline } from 'react-icons/io5';
 
 const VIEW_STORAGE_KEY = 'linkup_matchmaker_pool_view_mode';
 
@@ -181,9 +181,25 @@ export function MatchMakerPool() {
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <Link
-              href={matchmakerInterestsHref()}
-              className="relative flex h-9 w-9 items-center justify-center rounded-full border transition hover:opacity-95 active:scale-[0.98]"
+              href="/matchmaker/settings"
+              className="flex h-9 w-9 items-center justify-center rounded-full border bg-white transition hover:opacity-95 active:scale-[0.98]"
+              style={{ borderColor: MATCHMAKER_THEME.border }}
+              aria-label="MatchMaker settings"
+            >
+              <IoSettingsOutline size={18} style={{ color: MATCHMAKER_THEME.accent }} />
+            </Link>
+            <Link
+              href="/matchmaker/history"
+              className="flex h-9 w-9 items-center justify-center rounded-full border bg-white transition hover:opacity-95 active:scale-[0.98]"
               style={{ borderColor: MATCHMAKER_THEME.border, background: MATCHMAKER_THEME.surface }}
+              aria-label="Connection history"
+            >
+              <IoTimeOutline size={18} style={{ color: MATCHMAKER_THEME.accent }} />
+            </Link>
+            <Link
+              href={matchmakerInterestsHref()}
+              className="relative flex h-9 w-9 items-center justify-center rounded-full border bg-white transition hover:opacity-95 active:scale-[0.98]"
+              style={{ borderColor: MATCHMAKER_THEME.border }}
               aria-label={
                 receivedInterestCount > 0
                   ? `People who expressed interest, ${receivedInterestCount} unopened`

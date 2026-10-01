@@ -28,6 +28,9 @@ export function isStandaloneAppRoute(pathname: string): boolean {
     '/matchmaker/reflect',
     '/matchmaker/heal',
     '/matchmaker/reentry',
+    '/matchmaker/cooldown',
+    '/matchmaker/history',
+    '/matchmaker/settings',
     '/matchmaker/suspended',
     '/matchmaker/connection/',
   ];

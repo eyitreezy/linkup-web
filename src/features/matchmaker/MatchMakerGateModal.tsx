@@ -99,7 +99,7 @@ export function MatchMakerGateModal({
           <button
             type="button"
             onClick={config.onCta}
-            className="w-full min-h-[48px] rounded-full border border-border bg-surface text-[15px] font-extrabold text-foreground transition hover:bg-background"
+            className="w-full min-h-[48px] rounded-full border border-border bg-white text-[15px] font-extrabold text-foreground transition hover:opacity-95"
           >
             {config.cta}
           </button>

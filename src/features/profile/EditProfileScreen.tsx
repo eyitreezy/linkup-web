@@ -26,8 +26,10 @@ import { fetchUserProfileBundle } from '@/services/profile.service';
 import { useAuthStore } from '@/stores/auth-store';
 import type { MeetingIntent } from '@/types/onboarding';
 import { defaultOnboardingDraft, type OnboardingDraft } from '@/types/onboarding';
+import { ProfileSettingsRow } from '@/features/profile/ProfileSettingsRow';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
+import { IoHeart } from 'react-icons/io5';
 import type { ProfileMediaDraft } from '@/lib/profile/media/types';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -376,6 +378,17 @@ export function EditProfileScreen() {
           className="w-full"
         />
       </FormCard>
+
+      <PremiumSectionHead title="MatchMaker" />
+      <div className="overflow-hidden rounded-2xl border border-border bg-white">
+        <ProfileSettingsRow
+          href="/matchmaker/settings"
+          icon={IoHeart}
+          label="MatchMaker preferences"
+          subtitle="Pool visibility, values, and pause"
+          isLast
+        />
+      </div>
 
       <button
         type="button"

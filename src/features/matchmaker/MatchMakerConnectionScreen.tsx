@@ -6,8 +6,10 @@ import { MatchMakerDay10CheckinCard } from '@/features/matchmaker/MatchMakerDay1
 import { MatchMakerConnectionTimeline } from '@/features/matchmaker/MatchMakerConnectionTimeline';
 import { MatchMakerEndConnectionSheet } from '@/features/matchmaker/MatchMakerEndConnectionSheet';
 import {
+  MatchMakerAccentButton,
   MatchMakerCard,
   MatchMakerLayout,
+  MatchMakerOutlinedButton,
   MatchMakerPageShell,
   MatchMakerPrimaryButton,
 } from '@/features/matchmaker/MatchMakerLayout';
@@ -231,7 +233,7 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
             onBack={() => router.push('/matchmaker')}
             actions={
               <Link
-                href="/settings"
+                href="/matchmaker/settings"
                 className="flex h-11 w-11 items-center justify-center rounded-2xl border bg-white/90 shadow-sm"
                 style={{ borderColor: `${MATCHMAKER_THEME.accent}33`, color: MATCHMAKER_THEME.textMuted }}
                 aria-label="Settings"
@@ -241,14 +243,20 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
             }
           />
 
-          {connection.status === 'paused' ? (
-            <div
-              className="mb-4 rounded-2xl border px-4 py-3 text-[13px] font-semibold"
-              style={{ borderColor: '#F59E0B', background: '#FFFBEB', color: '#92400E' }}
-            >
-              This connection is paused while a subscription issue is resolved.
-            </div>
-          ) : null}
+        {connection.status === 'paused' ? (
+          <div
+            className="mb-4 rounded-2xl border px-4 py-3 text-[13px] font-semibold"
+            style={{ borderColor: '#F59E0B', background: '#FFFBEB', color: '#92400E' }}
+          >
+            <p className="font-extrabold">Your subscription has lapsed.</p>
+            <p className="mt-1">
+              Resolve your account to continue this connection. You have 14 days before it closes automatically.
+            </p>
+            <Link href="/subscription" className="mt-2 inline-block font-extrabold underline">
+              Restore subscription
+            </Link>
+          </div>
+        ) : null}
 
           {showDay10 ? (
             <MatchMakerDay10CheckinCard
@@ -315,42 +323,23 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
             <MatchMakerPrimaryButton onClick={() => void openChat()}>Open Chat</MatchMakerPrimaryButton>
 
             {sharedActivityReady ? (
-              <Link
-                href={`/matchmaker/connection/${connectionId}/activity`}
-                className="flex min-h-[48px] items-center justify-center rounded-full border font-extrabold"
-                style={{ borderColor: MATCHMAKER_THEME.border }}
-              >
-                Shared Activity
+              <Link href={`/matchmaker/connection/${connectionId}/activity`} className="block">
+                <MatchMakerOutlinedButton>Shared Activity</MatchMakerOutlinedButton>
               </Link>
             ) : (
-              <button
-                type="button"
-                onClick={() => showUnlockToast('shared_activity')}
-                className="flex min-h-[48px] w-full items-center justify-center rounded-full border font-extrabold opacity-60"
-                style={{ borderColor: MATCHMAKER_THEME.border, color: MATCHMAKER_THEME.disabled }}
-              >
+              <MatchMakerOutlinedButton className="opacity-60" onClick={() => showUnlockToast('shared_activity')}>
                 Shared Activity
-              </button>
+              </MatchMakerOutlinedButton>
             )}
 
             {readyAvailable && !readySent ? (
-              <button
-                type="button"
-                onClick={() => setReadyConfirmOpen(true)}
-                className="flex min-h-[48px] w-full items-center justify-center rounded-full border font-extrabold"
-                style={{ borderColor: MATCHMAKER_THEME.accent, color: MATCHMAKER_THEME.accent }}
-              >
-                I feel ready to meet
-              </button>
+              <MatchMakerOutlinedButton onClick={() => setReadyConfirmOpen(true)}>
+                <span style={{ color: MATCHMAKER_THEME.accent }}>I feel ready to meet</span>
+              </MatchMakerOutlinedButton>
             ) : readyAvailable ? null : (
-              <button
-                type="button"
-                onClick={() => showUnlockToast('ready_to_meet')}
-                className="flex min-h-[48px] w-full items-center justify-center rounded-full border font-extrabold opacity-60"
-                style={{ borderColor: MATCHMAKER_THEME.border, color: MATCHMAKER_THEME.disabled }}
-              >
+              <MatchMakerOutlinedButton className="opacity-60" onClick={() => showUnlockToast('ready_to_meet')}>
                 I feel ready to meet
-              </button>
+              </MatchMakerOutlinedButton>
             )}
 
             {planOpen ? (
@@ -373,14 +362,9 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => setEndOpen(true)}
-            className="mt-8 block w-full text-center text-[13px] font-semibold underline"
-            style={{ color: MATCHMAKER_THEME.textMuted }}
-          >
-            End this connection
-          </button>
+          <div className="mt-8">
+            <MatchMakerAccentButton onClick={() => setEndOpen(true)}>End this connection</MatchMakerAccentButton>
+          </div>
 
           {actionToast ? (
             <p
