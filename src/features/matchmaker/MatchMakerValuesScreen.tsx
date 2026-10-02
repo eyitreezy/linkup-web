@@ -5,15 +5,24 @@ import { GradientChip } from '@/components/settings/GradientChip';
 import { ToggleRow } from '@/components/settings/ToggleRow';
 import { MatchMakerLayout, MatchMakerPageShell } from '@/features/matchmaker/MatchMakerLayout';
 import { onboardingFieldClass } from '@/lib/onboarding/formFieldClass';
+import {
+  hasCompleteMatchMakerValues,
+  parseDealbreakersFromDb,
+  parseFaithFromDb,
+  parseFamilyFromDb,
+  parsePaceFromDb,
+  type DealbreakersFormState,
+  type MatchMakerValuesRow,
+} from '@/lib/matchmaker/valuesFormHydrate';
 import { saveMatchMakerValues } from '@/services/matchmaker.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/utils/cn';
-import { useRouter } from 'next/navigation';
-import { useMemo, useRef, useState } from 'react';
-import { IoArrowBack, IoClose } from 'react-icons/io5';
-import { useQuery } from '@tanstack/react-query';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { IoArrowBack, IoClose, IoCreateOutline } from 'react-icons/io5';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const TOTAL_STEPS = 4;
 
@@ -69,17 +78,6 @@ function StepProgress({ step, total }: { step: number; total: number }) {
   );
 }
 
-type DealbreakersState = {
-  faith: boolean;
-  family: boolean;
-  location: boolean;
-  age: boolean;
-  other: boolean;
-  maxDistanceKm: string;
-  ageMin: string;
-  ageMax: string;
-};
-
 function sanitizeDigitsInput(value: string, maxLength = 3): string {
   return value.replace(/\D/g, '').slice(0, maxLength);
 }
@@ -92,7 +90,7 @@ function parseBoundedInt(value: string, min: number, max: number, fallback: numb
   return Math.min(max, Math.max(min, parsed));
 }
 
-function buildDealbreakers(db: DealbreakersState, otherTags: string[]): Record<string, unknown> {
+function buildDealbreakers(db: DealbreakersFormState, otherTags: string[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (db.faith) out.faith_alignment = true;
   if (db.family) out.family_goals_alignment = true;
@@ -121,16 +119,27 @@ function faithDbValue(
   return null;
 }
 
+function parseEntryStep(raw: string | null): number {
+  const n = raw ? Number.parseInt(raw, 10) : 1;
+  return n >= 1 && n <= TOTAL_STEPS ? n : 1;
+}
+
 export function MatchMakerValuesScreen() {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+  const fromSettings = searchParams.get('from') === 'settings';
+  const focusCommunication = searchParams.get('focus') === 'communication';
+  const entryStep = parseEntryStep(searchParams.get('step'));
   const [step, setStep] = useState(1);
+  const [hydrated, setHydrated] = useState(false);
   const [faith, setFaith] = useState<string | null>(null);
   const [faithType, setFaithType] = useState<string | null>(null);
   const [otherFaithText, setOtherFaithText] = useState('');
   const [family, setFamily] = useState<string | null>(null);
   const [pace, setPace] = useState<string | null>(null);
-  const [dealbreakers, setDealbreakers] = useState<DealbreakersState>({
+  const [dealbreakers, setDealbreakers] = useState<DealbreakersFormState>({
     faith: false,
     family: false,
     location: false,
@@ -148,17 +157,64 @@ export function MatchMakerValuesScreen() {
   const [error, setError] = useState<string | null>(null);
   const commStyleRef = useRef<HTMLDivElement | null>(null);
 
-  const { data: profileBundle } = useQuery({
-    queryKey: ['profile-bundle', user?.id],
+  const valuesQuery = useQuery({
+    queryKey: ['matchmaker-values-form', user?.id],
     enabled: !!user?.id,
-    queryFn: () => fetchUserProfileBundle(createClient(), user!.id),
+    queryFn: async () => {
+      const client = createClient();
+      const bundle = await fetchUserProfileBundle(client, user!.id);
+      const { data: values, error } = await client
+        .from('matchmaker_values')
+        .select('faith, family_goals, pace_preference, communication_frequency, dealbreakers')
+        .eq('user_id', user!.id)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return {
+        bundle,
+        values: values as MatchMakerValuesRow | null,
+      };
+    },
   });
 
   const profileCommunicationStyle =
-    (profileBundle?.profile as { communication_style?: string | null } | undefined)?.communication_style ??
-    null;
+    (valuesQuery.data?.bundle?.profile as { communication_style?: string | null } | undefined)
+      ?.communication_style ?? null;
 
   const effectiveCommunicationStyle = communicationStyle ?? profileCommunicationStyle;
+
+  useEffect(() => {
+    if (!valuesQuery.data || hydrated) return;
+
+    const { bundle, values } = valuesQuery.data;
+    const profileComm =
+      (bundle.profile as { communication_style?: string | null } | undefined)?.communication_style ??
+      null;
+
+    if (values) {
+      const faithState = parseFaithFromDb(values.faith);
+      setFaith(faithState.faith);
+      setFaithType(faithState.faithType);
+      setOtherFaithText(faithState.otherFaithText);
+      setFamily(parseFamilyFromDb(values.family_goals));
+      setPace(parsePaceFromDb(values.pace_preference));
+      const dbParsed = parseDealbreakersFromDb(values.dealbreakers);
+      setDealbreakers(dbParsed.dealbreakers);
+      setOtherDealbreakers(dbParsed.otherDealbreakers);
+      const comm = values.communication_frequency ?? profileComm;
+      if (comm) setCommunicationStyle(comm);
+    } else if (profileComm) {
+      setCommunicationStyle(profileComm);
+    }
+
+    setStep(entryStep);
+    if (focusCommunication) setShowCommEditor(true);
+    setHydrated(true);
+  }, [valuesQuery.data, hydrated, entryStep, focusCommunication]);
+
+  const settingsEditBlocked =
+    fromSettings &&
+    valuesQuery.isSuccess &&
+    !hasCompleteMatchMakerValues(valuesQuery.data?.values ?? null);
 
   const stepValid = useMemo(() => {
     if (step === 1) {
@@ -190,12 +246,26 @@ export function MatchMakerValuesScreen() {
   }
 
   function handleContinue() {
+    if (fromSettings) {
+      void submit();
+      return;
+    }
     if (step < TOTAL_STEPS) {
       if (!stepValid) return;
       setStep((s) => s + 1);
       return;
     }
     void submit();
+  }
+
+  function handleBack() {
+    if (step > 1) {
+      setStep((s) => s - 1);
+      return;
+    }
+    if (fromSettings) {
+      router.push('/matchmaker/settings');
+    }
   }
 
   async function submit() {
@@ -214,18 +284,80 @@ export function MatchMakerValuesScreen() {
       setError(saveError);
       return;
     }
-    router.replace('/matchmaker');
+    await queryClient.invalidateQueries({ queryKey: ['matchmaker-settings-bundle', user.id] });
+    await queryClient.invalidateQueries({ queryKey: ['profile-bundle', user.id] });
+    await queryClient.invalidateQueries({ queryKey: ['matchmaker-values-form', user.id] });
+    await queryClient.invalidateQueries({ queryKey: ['matchmaker-gate'] });
+    router.replace(fromSettings ? '/matchmaker/settings' : '/matchmaker');
   }
 
   const privateLabel = 'This is private and never shown to others.';
+  const showBack = step > 1 || fromSettings;
+
+  if (valuesQuery.isLoading || !hydrated) {
+    return (
+      <MatchMakerLayout>
+        <MatchMakerPageShell>
+          <div className="space-y-4">
+            <div className="h-8 w-40 animate-pulse rounded-full bg-[#EDE8FF]" />
+            <div className="h-64 animate-pulse rounded-2xl bg-[#FBF5F0]" />
+          </div>
+        </MatchMakerPageShell>
+      </MatchMakerLayout>
+    );
+  }
+
+  if (valuesQuery.isError) {
+    return (
+      <MatchMakerLayout>
+        <MatchMakerPageShell>
+          <p className="text-[14px] font-semibold text-[#EF4444]">
+            Could not load your MatchMaker values. Please try again.
+          </p>
+          <button
+            type="button"
+            onClick={() => void valuesQuery.refetch()}
+            className="mt-4 min-h-[44px] rounded-full linkup-gradient-primary px-6 text-[14px] font-extrabold text-white"
+          >
+            Retry
+          </button>
+        </MatchMakerPageShell>
+      </MatchMakerLayout>
+    );
+  }
+
+  if (settingsEditBlocked) {
+    return (
+      <MatchMakerLayout>
+        <MatchMakerPageShell>
+          <p className="text-[14px] font-semibold text-foreground">
+            Complete MatchMaker values setup before editing individual fields.
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push('/matchmaker/settings')}
+            className="mt-4 min-h-[44px] rounded-full border border-border bg-white px-6 text-[14px] font-extrabold"
+          >
+            Back to settings
+          </button>
+        </MatchMakerPageShell>
+      </MatchMakerLayout>
+    );
+  }
+
+  const primaryLabel = fromSettings
+    ? 'Save changes'
+    : step < TOTAL_STEPS
+      ? 'Continue'
+      : 'Save and enter MatchMaker';
 
   return (
     <MatchMakerLayout>
       <MatchMakerPageShell>
-        {step > 1 ? (
+        {showBack ? (
           <button
             type="button"
-            onClick={() => setStep((s) => Math.max(1, s - 1))}
+            onClick={handleBack}
             className="mb-4 flex min-h-[40px] items-center gap-2 rounded-full border border-border bg-white px-4 text-[14px] font-extrabold text-foreground transition hover:border-primary/30 hover:bg-[#F8F7FF]"
           >
             <IoArrowBack size={16} />
@@ -250,13 +382,15 @@ export function MatchMakerValuesScreen() {
                   </div>
                   <button
                     type="button"
+                    title="Edit communication style"
+                    aria-label="Edit communication style"
                     onClick={() => {
                       setShowCommEditor(true);
                       commStyleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }}
-                    className="shrink-0 text-[12px] font-extrabold text-primary"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-primary transition hover:border-primary/35 hover:bg-white"
                   >
-                    Edit
+                    <IoCreateOutline size={18} aria-hidden />
                   </button>
                 </div>
               </div>
@@ -605,7 +739,7 @@ export function MatchMakerValuesScreen() {
               step < TOTAL_STEPS ? 'min-w-[160px]' : 'min-w-[280px]'
             )}
           >
-            {busy ? 'Saving…' : step < TOTAL_STEPS ? 'Continue' : 'Save and enter MatchMaker'}
+            {busy ? 'Saving…' : primaryLabel}
           </button>
         </div>
       </MatchMakerPageShell>

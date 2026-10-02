@@ -18,9 +18,11 @@ import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { matchmakerValuesEditHref } from '@/lib/matchmaker/valuesFormHydrate';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { IoCreateOutline } from 'react-icons/io5';
 
 const COMM_LABELS: Record<string, string> = {
   daily: 'Daily contact',
@@ -54,17 +56,32 @@ function dealbreakerSummary(raw: Record<string, unknown> | null | undefined): st
   return parts.length ? parts.join(', ') : 'Configured';
 }
 
-function SettingsRow({ label, value, editHref }: { label: string; value: string; editHref: string }) {
+function SettingsRow({
+  label,
+  value,
+  editHref,
+  editAriaLabel,
+}: {
+  label: string;
+  value: string;
+  editHref: string;
+  editAriaLabel: string;
+}) {
   return (
     <div className="flex items-start justify-between gap-3 border-b py-3 last:border-b-0" style={{ borderColor: MATCHMAKER_THEME.border }}>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1 pr-2">
         <p className="text-[12px] font-extrabold uppercase tracking-wide" style={{ color: MATCHMAKER_THEME.textMuted }}>
           {label}
         </p>
         <p className="mt-0.5 text-[14px] font-semibold">{value}</p>
       </div>
-      <Link href={editHref} className="shrink-0 text-[13px] font-extrabold text-primary">
-        Edit
+      <Link
+        href={editHref}
+        title={editAriaLabel}
+        aria-label={editAriaLabel}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border text-primary transition hover:border-primary/35 hover:bg-[#F8F7FF] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      >
+        <IoCreateOutline size={20} aria-hidden />
       </Link>
     </div>
   );
@@ -136,17 +153,29 @@ export function MatchMakerSettingsScreen() {
           <p className="text-[11px] font-extrabold uppercase tracking-wide" style={{ color: MATCHMAKER_THEME.accent }}>
             My Values
           </p>
-          <SettingsRow label="Communication style" value={comm} editHref="/matchmaker/values" />
-          <SettingsRow label="Faith preference" value={values?.faith ? 'Set (private)' : 'Not set'} editHref="/matchmaker/values" />
+          <SettingsRow
+            label="Communication style"
+            value={comm}
+            editHref={matchmakerValuesEditHref(1, 'communication')}
+            editAriaLabel="Edit communication style"
+          />
+          <SettingsRow
+            label="Faith preference"
+            value={values?.faith ? 'Set (private)' : 'Not set'}
+            editHref={matchmakerValuesEditHref(1)}
+            editAriaLabel="Edit faith preference"
+          />
           <SettingsRow
             label="Family goals"
             value={FAMILY_LABELS[values?.family_goals ?? ''] ?? 'Not set'}
-            editHref="/matchmaker/values"
+            editHref={matchmakerValuesEditHref(2)}
+            editAriaLabel="Edit family goals"
           />
           <SettingsRow
             label="Pace preference"
             value={PACE_LABELS[values?.pace_preference ?? ''] ?? 'Not set'}
-            editHref="/matchmaker/values"
+            editHref={matchmakerValuesEditHref(3)}
+            editAriaLabel="Edit pace preference"
           />
         </FormCard>
 
@@ -155,8 +184,13 @@ export function MatchMakerSettingsScreen() {
             Dealbreakers
           </p>
           <p className="mt-2 text-[14px] font-semibold">{dealbreakerSummary(values?.dealbreakers as Record<string, unknown>)}</p>
-          <Link href="/matchmaker/values" className="mt-3 inline-block text-[13px] font-extrabold text-primary">
-            Edit dealbreakers
+          <Link
+            href={matchmakerValuesEditHref(4)}
+            title="Edit dealbreakers"
+            aria-label="Edit dealbreakers"
+            className="mt-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-border text-primary transition hover:border-primary/35 hover:bg-[#F8F7FF] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            <IoCreateOutline size={20} aria-hidden />
           </Link>
         </FormCard>
 
