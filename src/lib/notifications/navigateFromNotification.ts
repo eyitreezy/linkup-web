@@ -255,7 +255,11 @@ export function navigateFromNotification(
     push('/matchmaker');
     return;
   }
-  if (t === 'matchmaker_ready_signal' || t === 'matchmaker_activity_revealed') {
+  if (
+    t === 'matchmaker_ready_signal' ||
+    t === 'matchmaker_activity_revealed' ||
+    t === 'matchmaker_activity_shared'
+  ) {
     const href = hrefFromNotificationPayload(data);
     if (href) {
       push(href);

@@ -323,9 +323,16 @@ export async function endMatchMakerConnection(
   connectionId: string,
   reason: string
 ): Promise<{ error: string | null }> {
+  const trimmed = reason.trim();
+  if (!trimmed) return { error: 'Select a reason before ending this connection.' };
+  if (trimmed.startsWith('other:')) {
+    const detail = trimmed.slice('other:'.length).trim();
+    if (!detail) return { error: 'Enter your reason before ending this connection.' };
+    if (detail.length > 40) return { error: 'Reason must be 40 characters or fewer.' };
+  }
   const { error } = await client.rpc('matchmaker_end_connection', {
     p_connection_id: connectionId,
-    p_reason: reason,
+    p_reason: trimmed,
   });
   return { error: error?.message ?? null };
 }

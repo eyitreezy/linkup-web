@@ -821,9 +821,32 @@ No MatchMaker-specific restrictions inside the chat beyond the existing contact-
   [Option B]
   [Option C]
   [Option D]
+  [Option E — **Other**]
 
   (Options generated from compatibility signals and
    general lifestyle questions — not binary yes/no)
+
+**Other (web, Week 1):**
+- Fifth chip **Other** after the four preset Sunday options.
+- Reveals a required custom-answer field (max **100** characters, live `n/100` counter).
+- Persisted as `other:<trimmed detail>` in `matchmaker_shared_activities.user_*_answers.q1` (same JSONB model as presets).
+- Server RPC `matchmaker_submit_activity_answer` validates length and rejects empty/whitespace `other:` payloads.
+- Selecting a preset clears custom text; switching away from Other clears stale custom state on submit.
+
+**Recipient notification (web):**
+- When one participant submits and the other has not, `create_notification` fires for the partner (`type`: `matchmaker_activity_shared`).
+- Dedupe id: `matchmaker_activity_pending:{connection_id}:{week}:{recipient_user_id}`.
+- Payload `href`: `/matchmaker/connection/{id}/activity`. Realtime inbox uses existing notification subscriptions.
+- When both have submitted, existing `matchmaker_activity_revealed` notification remains (dedupe id `matchmaker_activity:{activity_id}:{partner}`).
+
+**Concealed preview (before mutual reveal):**
+- `matchmaker_get_shared_activity_state` returns `partner_answer` **only** when `revealed_at` is set (server-authoritative; never leak partner text early).
+- `partner_answer_concealed: true` when partner has submitted but reveal has not occurred.
+- UI shows a non-text placeholder preview (decorative blur bars only — not the real answer) plus CTA to submit.
+- After refresh/direct URL, state is restored from RPC only.
+
+**Post-submit actions (web):**
+- After the user submits and waits: **Back to connection** (outlined white pill) and **Chat while you wait** (primary), side-by-side on `sm+`, stacked full-width on narrow viewports.
 
 [Spacing: 24pt]
 
@@ -1076,9 +1099,16 @@ From connection screen: tap "End this connection" (text link, bottom).
   ○ Personal reasons
   ○ Other
 
+When **Other** is selected (web):
+- Reveal a text field: "Please enter your reason" (private; never shared with the other person).
+- **Maximum 40 characters** — enforced on input, in form state, and on submit.
+- Live counter: `[n/40]`.
+- **End connection** stays disabled until Other has non-whitespace text.
+- Persisted in `matchmaker_connections.end_reason` as `other:<detail>` (same column as preset reasons; not exposed in UI or to the partner).
+
 [Spacing: 24pt]
 
-[CTA — "End connection" — #9B1B4B — only active when reason selected]
+[CTA — "End connection" — #9B1B4B — only active when reason selected (and Other detail valid when applicable)]
 [Link — "Go back, keep this connection"]
 ```
 
@@ -1327,14 +1357,23 @@ MatchMaker settings and connection history live **inside the MatchMaker tab**, n
   Subtitle: "Private preferences for your MatchMaker experience."
 
 [Section: My Values — FormCard]
-  Communication style     [value summary]     [Edit → /matchmaker/values]
-  Faith preference        [Set (private) / Not set]   [Edit]
-  Family goals            [summary label]       [Edit]
-  Pace preference         [summary label]       [Edit]
+  Each row: value summary + **edit icon** (accessible label per field; `IoCreateOutline`).
+  Icons deep-link to the **existing** Gate 4 values form (`MatchMakerValuesScreen`) with query context:
+  - `from=settings` — **settings edit mode** (exit/save return to `/matchmaker/settings`, not onboarding).
+  - `step=1|2|3|4` — open the relevant step (faith/communication share step 1; use `focus=communication` for communication-only).
+  - Example: `/matchmaker/values?from=settings&step=2`
+
+**Settings edit mode (web):**
+- Reuses one form for initial Gate 4 setup and for settings edits (no duplicate edit pages).
+- Load `matchmaker_values` + `profiles.communication_style` before rendering fields.
+- **Back** on the entry step → `router.replace('/matchmaker/settings')` (not the previous onboarding step).
+- **Back** on a later step (if the user moved forward inside the form) → previous step only.
+- **Save changes** → upsert full values object (unrelated fields preserved) → invalidate settings query → `/matchmaker/settings`.
+- Normal onboarding (no `from=settings`): Back between steps unchanged; final save → `/matchmaker`.
 
 [Section: Dealbreakers — FormCard]
   [Short summary — e.g. "Faith alignment, Distance" or "None set"]
-  [Edit dealbreakers → /matchmaker/values]
+  [Edit icon → `/matchmaker/values?from=settings&step=4`]
 
 [Section: Pool visibility — FormCard]
   Toggle: "Show me in MatchMaker pool"
@@ -1391,7 +1430,7 @@ Does **not** replace the interest queue; it is a separate private list.
 | Subscription gate | Tab tap (no Gold) | Upgrade or back |
 | KYC gate | Tab tap (no KYC) | Verify or back |
 | Intent Declaration | First entry | Confirm or back |
-| Values setup | First entry | Complete or back |
+| Values setup | First entry (Gate 4) or Settings edit icon | Complete → pool, or Save → Settings when `from=settings` |
 | Pool — card stack | All gates passed | Swipe / tap actions |
 | Profile view | Card tap | Back or express interest |
 | Interests queue | Badge tap | Back |

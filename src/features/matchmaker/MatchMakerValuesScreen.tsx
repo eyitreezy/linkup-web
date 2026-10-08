@@ -132,6 +132,7 @@ export function MatchMakerValuesScreen() {
   const fromSettings = searchParams.get('from') === 'settings';
   const focusCommunication = searchParams.get('focus') === 'communication';
   const entryStep = parseEntryStep(searchParams.get('step'));
+  const settingsEntryStepRef = useRef(entryStep);
   const [step, setStep] = useState(1);
   const [hydrated, setHydrated] = useState(false);
   const [faith, setFaith] = useState<string | null>(null);
@@ -206,6 +207,7 @@ export function MatchMakerValuesScreen() {
       setCommunicationStyle(profileComm);
     }
 
+    settingsEntryStepRef.current = entryStep;
     setStep(entryStep);
     if (focusCommunication) setShowCommEditor(true);
     setHydrated(true);
@@ -259,12 +261,16 @@ export function MatchMakerValuesScreen() {
   }
 
   function handleBack() {
-    if (step > 1) {
+    if (fromSettings) {
+      if (step <= settingsEntryStepRef.current) {
+        router.replace('/matchmaker/settings');
+        return;
+      }
       setStep((s) => s - 1);
       return;
     }
-    if (fromSettings) {
-      router.push('/matchmaker/settings');
+    if (step > 1) {
+      setStep((s) => s - 1);
     }
   }
 

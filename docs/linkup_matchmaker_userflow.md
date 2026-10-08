@@ -477,13 +477,13 @@ FIRST MESSAGE SENT — Clock starts
 
 DAY 7 (from connected_at) — Shared Interest Activity unlocks
   • [Shared Activity] button becomes active
-  • Both parties independently answer 3 questions
-    generated from their shared compatibility signals:
-    e.g. "What does your ideal Sunday look like?"
-         "What does family mean to you?"
-         "What is one thing you need in a relationship to feel safe?"
-  • Answers revealed simultaneously ONLY after both submit
-  • Neither sees the other's answers before submitting
+  • Week 1 question (web): e.g. "What does your ideal Sunday look like?"
+    with four preset chips plus **Other** (custom answer, max 100 chars)
+  • First submitter triggers in-app notification to partner
+    (`matchmaker_activity_shared` → `/matchmaker/connection/{id}/activity`)
+  • Partner sees concealed preview (no partner answer text) until they submit
+  • Answers revealed ONLY after both submit (`matchmaker_activity_revealed`)
+  • Server RPC withholds partner_answer until revealed_at is set
   • Available once per week throughout the connection
   • Voluntary — no penalty for not participating
 
@@ -603,6 +603,9 @@ Reason selection
 ○ Not feeling it
 ○ Personal reasons
 ○ Other
+  → (Web) Text field appears; max 40 characters; live counter;
+    required non-whitespace before submit. Stored privately as
+    end_reason `other:<detail>` — never shown to the other party.
 
          │
          ▼
