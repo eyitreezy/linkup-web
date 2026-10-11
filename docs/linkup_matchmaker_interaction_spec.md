@@ -1452,6 +1452,89 @@ Does **not** replace the interest queue; it is a separate private list.
 
 ---
 
+## WEB QA REVIEW — PARTIAL, FAIL, BLOCKED (2026-10-10)
+
+**Full matrix:** `docs/matchmaker_web_requirements_audit.md` §4 (Req IDs).
+
+### Migrations on staging ≠ “broken in the app”
+
+Applying Supabase migrations on **staging** (including `20261008000001_matchmaker_shared_activity_notify_validate.sql`) means the **database RPCs and triggers on that project** match the repo. The web app is functional for those features when **all** of the following are true:
+
+| Check | What to verify |
+|--------|----------------|
+| **Same project** | Deployed web (or local `.env`) uses the **same** Supabase URL/keys as staging where migrations ran. |
+| **Current build** | Staging deploy includes the client that calls the RPC / handles notification types (not an older bundle). |
+| **Journey preconditions** | e.g. shared-activity notify needs an **active connection**, **Day 7+** (`connected_at`), **first partner submit** while the other side is still empty, and notifications enabled for the partner. |
+
+**Shared activity partner notify (§3.4):** Backend + app are wired: `MatchMakerSharedActivity.tsx` → `matchmaker_submit_activity_answer`; migration inserts `matchmaker_activity_shared` via `create_notification`; `navigateFromNotification.ts` routes that type to `/matchmaker/connection/{id}/activity`. With migrations applied on staging, treat this as **QA verification (PARTIAL)**, not missing implementation—unless smoke test fails (then debug env, deploy, or RPC errors).
+
+**`publish_plan` + `matchmaker_connection_id` (§3.7, DATABASE NOTE):** Client sends `matchmaker_connection_id` in `publishPlan.service.ts`; wrapper migration `20260930000001` must be on the same DB. Same rule: **PARTIAL until one create-plan from connection is confirmed on staging.**
+
+---
+
+### FAIL — build or refine in product (spec sections)
+
+These are **not** fixed by running migrations alone; implement against the headings below.
+
+| Req ID | Read in this doc | Gap / what to build |
+|--------|------------------|---------------------|
+| MM-P2-008 | **§2.5** — *60-Day Re-Affirmation Prompt* | DB has `last_reaffirmed_at`; **no pool overlay UI** (entry when due). |
+| MM-P2-009 | **§2.5** (options + snooze bullets) | **Three reaffirm actions** + **7-day snooze** + pool removal path—not implemented. |
+| MM-P3-008 | **§3.4** — *Subsequent weeks* / badge copy | UI/RPC calls use **`week_number: 1` only**; no week-2+ questions or “new activity” badge. |
+| MM-P6-002 | **§6.1** — *Active Connection — MatchMaker Tab Entry* (re-tap behavior) | Redirect to connection works; **no pulse/highlight on repeat tab tap** while on connection. |
+| MM-P6-005 | **`docs/linkup_matchmaker_userflow.md` §6.4** — *Misalignment Report* | **No MatchMaker misalignment report UI** on web (userflow; not duplicated in Part 6 body). |
+
+---
+
+### PARTIAL — exists; verify on staging or finish scope
+
+| Req ID | Read in this doc | Status / next step |
+|--------|------------------|-------------------|
+| MM-G-001 | **§1.1** — *First Tap — MatchMaker Tab* (gate order) | Subscription gate seen manually; **re-check every gate type** (KYC, intent, values, connection). |
+| MM-G-005 | **§1.1** (blurred pool under modal) | Blur component present; **confirm under each gate**, not only subscription. |
+| MM-P3-005 | **§3.4** (partner notify on first submit) | **Code + migration confirmed**; **smoke:** User A submits → User B gets `matchmaker_activity_shared` → tap opens activity route. |
+| MM-P3-009 | **§3.5** — *Day 10 — Check-In Nudge* | In-app card exists; clarify **push vs in-app-only** vs spec copy. |
+| MM-P3-012 | **§3.7** + **DATABASE NOTE** | Client + wrapper migration; **create plan from Day 21 window** and assert `plans.matchmaker_connection_id`. |
+| MM-P5-004 | **§5.2** — *Healing Period Screen* | RPC saves values/dealbreakers; **run full healing UX** on staging. |
+| MM-P6-004 | **§6.3** — *Subscription Lapse — Connection Paused State* | Banner in connection UI; **server 14-day auto-end** not verified in audit. |
+| MM-P7-005 | **§7.1** — delete profile | `matchmaker_delete_profile` **deactivates** intent/pool; **not full data purge** if spec/account copy promises more. |
+| MM-TST-001 | Audit §4 / Phase 8 | **9 unit tests** on payload helpers only; **no Playwright/E2E** for MatchMaker. |
+| *(doc)* | **PART 0 — WEB APPLICATION IMPLEMENTATION STATUS** below | Tables still say Step 0 gender “partial”; **code has gender on Step 0**—update status table when you sign off. |
+| *(doc)* | **§7.1** / PART 0 partial row | **Edit Profile as canonical communication editor** vs Settings → values—product choice / copy alignment. |
+
+---
+
+### BLOCKED — staging test matrix (code often already present)
+
+Use **`docs/linkup_matchmaker_userflow.md`** for end-to-end scripts; map each row to the **matching Part/section** in this spec.
+
+| Req ID | Primary spec section | What to prove (two users / time / payloads) |
+|--------|----------------------|---------------------------------------------|
+| MM-P0-005 | **§0.0** pool eligibility | Pool RPC returns only eligible profiles; filters match intent/values. |
+| MM-G-002 | **§1.1** | KYC gate for unverified user. |
+| MM-G-006 | **§1.1**, **§6.2** | Cooldown / suspension banners + `/matchmaker/cooldown`. |
+| MM-G-007 | **§0.0** / **§1.1** | Gold via `host_tier` / `matchmaker_user_has_gold_access`. |
+| MM-P2-001 | **§2.1** | Pool grid + filters with real pool members. |
+| MM-P2-002 | **§2.2** | Express interest happy path. |
+| MM-P2-003 | **§2.2**, **§2.3b** | Duplicate express rejected idempotently. |
+| MM-P2-004 | **§2.2** | Pass excludes profile persistently. |
+| MM-P2-006 | **§2.3** | Profile API exposes **no** private values/dealbreakers. |
+| MM-P3-001 | **§3.1** | Mutual match → connection screen + notification. |
+| MM-P3-003 | **§3.2**, userflow **§3.3** | Two clocks: `connected_at` vs first message + 21-day plan logic. |
+| MM-P3-010 | **§3.6** | Ready-to-meet signal both sides. |
+| MM-P3-011 | **§3.7** | Day 21 plan window + create plan entry. |
+| MM-P3-013 | **§3.8** | Post-meetup reflection flow. |
+| MM-P4-003 | **§4.1**, **§5.1** | End connection → reflection lifecycle. |
+| MM-P6-003 | **§6.2** | Rapid cycler → 30-day cooldown screen. |
+| MM-P7-003 | **§7.1** | Pool visibility toggle hides user from **other** user’s pool. |
+| MM-P7-004 | **§7.2** | Connection history payloads privacy-safe. |
+| MM-SEC-001 | Implicit (RLS in migrations) | Policy tests or SQL role checks on matchmaker tables. |
+| Checklist **5–6** | **PART 0 — Verification checklist (web)** below | Items 5–6: cross-user visibility + API leakage audit. |
+
+**Suggested implementation order after staging smoke:** FAIL **§2.5** → FAIL **§3.4** weekly → userflow **§6.4** report → FAIL **§6.1** tab pulse → widen BLOCKED → E2E (MM-TST-001).
+
+---
+
 ## PART 0 — WEB APPLICATION IMPLEMENTATION STATUS
 
 This section records **Part 0 (and related) requirements that appear in this specification** but are **not fully implemented in the LinkUp web app** as of the MatchMaker web rollout. The spec remains the target; this list is for engineering verification.
@@ -1475,8 +1558,9 @@ This section records **Part 0 (and related) requirements that appear in this spe
 
 | Item | Gap |
 |---|---|
-| Onboarding **Step 0** gender required with name/photos | Web collects gender on **Edit Profile**, not Step 0 of onboarding |
 | **Edit Profile** as canonical editor for communication style from Settings | Settings routes to values; general communication style still edited via onboarding or Gate 4 |
+
+*(Onboarding Step 0 gender with name/photos: implemented in web onboarding—see audit SC-03; remove from partial when checklist item 1 is signed off.)*
 
 ### Documented in spec — not implemented on web
 

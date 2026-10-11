@@ -47,6 +47,10 @@ export function isProfileRoute(pathname: string): boolean {
 
 export function isMainNavItemActive(pathname: string, href: string): boolean {
   if (href === '/profile') return isProfileRoute(pathname);
+  if (href === '/matchmaker') {
+    if (pathname === '/matchmaker') return true;
+    if (/^\/matchmaker\/connection\/[^/]+$/.test(pathname)) return true;
+  }
   if (isPremiumRoute(pathname)) return false;
   if (isAdminRoute(pathname)) return href === '/admin';
   if (isProfileRoute(pathname)) return false;

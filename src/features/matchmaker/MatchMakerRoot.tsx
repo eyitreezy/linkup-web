@@ -9,6 +9,7 @@ import {
 import { MatchMakerLayout, MatchMakerPageShell } from '@/features/matchmaker/MatchMakerLayout';
 import { MatchMakerPool } from '@/features/matchmaker/MatchMakerPool';
 import { MatchMakerPoolPreview } from '@/features/matchmaker/MatchMakerPoolPreview';
+import { MatchMakerReaffirmationOverlay } from '@/features/matchmaker/MatchMakerReaffirmationOverlay';
 import type { MatchMakerGate } from '@/lib/matchmaker/gates';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { cn } from '@/utils/cn';
@@ -63,6 +64,7 @@ export function MatchMakerRoot() {
   const [modalDismissed, setModalDismissed] = useState(false);
   const [poolPreview, setPoolPreview] = useState<Awaited<ReturnType<typeof fetchMatchMakerPoolPreview>>['data']>([]);
   const [error, setError] = useState<string | null>(null);
+  const [reaffirmKey, setReaffirmKey] = useState(0);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -89,7 +91,10 @@ export function MatchMakerRoot() {
       setSuspensionUntil(data.suspension_until);
       setConnectionId(data.connection_id);
 
-      if (GATED_MODAL.includes(resolvedGate as MatchMakerGateModalState)) {
+      if (
+        resolvedGate === 'reaffirmation' ||
+        GATED_MODAL.includes(resolvedGate as MatchMakerGateModalState)
+      ) {
         const preview = await fetchMatchMakerPoolPreview(client, 6);
         if (!cancelled) setPoolPreview(preview.data);
       }
@@ -99,7 +104,7 @@ export function MatchMakerRoot() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, pathname]);
+  }, [user?.id, pathname, reaffirmKey]);
 
   useEffect(() => {
     if (gate !== 'connection' || !connectionId) return;
@@ -146,6 +151,17 @@ export function MatchMakerRoot() {
           <p className="text-center text-[14px] font-semibold text-[#EF4444]">{error}</p>
         </MatchMakerPageShell>
       </MatchMakerLayout>
+    );
+  }
+
+  if (gate === 'reaffirmation') {
+    return (
+      <div className="relative min-h-full w-full">
+        <div className="pointer-events-none select-none" style={{ filter: 'blur(12px)' }}>
+          <MatchMakerPoolPreview profiles={poolPreview.length ? poolPreview : []} />
+        </div>
+        <MatchMakerReaffirmationOverlay onComplete={() => setReaffirmKey((k) => k + 1)} />
+      </div>
     );
   }
 

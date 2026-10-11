@@ -5,10 +5,11 @@ import { cn } from '@/utils/cn';
 type Props = {
   size?: number;
   className?: string;
+  pulse?: boolean;
 };
 
 /** Filled heart with orbital ring — inherits color; heart uses a soft transparent fill. */
-export function MatchMakerTabIcon({ size = 24, className }: Props) {
+export function MatchMakerTabIcon({ size = 24, className, pulse }: Props) {
   return (
     <svg
       width={size}
@@ -16,7 +17,7 @@ export function MatchMakerTabIcon({ size = 24, className }: Props) {
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={cn('shrink-0 text-inherit', className)}
+      className={cn('shrink-0 text-inherit', pulse && 'animate-mm-tab-pulse', className)}
       aria-hidden
     >
       <path

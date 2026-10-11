@@ -8,8 +8,10 @@ import { isMainNavItemActive } from '@/lib/navigation/navActive';
 import { shouldPrefetchNavRoute } from '@/lib/navigation/prefetchNav';
 import { NavItemUnreadIndicator } from '@/components/navigation/NavItemUnreadIndicator';
 import { cn } from '@/utils/cn';
+import { isMatchMakerConnectionTabRoute, useMatchMakerTabStore } from '@/stores/matchmaker-tab-store';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import type { MouseEvent } from 'react';
 import { useEffect } from 'react';
 import { IoClose } from 'react-icons/io5';
 
@@ -21,6 +23,7 @@ type Props = {
 
 export function BottomNavMoreSheet({ open, onClose, items }: Props) {
   const pathname = usePathname();
+  const requestTabPulse = useMatchMakerTabStore((s) => s.requestTabPulse);
   const user = useAuthStore((s) => s.user);
   const matchmakerInterestCount = useMatchMakerInterestBadge(user?.id);
   useEffect(() => {
@@ -72,7 +75,15 @@ export function BottomNavMoreSheet({ open, onClose, items }: Props) {
                 <Link
                   href={item.href}
                   prefetch={shouldPrefetchNavRoute(item.href)}
-                  onClick={onClose}
+                  onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+                    if (isMatchMaker && active && isMatchMakerConnectionTabRoute(pathname)) {
+                      e.preventDefault();
+                      requestTabPulse();
+                      onClose();
+                      return;
+                    }
+                    onClose();
+                  }}
                   className={cn(
                     'flex flex-col items-center gap-2 rounded-2xl border px-3 py-4 transition active:scale-[0.98]',
                     active

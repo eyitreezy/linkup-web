@@ -4,6 +4,8 @@ import { ProfileAvatar } from '@/components/profile/ProfileAvatar';
 import { ConfirmDialog } from '@/features/plan-management/ConfirmDialog';
 import { MatchMakerDay10CheckinCard } from '@/features/matchmaker/MatchMakerDay10CheckinCard';
 import { MatchMakerConnectionTimeline } from '@/features/matchmaker/MatchMakerConnectionTimeline';
+import { MatchMakerConnectionMenu } from '@/features/matchmaker/MatchMakerConnectionMenu';
+import { MatchMakerConnectionReportSheet } from '@/features/matchmaker/MatchMakerConnectionReportSheet';
 import { MatchMakerEndConnectionSheet } from '@/features/matchmaker/MatchMakerEndConnectionSheet';
 import {
   MatchMakerAccentButton,
@@ -38,6 +40,7 @@ import { getOrCreateConversation } from '@/lib/conversations';
 import {
   fetchLastMessageTimesForConversation,
   fetchMatchMakerConversationId,
+  fetchMatchMakerSharedActivityOverview,
   fetchMatchMakerSharedActivityState,
   hasReadySignal,
   sendReadyToMeetSignal,
@@ -47,10 +50,10 @@ import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useQuery } from '@tanstack/react-query';
+import { defaultActivityWeekToOpen } from '@/lib/matchmaker/sharedActivityWeek';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { IoSettingsOutline } from 'react-icons/io5';
 
 function ageFromBirthDate(birthDate: string | null | undefined): number | null {
   if (!birthDate) return null;
@@ -75,6 +78,7 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
   const [day10Visible, setDay10Visible] = useState(true);
   const [postMeetupOpen, setPostMeetupOpen] = useState(false);
   const [postMeetupDismissed, setPostMeetupDismissed] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const partnerId = connection && user?.id ? partnerUserId(connection, user.id) : null;
 
@@ -96,8 +100,19 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
     enabled: !!user?.id,
   });
 
+  const activityOverviewQuery = useQuery({
+    queryKey: ['matchmaker-activity-overview', connectionId],
+    queryFn: async () => {
+      const client = createClient();
+      const { data, error: actErr } = await fetchMatchMakerSharedActivityOverview(client, connectionId);
+      if (actErr) throw new Error(actErr);
+      return data;
+    },
+    enabled: !!connectionId,
+  });
+
   const activityQuery = useQuery({
-    queryKey: ['matchmaker-activity', connectionId],
+    queryKey: ['matchmaker-activity', connectionId, 1],
     queryFn: async () => {
       const client = createClient();
       const { data, error: actErr } = await fetchMatchMakerSharedActivityState(client, connectionId, 1);
@@ -210,7 +225,15 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
   const planOpen = isPlanWindowOpen(connection);
   const sharedActivityReady = isSharedActivityAvailable(connection.connected_at);
   const readyAvailable = isReadyToMeetAvailable(connection.connected_at);
-  const activityRevealed = !!activityQuery.data?.revealed;
+  const activityRevealed = !!activityOverviewQuery.data?.weeks.some((w) => w.revealed);
+  const activityBadge = activityOverviewQuery.data?.pendingBadgeCount ?? 0;
+  const submittedActivityWeeks = (activityOverviewQuery.data?.weeks ?? [])
+    .filter((w) => w.mySubmitted)
+    .map((w) => w.weekNumber);
+  const activityWeekHref = `/matchmaker/connection/${connectionId}/activity?week=${defaultActivityWeekToOpen(
+    connection.connected_at,
+    submittedActivityWeeks
+  )}`;
   const milestones = buildConnectionMilestones(connection, { sharedActivityDone: activityRevealed });
 
   const showDay10 =
@@ -231,16 +254,7 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
             subtitle="Your active connection"
             backLabel="Back to MatchMaker"
             onBack={() => router.push('/matchmaker')}
-            actions={
-              <Link
-                href="/matchmaker/settings"
-                className="flex h-11 w-11 items-center justify-center rounded-2xl border bg-white/90 shadow-sm"
-                style={{ borderColor: `${MATCHMAKER_THEME.accent}33`, color: MATCHMAKER_THEME.textMuted }}
-                aria-label="Settings"
-              >
-                <IoSettingsOutline size={22} />
-              </Link>
-            }
+            actions={<MatchMakerConnectionMenu onReport={() => setReportOpen(true)} />}
           />
 
         {connection.status === 'paused' ? (
@@ -323,8 +337,13 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
             <MatchMakerPrimaryButton onClick={() => void openChat()}>Open Chat</MatchMakerPrimaryButton>
 
             {sharedActivityReady ? (
-              <Link href={`/matchmaker/connection/${connectionId}/activity`} className="block">
+              <Link href={activityWeekHref} className="relative block">
                 <MatchMakerOutlinedButton>Shared Activity</MatchMakerOutlinedButton>
+                {activityBadge > 0 ? (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#9B1B4B] px-1 text-[10px] font-extrabold text-white">
+                    {activityBadge}
+                  </span>
+                ) : null}
               </Link>
             ) : (
               <MatchMakerOutlinedButton className="opacity-60" onClick={() => showUnlockToast('shared_activity')}>
@@ -393,6 +412,12 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
         onClose={() => setEndOpen(false)}
         connectionId={connectionId}
         partnerName={partnerName}
+      />
+
+      <MatchMakerConnectionReportSheet
+        open={reportOpen}
+        connectionId={connectionId}
+        onClose={() => setReportOpen(false)}
       />
 
       {postMeetupOpen ? (

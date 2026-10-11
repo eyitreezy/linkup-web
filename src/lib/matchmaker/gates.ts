@@ -10,6 +10,7 @@ export type MatchMakerGate =
   | 'reflection'
   | 'healing'
   | 'reentry'
+  | 'reaffirmation'
   | 'open'
   | 'pool';
 

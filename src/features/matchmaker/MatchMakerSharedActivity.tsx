@@ -10,8 +10,10 @@ import {
 } from '@/features/matchmaker/MatchMakerLayout';
 import { MatchMakerPageHeader } from '@/features/matchmaker/MatchMakerPageHeader';
 import { MatchMakerSlideIn } from '@/features/matchmaker/MatchMakerSlideIn';
-import { isSharedActivityAvailable } from '@/lib/matchmaker/connection';
-import { onboardingFieldClass } from '@/lib/onboarding/formFieldClass';
+import { useMatchMakerConnection } from '@/hooks/useMatchMakerConnection';
+import { getOrCreateConversation } from '@/lib/conversations';
+import { partnerUserId } from '@/lib/matchmaker/connection';
+import { sharedActivityWeekDefinition } from '@/lib/matchmaker/sharedActivityCatalog';
 import {
   buildSharedActivityAnswerPayload,
   canSubmitSharedActivityAnswer,
@@ -20,10 +22,8 @@ import {
   SHARED_ACTIVITY_OTHER_LABEL,
   SHARED_ACTIVITY_OTHER_SELECTION,
 } from '@/lib/matchmaker/sharedActivityAnswer';
+import { isActivityWeekUnlocked, maxUnlockedActivityWeek } from '@/lib/matchmaker/sharedActivityWeek';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
-import { useMatchMakerConnection } from '@/hooks/useMatchMakerConnection';
-import { getOrCreateConversation } from '@/lib/conversations';
-import { partnerUserId } from '@/lib/matchmaker/connection';
 import { fetchMatchMakerSharedActivityState } from '@/services/matchmaker.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
@@ -31,15 +31,8 @@ import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/utils/cn';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-
-const SUNDAY_OPTIONS = [
-  'Relaxing at home with a good book',
-  'Exploring somewhere new outdoors',
-  'Church or community time',
-  'Food, friends, and good conversation',
-] as const;
 
 function ConcealedPartnerAnswerPreview({ partnerName }: { partnerName: string }) {
   return (
@@ -69,7 +62,12 @@ function ConcealedPartnerAnswerPreview({ partnerName }: { partnerName: string })
   );
 }
 
-export function MatchMakerSharedActivity({ connectionId }: { connectionId: string }) {
+type Props = {
+  connectionId: string;
+  weekNumber: number;
+};
+
+export function MatchMakerSharedActivity({ connectionId, weekNumber }: Props) {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -79,7 +77,15 @@ export function MatchMakerSharedActivity({ connectionId }: { connectionId: strin
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const weekDef = sharedActivityWeekDefinition(weekNumber);
   const partnerId = connection && user?.id ? partnerUserId(connection, user.id) : null;
+
+  const unlocked = connection
+    ? isActivityWeekUnlocked(connection.connected_at, weekNumber)
+    : false;
+
+  const maxWeek = connection ? maxUnlockedActivityWeek(connection.connected_at) : 0;
+  const nextWeek = weekNumber < maxWeek ? weekNumber + 1 : null;
 
   const partnerQuery = useQuery({
     queryKey: ['matchmaker-partner', partnerId],
@@ -91,21 +97,21 @@ export function MatchMakerSharedActivity({ connectionId }: { connectionId: strin
   });
 
   const activityQuery = useQuery({
-    queryKey: ['matchmaker-activity', connectionId],
+    queryKey: ['matchmaker-activity', connectionId, weekNumber],
     queryFn: async () => {
       const client = createClient();
-      const { data, error } = await fetchMatchMakerSharedActivityState(client, connectionId, 1);
+      const { data, error } = await fetchMatchMakerSharedActivityState(client, connectionId, weekNumber);
       if (error) throw new Error(error);
       return data;
     },
-    enabled: !!connectionId,
+    enabled: !!connectionId && unlocked,
   });
 
   const partnerName = partnerQuery.data?.profile?.display_name ?? 'Your match';
   const state = activityQuery.data;
-  const unlocked = connection ? isSharedActivityAvailable(connection.connected_at) : false;
-
   const canSubmit = canSubmitSharedActivityAnswer(selection, customAnswer);
+
+  const presetOptions = useMemo(() => weekDef?.presets ?? [], [weekDef]);
 
   async function submit() {
     const built = buildSharedActivityAnswerPayload(selection, customAnswer);
@@ -118,7 +124,7 @@ export function MatchMakerSharedActivity({ connectionId }: { connectionId: strin
     const client = createClient();
     const { error } = await client.rpc('matchmaker_submit_activity_answer', {
       p_connection_id: connectionId,
-      p_week_number: 1,
+      p_week_number: weekNumber,
       p_answers: { q1: built.q1 },
     });
     setBusy(false);
@@ -127,6 +133,7 @@ export function MatchMakerSharedActivity({ connectionId }: { connectionId: strin
       return;
     }
     void queryClient.invalidateQueries({ queryKey: ['matchmaker-activity', connectionId] });
+    void queryClient.invalidateQueries({ queryKey: ['matchmaker-activity-overview', connectionId] });
   }
 
   async function openChat() {
@@ -135,7 +142,7 @@ export function MatchMakerSharedActivity({ connectionId }: { connectionId: strin
     router.push(`/messages?c=${chatId}`);
   }
 
-  if (isLoading || activityQuery.isLoading) {
+  if (isLoading || (unlocked && activityQuery.isLoading)) {
     return (
       <MatchMakerLayout>
         <MatchMakerPageShell className="animate-pulse">
@@ -162,12 +169,12 @@ export function MatchMakerSharedActivity({ connectionId }: { connectionId: strin
     );
   }
 
-  if (!connection || !unlocked) {
+  if (!connection || !unlocked || !weekDef) {
     return (
       <MatchMakerLayout>
         <MatchMakerPageShell>
           <p className="text-center text-[14px] font-semibold" style={{ color: MATCHMAKER_THEME.textMuted }}>
-            Shared Activity unlocks on Day 7 of your connection.
+            Shared Activity unlocks on Day 7 of your connection, with a new question each week.
           </p>
           <Link
             href={`/matchmaker/connection/${connectionId}`}
@@ -191,12 +198,30 @@ export function MatchMakerSharedActivity({ connectionId }: { connectionId: strin
       <MatchMakerSlideIn>
         <MatchMakerPageShell>
           <MatchMakerPageHeader
-            kicker="Week 1"
+            kicker={`Week ${weekNumber}`}
             title="Shared Activity"
             subtitle="Answers are revealed only after you both submit."
             backLabel="Back to connection"
             onBack={() => router.push(`/matchmaker/connection/${connectionId}`)}
           />
+
+          {maxWeek > 1 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {Array.from({ length: maxWeek }, (_, i) => i + 1).map((w) => (
+                <Link
+                  key={w}
+                  href={`/matchmaker/connection/${connectionId}/activity?week=${w}`}
+                  className={cn(
+                    'rounded-full px-3 py-1 text-[12px] font-extrabold',
+                    w === weekNumber ? 'linkup-gradient-primary text-white' : 'border bg-white'
+                  )}
+                  style={w === weekNumber ? undefined : { borderColor: MATCHMAKER_THEME.border }}
+                >
+                  Week {w}
+                </Link>
+              ))}
+            </div>
+          ) : null}
 
           {revealed ? (
             <div className="mt-6 space-y-4">
@@ -222,6 +247,15 @@ export function MatchMakerSharedActivity({ connectionId }: { connectionId: strin
                 You have both answered. Talk about it.
               </p>
               <MatchMakerPrimaryButton onClick={() => void openChat()}>Open chat</MatchMakerPrimaryButton>
+              {nextWeek ? (
+                <Link
+                  href={`/matchmaker/connection/${connectionId}/activity?week=${nextWeek}`}
+                  className="block text-center text-[14px] font-extrabold underline"
+                  style={{ color: MATCHMAKER_THEME.accent }}
+                >
+                  See next question
+                </Link>
+              ) : null}
             </div>
           ) : (
             <>
@@ -229,15 +263,13 @@ export function MatchMakerSharedActivity({ connectionId }: { connectionId: strin
 
               <FormCard className="mt-6">
                 <p className="text-[11px] font-extrabold uppercase tracking-wide" style={{ color: MATCHMAKER_THEME.textMuted }}>
-                  Week 1 · Question 1
+                  Week {weekNumber} · Question {weekDef.questionNumber}
                 </p>
-                <p className="mt-3 text-center text-[18px] font-extrabold leading-snug">
-                  What does your ideal Sunday look like?
-                </p>
+                <p className="mt-3 text-center text-[18px] font-extrabold leading-snug">{weekDef.question}</p>
                 {!mySubmitted ? (
                   <>
                     <div className="mt-4 flex flex-wrap justify-center gap-2">
-                      {SUNDAY_OPTIONS.map((opt) => (
+                      {presetOptions.map((opt) => (
                         <GradientChip
                           key={opt}
                           label={opt}
@@ -266,8 +298,11 @@ export function MatchMakerSharedActivity({ connectionId }: { connectionId: strin
                           value={customAnswer}
                           maxLength={100}
                           onChange={(e) => setCustomAnswer(sanitizeSharedActivityCustomInput(e.target.value))}
-                          placeholder="Describe your ideal Sunday"
-                          className={onboardingFieldClass}
+                          placeholder="Your answer"
+                          className={cn(
+                            'w-full rounded-xl border px-4 py-3 text-[14px] font-semibold',
+                            'border-[#D8DCE6] bg-white focus:outline-none focus:ring-2 focus:ring-primary/30'
+                          )}
                           aria-describedby="shared-activity-other-count"
                         />
                         <p id="shared-activity-other-count" className="text-right text-[11px] font-semibold text-muted">
@@ -283,7 +318,13 @@ export function MatchMakerSharedActivity({ connectionId }: { connectionId: strin
                 <p>Your answer: {mySubmitted ? 'submitted' : 'not yet submitted'}</p>
                 <p>
                   {partnerName}&apos;s answer:{' '}
-                  {partnerSubmitted ? (mySubmitted ? 'submitted' : 'waiting for your answer') : mySubmitted ? 'still thinking...' : 'waiting for them'}
+                  {partnerSubmitted
+                    ? mySubmitted
+                      ? 'submitted'
+                      : 'waiting for your answer'
+                    : mySubmitted
+                      ? 'still thinking...'
+                      : 'waiting for them'}
                 </p>
               </div>
 

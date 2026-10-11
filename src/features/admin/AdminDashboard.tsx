@@ -1,6 +1,7 @@
 'use client';
 
 import { AdminReviewReportsPanel } from '@/components/admin/AdminReviewReportsPanel';
+import { AdminMatchMakerMisalignmentPanel } from '@/features/admin/AdminMatchMakerMisalignmentPanel';
 import {
   ADMIN_TAB_ICONS,
   AdminShell,
@@ -190,7 +191,10 @@ export function AdminDashboard() {
         <AdminDisputesPanel data={data} onReload={() => void load()} />
       ) : null}
       {tab === 'review_reports' ? (
-        <AdminReviewReportsPanel adminUserId={adminRecordId} onReload={() => void load()} />
+        <>
+          <AdminReviewReportsPanel adminUserId={adminRecordId} onReload={() => void load()} />
+          <AdminMatchMakerMisalignmentPanel />
+        </>
       ) : null}
       {data && tab === 'support' ? <AdminSupportPanel data={data} onReload={() => void load()} /> : null}
       {tab === 'users' ? <AdminUsersSection /> : null}

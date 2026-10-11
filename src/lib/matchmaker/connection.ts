@@ -43,7 +43,4 @@ export function isReadyToMeetAvailable(connectedAt: string, now = Date.now()): b
   return day >= 10;
 }
 
-export function isSharedActivityAvailable(connectedAt: string, now = Date.now()): boolean {
-  const day = connectionDayNumber(connectedAt, now);
-  return day >= 7;
-}
+export { isSharedActivityAvailable } from '@/lib/matchmaker/sharedActivityWeek';

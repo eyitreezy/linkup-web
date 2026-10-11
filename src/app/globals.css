@@ -373,3 +373,20 @@ body {
     filter: brightness(1.12);
   }
 }
+
+@keyframes mm-tab-pulse-keyframes {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  40% {
+    transform: scale(1.12);
+    opacity: 0.85;
+  }
+}
+
+.animate-mm-tab-pulse {
+  animation: mm-tab-pulse-keyframes 480ms ease-out;
+  transform-origin: center;
+}

@@ -424,6 +424,61 @@ export type MatchMakerSharedActivityState = {
   partnerAnswer: string | null;
 };
 
+export type MatchMakerSharedActivityOverview = {
+  maxUnlockedWeek: number;
+  pendingBadgeCount: number;
+  weeks: { weekNumber: number; unlocked: boolean; mySubmitted: boolean; revealed: boolean }[];
+};
+
+export async function fetchMatchMakerSharedActivityOverview(
+  client: SupabaseClient,
+  connectionId: string
+): Promise<{ data: MatchMakerSharedActivityOverview | null; error: string | null }> {
+  const { data, error } = await client.rpc('matchmaker_get_shared_activity_overview', {
+    p_connection_id: connectionId,
+  });
+  if (error) return { data: null, error: error.message };
+  const payload = data as Record<string, unknown> | null;
+  if (!payload) return { data: null, error: null };
+  const weeksRaw = (payload.weeks as unknown[]) ?? [];
+  return {
+    data: {
+      maxUnlockedWeek: Number(payload.max_unlocked_week ?? 0),
+      pendingBadgeCount: Number(payload.pending_badge_count ?? 0),
+      weeks: weeksRaw.map((row) => {
+        const w = row as Record<string, unknown>;
+        return {
+          weekNumber: Number(w.week_number),
+          unlocked: !!w.unlocked,
+          mySubmitted: !!w.my_submitted,
+          revealed: !!w.revealed,
+        };
+      }),
+    },
+    error: null,
+  };
+}
+
+export async function respondMatchMakerReaffirmation(
+  client: SupabaseClient,
+  action: 'yes' | 'snooze' | 'leave'
+): Promise<{ error: string | null }> {
+  const { error } = await client.rpc('matchmaker_reaffirmation_respond', { p_action: action });
+  return { error: error?.message ?? null };
+}
+
+export async function submitMatchMakerConnectionReport(
+  client: SupabaseClient,
+  args: { connectionId: string; reasonCode: string; explanation: string | null }
+): Promise<{ error: string | null }> {
+  const { error } = await client.rpc('matchmaker_submit_connection_report', {
+    p_connection_id: args.connectionId,
+    p_reason_code: args.reasonCode,
+    p_explanation: args.explanation,
+  });
+  return { error: error?.message ?? null };
+}
+
 export async function fetchMatchMakerSharedActivityState(
   client: SupabaseClient,
   connectionId: string,

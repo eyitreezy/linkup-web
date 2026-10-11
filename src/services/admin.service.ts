@@ -247,6 +247,18 @@ export async function rejectVerification(id: string, reason: string, adminRecord
     .eq('id', id);
 }
 
+export async function reviewMatchMakerMisalignmentFlag(
+  reportedUserId: string,
+  confirmed: boolean
+): Promise<{ error: string | null }> {
+  const client = createClient();
+  const { error } = await client.rpc('admin_review_matchmaker_misalignment', {
+    p_reported_user_id: reportedUserId,
+    p_confirmed: confirmed,
+  });
+  return { error: error?.message ?? null };
+}
+
 export async function resolveReport(id: string) {
   const client = createClient();
   return client.from('reports').update({ status: 'resolved' }).eq('id', id);

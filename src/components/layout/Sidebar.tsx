@@ -13,10 +13,22 @@ import { shouldPrefetchNavRoute } from '@/lib/navigation/prefetchNav';
 import { cn } from '@/utils/cn';
 import Link from 'next/link';
 import { SidebarProfileFooter } from '@/components/layout/SidebarProfileFooter';
+import { isMatchMakerConnectionTabRoute, useMatchMakerTabStore } from '@/stores/matchmaker-tab-store';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState, type MouseEvent } from 'react';
 
 export function Sidebar() {
   const pathname = usePathname();
+  const pulseSeq = useMatchMakerTabStore((s) => s.pulseSeq);
+  const requestTabPulse = useMatchMakerTabStore((s) => s.requestTabPulse);
+  const [tabPulse, setTabPulse] = useState(false);
+
+  useEffect(() => {
+    if (pulseSeq === 0) return;
+    setTabPulse(true);
+    const t = window.setTimeout(() => setTabPulse(false), 520);
+    return () => window.clearTimeout(t);
+  }, [pulseSeq]);
   const messagesInbox = useMessagesInboxOptional();
   const user = useAuthStore((s) => s.user);
   const matchmakerInterestCount = useMatchMakerInterestBadge(user?.id);
@@ -46,11 +58,19 @@ export function Sidebar() {
               : 0;
           const showDot = isMessages;
           const badgeVariant = isMatchMaker ? 'pill' : undefined;
+          function onNav(e: MouseEvent<HTMLAnchorElement>) {
+            if (isMatchMaker && active && isMatchMakerConnectionTabRoute(pathname)) {
+              e.preventDefault();
+              requestTabPulse();
+            }
+          }
+
           return (
             <Link
               key={item.href}
               href={item.href}
               prefetch={shouldPrefetchNavRoute(item.href)}
+              onClick={onNav}
               className={cn(
                 'flex shrink-0 items-center gap-3 rounded-2xl px-3 py-2.5 text-[14px] font-bold transition',
                 active
@@ -68,6 +88,7 @@ export function Sidebar() {
                 <TabIcon
                   name={item.icon}
                   size={20}
+                  pulse={isMatchMaker && tabPulse}
                   className={active ? 'text-white' : 'text-muted'}
                 />
               </NavItemUnreadIndicator>

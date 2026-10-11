@@ -23,7 +23,8 @@ import { shouldPrefetchNavRoute } from '@/lib/navigation/prefetchNav';
 import { cn } from '@/utils/cn';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useMemo, useState, type MouseEvent } from 'react';
+import { isMatchMakerConnectionTabRoute, useMatchMakerTabStore } from '@/stores/matchmaker-tab-store';
+import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 
 const INACTIVE = '#6B7280';
 
@@ -34,6 +35,7 @@ function BottomNavTabLink({
   showDot,
   badgeVariant,
   onNavigate,
+  iconPulse,
 }: {
   item: NavTabItem;
   active: boolean;
@@ -41,6 +43,7 @@ function BottomNavTabLink({
   showDot: boolean;
   badgeVariant?: 'dot' | 'pill';
   onNavigate?: (e: MouseEvent<HTMLAnchorElement>) => void;
+  iconPulse?: boolean;
 }) {
   return (
     <Link
@@ -63,21 +66,25 @@ function BottomNavTabLink({
         <TabIcon
           name={item.icon}
           size={18}
+          pulse={iconPulse}
           className={cn('min-[360px]:hidden', active ? 'text-primary' : 'text-[#6B7280]')}
         />
         <TabIcon
           name={item.icon}
           size={20}
+          pulse={iconPulse}
           className={cn('hidden min-[360px]:block min-[400px]:hidden', active ? 'text-primary' : 'text-[#6B7280]')}
         />
         <TabIcon
           name={item.icon}
           size={22}
+          pulse={iconPulse}
           className={cn('hidden min-[400px]:block min-[480px]:hidden', active ? 'text-primary' : 'text-[#6B7280]')}
         />
         <TabIcon
           name={item.icon}
           size={24}
+          pulse={iconPulse}
           className={cn('hidden min-[480px]:block', active ? 'text-primary' : 'text-[#6B7280]')}
         />
       </NavItemUnreadIndicator>
@@ -97,6 +104,9 @@ export function BottomNav() {
   const matchmakerInterestCount = useMatchMakerInterestBadge(user?.id);
   const { isAdmin } = useAdminAccess();
   const [moreOpen, setMoreOpen] = useState(false);
+  const pulseSeq = useMatchMakerTabStore((s) => s.pulseSeq);
+  const requestTabPulse = useMatchMakerTabStore((s) => s.requestTabPulse);
+  const [tabPulse, setTabPulse] = useState(false);
   const maxVisible = useBottomNavVisibleCount();
 
   const navItems = isAdmin ? [...MOBILE_TAB_NAV, ADMIN_NAV_ITEM] : [...MOBILE_TAB_NAV];
@@ -116,6 +126,13 @@ export function BottomNav() {
     { id: 'account' as const },
     ...(overflow.length > 0 ? [{ id: 'more' as const }] : []),
   ];
+
+  useEffect(() => {
+    if (pulseSeq === 0) return;
+    setTabPulse(true);
+    const t = window.setTimeout(() => setTabPulse(false), 520);
+    return () => window.clearTimeout(t);
+  }, [pulseSeq]);
 
   function unreadFor(item: NavTabItem) {
     if (item.href === '/messages') return messagesInbox?.unreadCount ?? 0;
@@ -162,13 +179,19 @@ export function BottomNav() {
                   unreadCount={unreadFor(item)}
                   showDot={isMessages}
                   badgeVariant={isMatchMaker ? 'pill' : undefined}
+                  iconPulse={isMatchMaker && tabPulse}
                   onNavigate={
                     isMessages && isMobileShell
                       ? (e) => {
                           e.preventDefault();
                           router.replace('/messages', { scroll: false });
                         }
-                      : undefined
+                      : isMatchMaker && active && isMatchMakerConnectionTabRoute(pathname)
+                        ? (e) => {
+                            e.preventDefault();
+                            requestTabPulse();
+                          }
+                        : undefined
                   }
                 />
               </li>
