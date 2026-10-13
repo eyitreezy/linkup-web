@@ -180,18 +180,30 @@ export function MatchMakerSettingsScreen() {
         </FormCard>
 
         <FormCard className="mt-4">
-          <p className="text-[11px] font-extrabold uppercase tracking-wide" style={{ color: MATCHMAKER_THEME.accent }}>
-            Dealbreakers
-          </p>
-          <p className="mt-2 text-[14px] font-semibold">{dealbreakerSummary(values?.dealbreakers as Record<string, unknown>)}</p>
-          <Link
-            href={matchmakerValuesEditHref(4)}
-            title="Edit dealbreakers"
-            aria-label="Edit dealbreakers"
-            className="mt-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-border text-primary transition hover:border-primary/35 hover:bg-[#F8F7FF] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          <div
+            className="flex items-start justify-between gap-3 py-1"
+            style={{ borderColor: MATCHMAKER_THEME.border }}
           >
-            <IoCreateOutline size={20} aria-hidden />
-          </Link>
+            <div className="min-w-0 flex-1 pr-2">
+              <p
+                className="text-[11px] font-extrabold uppercase tracking-wide"
+                style={{ color: MATCHMAKER_THEME.accent }}
+              >
+                Dealbreakers
+              </p>
+              <p className="mt-0.5 text-[14px] font-semibold">
+                {dealbreakerSummary(values?.dealbreakers as Record<string, unknown>)}
+              </p>
+            </div>
+            <Link
+              href={matchmakerValuesEditHref(4)}
+              title="Edit dealbreakers"
+              aria-label="Edit dealbreakers"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border text-primary transition hover:border-primary/35 hover:bg-[#F8F7FF] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              <IoCreateOutline size={20} aria-hidden />
+            </Link>
+          </div>
         </FormCard>
 
         <FormCard className="mt-4">

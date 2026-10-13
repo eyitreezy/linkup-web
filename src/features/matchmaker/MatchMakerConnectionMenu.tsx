@@ -3,7 +3,7 @@
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { cn } from '@/utils/cn';
 import { useEffect, useRef, useState } from 'react';
-import { IoEllipsisHorizontal, IoSettingsOutline } from 'react-icons/io5';
+import { IoEllipsisVertical, IoFlagOutline, IoSettingsOutline } from 'react-icons/io5';
 import Link from 'next/link';
 
 type Props = {
@@ -33,7 +33,7 @@ export function MatchMakerConnectionMenu({ onReport }: Props) {
         className="flex h-11 w-11 items-center justify-center rounded-2xl border bg-white/90 shadow-sm"
         style={{ borderColor: `${MATCHMAKER_THEME.accent}33`, color: MATCHMAKER_THEME.textMuted }}
       >
-        <IoEllipsisHorizontal size={22} />
+        <IoEllipsisVertical size={22} />
       </button>
 
       {open ? (
@@ -53,13 +53,14 @@ export function MatchMakerConnectionMenu({ onReport }: Props) {
           </Link>
           <button
             type="button"
-            className="flex w-full px-4 py-3 text-left text-[14px] font-semibold hover:bg-[#FBF5F0]"
+            className="flex w-full items-center gap-2 px-4 py-3 text-left text-[14px] font-semibold hover:bg-[#FBF5F0]"
             onClick={() => {
               setOpen(false);
               onReport();
             }}
           >
-            Report this connection
+            <IoFlagOutline size={18} aria-hidden />
+            Report Connection
           </button>
         </div>
       ) : null}
