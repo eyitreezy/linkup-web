@@ -2,7 +2,6 @@
 
 import { matchMakerNavIconSrc } from '@/lib/navigation/matchmakerNavIcon';
 import { cn } from '@/utils/cn';
-import Image from 'next/image';
 
 type Props = {
   size?: number;
@@ -12,22 +11,59 @@ type Props = {
   navActive?: boolean;
 };
 
+/** Inactive nav artwork fill — matches supplied inactive PNG. */
+const NAV_INACTIVE_FILL = '#8B92A5';
+
+/**
+ * Nav PNGs use a black backdrop. Luminance masking drops the black field and paints the
+ * glyph with a solid fill so inactive icons stay visible on white nav surfaces (unlike
+ * mix-blend-lighten, which washes gray art out on light backgrounds).
+ */
+function MatchMakerNavIconImage({
+  active,
+  size,
+  className,
+  pulse,
+}: {
+  active: boolean;
+  size: number;
+  className?: string;
+  pulse?: boolean;
+}) {
+  const src = matchMakerNavIconSrc(active);
+
+  return (
+    <span
+      aria-hidden
+      className={cn('inline-block shrink-0', pulse && 'animate-mm-tab-pulse', className)}
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: active ? '#FFFFFF' : NAV_INACTIVE_FILL,
+        WebkitMaskImage: `url("${src}")`,
+        maskImage: `url("${src}")`,
+        WebkitMaskSize: 'contain',
+        maskSize: 'contain',
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+        WebkitMaskPosition: 'center',
+        maskPosition: 'center',
+        WebkitMaskMode: 'luminance',
+        maskMode: 'luminance',
+      }}
+    />
+  );
+}
+
 /** Filled heart with orbital ring — or nav PNG when `navActive` is provided. */
 export function MatchMakerTabIcon({ size = 24, className, pulse, navActive }: Props) {
   if (navActive !== undefined) {
     return (
-      <Image
-        src={matchMakerNavIconSrc(navActive)}
-        alt=""
-        width={size}
-        height={size}
-        unoptimized
-        className={cn(
-          'shrink-0 object-contain mix-blend-lighten',
-          pulse && 'animate-mm-tab-pulse',
-          className
-        )}
-        aria-hidden
+      <MatchMakerNavIconImage
+        active={navActive}
+        size={size}
+        className={className}
+        pulse={pulse}
       />
     );
   }
