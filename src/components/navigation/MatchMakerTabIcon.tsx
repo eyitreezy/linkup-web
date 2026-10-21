@@ -2,6 +2,7 @@
 
 import { matchMakerNavIconSrc } from '@/lib/navigation/matchmakerNavIcon';
 import { cn } from '@/utils/cn';
+import type { CSSProperties } from 'react';
 
 type Props = {
   size?: number;
@@ -31,26 +32,27 @@ function MatchMakerNavIconImage({
   pulse?: boolean;
 }) {
   const src = matchMakerNavIconSrc(active);
+  const maskStyle = {
+    width: size,
+    height: size,
+    backgroundColor: active ? '#FFFFFF' : NAV_INACTIVE_FILL,
+    WebkitMaskImage: `url("${src}")`,
+    maskImage: `url("${src}")`,
+    WebkitMaskSize: 'contain',
+    maskSize: 'contain',
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+    WebkitMaskPosition: 'center',
+    maskPosition: 'center',
+    WebkitMaskMode: 'luminance',
+    maskMode: 'luminance',
+  } as CSSProperties;
 
   return (
     <span
       aria-hidden
       className={cn('inline-block shrink-0', pulse && 'animate-mm-tab-pulse', className)}
-      style={{
-        width: size,
-        height: size,
-        backgroundColor: active ? '#FFFFFF' : NAV_INACTIVE_FILL,
-        WebkitMaskImage: `url("${src}")`,
-        maskImage: `url("${src}")`,
-        WebkitMaskSize: 'contain',
-        maskSize: 'contain',
-        WebkitMaskRepeat: 'no-repeat',
-        maskRepeat: 'no-repeat',
-        WebkitMaskPosition: 'center',
-        maskPosition: 'center',
-        WebkitMaskMode: 'luminance',
-        maskMode: 'luminance',
-      }}
+      style={maskStyle}
     />
   );
 }
