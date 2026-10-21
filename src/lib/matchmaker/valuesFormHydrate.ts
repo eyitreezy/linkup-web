@@ -1,3 +1,5 @@
+import { parsePacePreferenceUiFromDb } from '@/lib/matchmaker/pacePreference';
+
 export type MatchMakerValuesRow = {
   faith: string | null;
   family_goals: string;
@@ -31,13 +33,6 @@ const FAMILY_UI: Record<string, string> = {
   have_not_open_more: 'have_not',
 };
 
-const PACE_UI: Record<string, string> = {
-  asap_21_days: 'asap',
-  one_two_months: '1_2',
-  three_six_months: '3_6',
-  six_plus_months: 'long',
-};
-
 export function parseFaithFromDb(faith: string | null): FaithFormState {
   if (!faith) {
     return { faith: 'skip', faithType: null, otherFaithText: '' };
@@ -61,8 +56,7 @@ export function parseFamilyFromDb(familyGoals: string | null | undefined): strin
 }
 
 export function parsePaceFromDb(pacePreference: string | null | undefined): string | null {
-  if (!pacePreference) return null;
-  return PACE_UI[pacePreference] ?? null;
+  return parsePacePreferenceUiFromDb(pacePreference);
 }
 
 export function parseDealbreakersFromDb(raw: Record<string, unknown> | null | undefined): {

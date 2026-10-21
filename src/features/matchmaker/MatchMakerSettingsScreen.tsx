@@ -18,6 +18,7 @@ import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { pacePreferenceDisplayLabel } from '@/lib/matchmaker/pacePreference';
 import { matchmakerValuesEditHref } from '@/lib/matchmaker/valuesFormHydrate';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -36,13 +37,6 @@ const FAMILY_LABELS: Record<string, string> = {
   no_children: 'Does not want children',
   have_open_more: 'Has children, open to more',
   have_not_open_more: 'Has children, not open to more',
-};
-
-const PACE_LABELS: Record<string, string> = {
-  asap_21_days: 'Ready within about 21 days',
-  one_two_months: 'One to two months',
-  three_six_months: 'Three to six months',
-  six_plus_months: 'Six months or more',
 };
 
 function dealbreakerSummary(raw: Record<string, unknown> | null | undefined): string {
@@ -173,7 +167,7 @@ export function MatchMakerSettingsScreen() {
           />
           <SettingsRow
             label="Pace preference"
-            value={PACE_LABELS[values?.pace_preference ?? ''] ?? 'Not set'}
+            value={pacePreferenceDisplayLabel(values?.pace_preference)}
             editHref={matchmakerValuesEditHref(3)}
             editAriaLabel="Edit pace preference"
           />

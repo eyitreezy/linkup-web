@@ -31,6 +31,8 @@
 
 MatchMaker is a standalone tab in the primary navigation alongside Discover, Meetr, Messages, and Saved. It is the most regulated meet type on the platform. It is available to **Gold subscription and above** only. Every existing LinkUp member aged 18+ is eligible to subscribe and enter.
 
+**Web sidebar / bottom nav icon:** `public/navigation/matchmaker-active.png` when the current route is under `/matchmaker` (pool, connection, values onboarding, settings, history, lifecycle screens). `public/navigation/matchmaker-inactive.png` on all other main routes.
+
 The central premise: one person, one connection, one genuine opportunity to build something meaningful.
 
 ---
@@ -154,12 +156,16 @@ Has user completed MatchMaker values setup?
 │         Private. Never shown publicly.
 │
 │         Step 3: Pace Preference
-│         "How long after connecting do you expect to meet in person?"
-│         ○ As soon as the platform allows (21 days minimum)
-│         ○ 1 to 2 months
-│         ○ 3 to 6 months
-│         ○ I take my time — 6 months or more
-│         Private. Used for compatibility weighting.
+│         Title: Pace Preference
+│         "How long after connecting do you expect to meet?"
+│         Chips (single select, wrapped row):
+│         ○ As soon as the platform allows (7 day minimum)
+│         ○ 1 to 2 weeks
+│         ○ 2 to 3 weeks
+│         ○ I take my time, 1 months or more
+│         Private. Used for compatibility weighting only.
+│         Stored: matchmaker_values.pace_preference
+│         (asap_7_days | one_two_weeks | two_three_weeks | one_month_or_more)
 │
 │         Step 4: Dealbreakers
 │         "Are there any absolute dealbreakers for you?"

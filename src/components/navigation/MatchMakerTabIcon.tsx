@@ -1,15 +1,37 @@
 'use client';
 
+import { matchMakerNavIconSrc } from '@/lib/navigation/matchmakerNavIcon';
 import { cn } from '@/utils/cn';
+import Image from 'next/image';
 
 type Props = {
   size?: number;
   className?: string;
   pulse?: boolean;
+  /** When set, renders supplied sidebar/bottom-nav PNG artwork (active vs inactive). */
+  navActive?: boolean;
 };
 
-/** Filled heart with orbital ring — inherits color; heart uses a soft transparent fill. */
-export function MatchMakerTabIcon({ size = 24, className, pulse }: Props) {
+/** Filled heart with orbital ring — or nav PNG when `navActive` is provided. */
+export function MatchMakerTabIcon({ size = 24, className, pulse, navActive }: Props) {
+  if (navActive !== undefined) {
+    return (
+      <Image
+        src={matchMakerNavIconSrc(navActive)}
+        alt=""
+        width={size}
+        height={size}
+        unoptimized
+        className={cn(
+          'shrink-0 object-contain mix-blend-lighten',
+          pulse && 'animate-mm-tab-pulse',
+          className
+        )}
+        aria-hidden
+      />
+    );
+  }
+
   return (
     <svg
       width={size}

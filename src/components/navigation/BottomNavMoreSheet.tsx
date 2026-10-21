@@ -101,7 +101,10 @@ export function BottomNavMoreSheet({ open, onClose, items }: Props) {
                     <TabIcon
                       name={item.icon as TabIconName}
                       size={26}
-                      className={active ? 'text-white' : 'text-primary'}
+                      navActive={isMatchMaker ? active : undefined}
+                      className={
+                        isMatchMaker ? undefined : active ? 'text-white' : 'text-primary'
+                      }
                     />
                   </NavItemUnreadIndicator>
                   <span className="text-center text-[12px] font-extrabold leading-tight">{item.label}</span>

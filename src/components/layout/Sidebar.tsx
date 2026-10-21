@@ -89,7 +89,8 @@ export function Sidebar() {
                   name={item.icon}
                   size={20}
                   pulse={isMatchMaker && tabPulse}
-                  className={active ? 'text-white' : 'text-muted'}
+                  navActive={isMatchMaker ? active : undefined}
+                  className={isMatchMaker ? undefined : active ? 'text-white' : 'text-muted'}
                 />
               </NavItemUnreadIndicator>
               {item.label}

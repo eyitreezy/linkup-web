@@ -26,9 +26,16 @@
 - Card swipe: physics-based follow with resistance at edges
 - Micro-interactions: `200ms` ease-in-out for state changes (button press, icon tap)
 
-**Tab icon:** Flat SVG — heart shape with an elliptical orbital ring crossing in front and behind it. Same stroke weight as existing Ionicons tab icons (1.5pt inactive, 2pt active). No fill on heart in inactive state; `#9B1B4B` fill at 15% opacity on heart in active state. Orbital ring back arc at 35% opacity. Both arcs and heart stroke use `currentColor`.
+**Tab icon (main navigation):** Raster artwork for the MatchMaker sidebar and bottom nav entry (not an Ionicons icon). Label: **MatchMaker**.
 
-Created as `MatchMakerTabIcon` component — not an Ionicons icon. Label: **MatchMaker**. Active colour: `#9B1B4B`. Inactive: standard tab inactive muted colour.
+| State | Asset (web `public/navigation/`) |
+|---|---|
+| Active (current route is MatchMaker) | `matchmaker-active.png` — supplied active-state heart, ring, and gemstone artwork |
+| Inactive | `matchmaker-inactive.png` — supplied inactive-state artwork |
+
+Route detection uses `isMainNavItemActive` with `pathname === '/matchmaker'` or `pathname.startsWith('/matchmaker/')` so pool, connection, onboarding (`/matchmaker/values`), settings, history, and lifecycle sub-routes all show the active asset.
+
+In-app decorative contexts (gate modals, pool empty states, chat badges) continue to use the inline SVG `MatchMakerTabIcon` without the nav PNGs.
 
 
 ---
@@ -364,19 +371,28 @@ CTA: `Continue` — active when one chip is selected.
 
 **Step 3: Pace Preference**
 
-Same chip pattern. Single select.
+Step title: **Pace Preference**
+
+Same chip pattern. Single select. Wrapped flex row (`flex flex-wrap gap-2`).
+
 Question: "How long after connecting do you expect to meet?"
+
 Private label: "Private. Used for compatibility weighting only."
 
-Options (chips, wrapped row):
+Options (chips, wrapped row — exact copy):
 ```
-"As soon as the platform allows (21 day minimum)"
-"1 to 2 months"
-"3 to 6 months"
-"I take my time, 6 months or more"
+"As soon as the platform allows (7 day minimum)"
+"1 to 2 weeks"
+"2 to 3 weeks"
+"I take my time, 1 months or more"
 ```
 
-CTA: `Continue` — active when one chip is selected.
+Stored in `matchmaker_values.pace_preference` as:
+`asap_7_days` | `one_two_weeks` | `two_three_weeks` | `one_month_or_more`
+
+Legacy month-based values (`asap_21_days`, `one_two_months`, `three_six_months`, `six_plus_months`) are not auto-mapped to the new chips; Settings shows the legacy label until the user re-selects on Step 3.
+
+CTA: `Continue` — disabled until one chip is selected (required Gate 4 field). Saved value restores on reload and when editing from Settings (`/matchmaker/values?from=settings&step=3`).
 
 ---
 

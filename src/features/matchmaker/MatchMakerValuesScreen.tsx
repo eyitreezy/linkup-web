@@ -14,6 +14,13 @@ import {
   type DealbreakersFormState,
   type MatchMakerValuesRow,
 } from '@/lib/matchmaker/valuesFormHydrate';
+import {
+  PACE_PREFERENCE_OPTIONS,
+  PACE_PREFERENCE_PRIVATE_LABEL,
+  PACE_PREFERENCE_QUESTION,
+  PACE_PREFERENCE_STEP_TITLE,
+  pacePreferenceDbFromUi,
+} from '@/lib/matchmaker/pacePreference';
 import { saveMatchMakerValues } from '@/services/matchmaker.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
@@ -32,13 +39,6 @@ const FAMILY_DB: Record<string, string> = {
   no: 'no_children',
   have_open: 'have_open_more',
   have_not: 'have_not_open_more',
-};
-
-const PACE_DB: Record<string, string> = {
-  asap: 'asap_21_days',
-  '1_2': 'one_two_months',
-  '3_6': 'three_six_months',
-  long: 'six_plus_months',
 };
 
 const COMMUNICATION_LABELS: Record<string, string> = {
@@ -275,13 +275,15 @@ export function MatchMakerValuesScreen() {
   }
 
   async function submit() {
-    if (!user?.id || !family || !pace || !effectiveCommunicationStyle) return;
+    const paceDb =
+      pacePreferenceDbFromUi(pace) ?? valuesQuery.data?.values?.pace_preference ?? null;
+    if (!user?.id || !family || !paceDb || !effectiveCommunicationStyle) return;
     setBusy(true);
     setError(null);
     const { error: saveError } = await saveMatchMakerValues(createClient(), user.id, {
       faith: faithDbValue(faith, faithType, otherFaithText),
       family_goals: FAMILY_DB[family],
-      pace_preference: PACE_DB[pace],
+      pace_preference: paceDb,
       communication_frequency: effectiveCommunicationStyle,
       dealbreakers: buildDealbreakers(dealbreakers, otherDealbreakers),
     });
@@ -544,17 +546,13 @@ export function MatchMakerValuesScreen() {
         {step === 3 ? (
           <FormCard>
             <h2 className="font-display text-xl font-extrabold text-foreground">
-              How long after connecting do you expect to meet?
+              {PACE_PREFERENCE_STEP_TITLE}
             </h2>
-            <p className="mt-1 text-[13px] font-semibold text-muted">{privateLabel}</p>
+            <p className="mt-3 text-[15px] font-extrabold text-foreground">{PACE_PREFERENCE_QUESTION}</p>
+            <p className="mt-1 text-[13px] font-semibold text-muted">{PACE_PREFERENCE_PRIVATE_LABEL}</p>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              {[
-                { key: 'asap', label: 'As soon as the platform allows (21 day minimum)' },
-                { key: '1_2', label: '1 to 2 months' },
-                { key: '3_6', label: '3 to 6 months' },
-                { key: 'long', label: 'I take my time, 6 months or more' },
-              ].map((opt) => (
+              {PACE_PREFERENCE_OPTIONS.map((opt) => (
                 <GradientChip
                   key={opt.key}
                   label={opt.label}

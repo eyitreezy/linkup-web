@@ -32,12 +32,21 @@ type Props = {
   className?: string;
   size?: number;
   pulse?: boolean;
+  /** MatchMaker main nav only — selects active vs inactive PNG artwork. */
+  navActive?: boolean;
 };
 
 /** Same Ionicons (io5) as mobile `app/(tabs)/_layout.tsx`. */
-export function TabIcon({ name, className, size = 24, pulse }: Props) {
+export function TabIcon({ name, className, size = 24, pulse, navActive }: Props) {
   if (name === 'matchmaker') {
-    return <MatchMakerTabIcon size={size} className={className} pulse={pulse} />;
+    return (
+      <MatchMakerTabIcon
+        size={size}
+        className={className}
+        pulse={pulse}
+        navActive={navActive}
+      />
+    );
   }
   const Icon = ICONS[name];
   return <Icon size={size} className={cn('shrink-0', className)} aria-hidden />;
