@@ -31,7 +31,7 @@
 | State | Asset (web `public/navigation/`) |
 |---|---|
 | Active (current route is MatchMaker) | `matchmaker-active.png` — supplied active-state heart, ring, and gemstone artwork |
-| Inactive | `matchmaker-inactive.png` — supplied inactive-state artwork |
+| Inactive | `matchmaker-inactive.png` — supplied inactive-state artwork; rendered with luminance mask fill `#6B7280` (same as other main nav inactive icons) |
 
 Route detection uses `isMainNavItemActive` with `pathname === '/matchmaker'` or `pathname.startsWith('/matchmaker/')` so pool, connection, onboarding (`/matchmaker/values`), settings, history, and lifecycle sub-routes all show the active asset.
 
@@ -1489,6 +1489,8 @@ Applying Supabase migrations on **staging** (including `20261008000001_matchmake
 ---
 
 ### FAIL — build or refine in product (spec sections)
+
+**Note (2026-10-21):** Rows below were **superseded in code** (see `docs/matchmaker_web_requirements_audit.md` §11–§12). Use **`docs/LinkUp_MatchMaker_Web_QA_Test_Plan.docx`** for staging verification. Do not treat this table as a build backlog without re-auditing the repo.
 
 These are **not** fixed by running migrations alone; implement against the headings below.
 

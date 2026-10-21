@@ -12,8 +12,8 @@ type Props = {
   navActive?: boolean;
 };
 
-/** Inactive nav artwork fill — matches supplied inactive PNG. */
-const NAV_INACTIVE_FILL = '#8B92A5';
+/** Inactive nav artwork fill — matches other sidebar tab icons (`BottomNav` INACTIVE). */
+const NAV_INACTIVE_FILL = '#6B7280';
 
 /**
  * Nav PNGs use a black backdrop. Luminance masking drops the black field and paints the

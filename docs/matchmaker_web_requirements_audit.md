@@ -1,6 +1,6 @@
 # MatchMaker Web — Requirements Audit & Gap Analysis
 
-**Audit date:** 2026-10-10 (initial) · **Re-audit:** 2026-10-11  
+**Audit date:** 2026-10-10 (initial) · **Re-audit:** 2026-10-11 · **2026-10-21** (§12)  
 **Repository:** `linkup-web`  
 **Authoritative sources:**
 
@@ -8,7 +8,7 @@
 - `docs/linkup_matchmaker_userflow.md` (full section inventory + Phases 2–6, DATABASE TABLES)
 
 **Audit mode:** Read-only for gap analysis (§11 re-audit). Minor UI polish (connection menu, settings dealbreakers row) applied separately per product request.  
-**DOCX test plan:** **Not generated** — completeness gate (Phase 6) **not satisfied** (see §8).
+**DOCX test plan:** **`docs/LinkUp_MatchMaker_Web_QA_Test_Plan.docx`** (generated 2026-10-21; regenerate via `npm run qa:matchmaker-docx`). Runtime sign-off still required (see §8, §12).
 
 ---
 
@@ -277,3 +277,61 @@ The §4 matrix uses **representative rows** for each Part/section. Cosmetic mobi
 | `npx tsc --noEmit` | **Pass** |
 | Staging / Supabase live | **Not executed** in audit environment |
 | `LinkUp_MatchMaker_Functionality_Test_Plan_Web.docx` | **Not created** (gate §8 still failed) |
+
+---
+
+## 12. Re-audit delta (2026-10-21)
+
+### 12.1 Verification performed (static + automated)
+
+| Activity | Result |
+|----------|--------|
+| Route inventory | **15** app routes under `src/app/(main)/matchmaker/**` (pool, declare, values, connection, activity, end, lifecycle, settings, history, interests, profile, suspended, cooldown) |
+| Feature modules | **40** files under `src/features/matchmaker/*` + admin misalignment panel |
+| Supabase migrations | **17** matchmaker-related SQL migrations (schema through misalignment reports) |
+| RPC surface | **30+** `matchmaker_*` calls in `matchmaker.service.ts` (gates, pool, interest, connection, activity, lifecycle, settings) |
+| `npm test` (Vitest) | **27 passed**, 7 files (nav, pace preference, shared activity, end reason, misalignment, tab store) |
+| Staging two-user E2E | **Not executed** in this session |
+
+### 12.2 Product changes since 2026-10-11
+
+| Change | Evidence | Audit impact |
+|--------|----------|--------------|
+| Nav PNG active/inactive icons | `public/navigation/*.png`, `MatchMakerTabIcon.tsx`, `navActive.ts` | **MM-NAV-003** → PNG + mask fill `#6B7280` inactive (PASS code) |
+| Pace Preference Step 3 (week-based copy + DB keys) | `pacePreference.ts`, `MatchMakerValuesScreen.tsx` | Gate 4 aligned with spec; legacy month values compatibility layer |
+| Vitest config | `vitest.config.mjs` | `npm test` runnable on CI/dev |
+
+### 12.3 Spec document drift (action: doc only)
+
+| Location | Issue | Resolution |
+|----------|-------|------------|
+| Interaction spec §1491–1501 **FAIL** table | Lists reaffirmation, weekly activity, tab pulse, misalignment as missing | **Stale** — implemented per §11.1; treat as **PARTIAL pending staging smoke** |
+| Interaction spec PART 0 “not implemented” gender on Step 0 | Contradicts code | Mark **implemented** when checklist #1 signed off |
+| Userflow OVERVIEW | Saved in primary nav | **Stale** — use interaction spec nav decisions |
+
+### 12.4 Remaining engineering / QA work (unchanged priority)
+
+1. **P0 staging matrix:** MM-QA-001, 005, 006, 010–011, 015–017, 022, 025, 031–033, 035 in `docs/LinkUp_MatchMaker_Web_QA_Test_Plan.docx`.
+2. **BLOCKED (14):** Live proof for pool RPC, RLS, clocks, cross-user visibility — requires fixtures, not new routes.
+3. **PARTIAL:** Partner activity notification, reaffirmation cron/silence, subscription 14-day auto-end server job, delete-profile purge scope vs copy.
+4. **Automation gap:** Playwright (or equivalent) still recommended (BL-E1).
+
+### 12.5 Deliverables
+
+| Artifact | Path |
+|----------|------|
+| QA test plan (DOCX) | `docs/LinkUp_MatchMaker_Web_QA_Test_Plan.docx` |
+| Regenerate command | `npm run qa:matchmaker-docx` |
+| This audit | `docs/matchmaker_web_requirements_audit.md` |
+
+### 12.6 Updated matrix counts (engineering judgment)
+
+| Result | Count (2026-10-21) | Notes |
+|--------|-------------------:|-------|
+| PASS | **45** | +2 nav/pace code-complete items |
+| PARTIAL | **22** | Runtime smoke still open |
+| FAIL | **0** | No known missing routes for spec FAIL table items |
+| BLOCKED | **14** | Verification-only |
+| NOT APPLICABLE | **6** | Mobile-only / cosmetic |
+
+**§8 DOCX gate:** Test plan document **now exists**; **release gate** still **not met** until P0 cases in DOCX are executed and signed off on staging.
