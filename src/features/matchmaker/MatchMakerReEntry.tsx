@@ -28,7 +28,7 @@ export function MatchMakerReEntry() {
   return (
     <MatchMakerLayout>
       <MatchMakerPageShell className="py-16 text-center">
-        <MatchMakerTabIcon size={48} className="mx-auto animate-pulse text-[#9B1B4B]/80" />
+        <MatchMakerTabIcon size={48} tone="accent-strong" pulse className="mx-auto" />
         <h1 className="mt-6 font-display text-2xl font-extrabold">Ready when you are.</h1>
         <p className="mt-3 text-[15px] font-semibold leading-relaxed" style={{ color: MATCHMAKER_THEME.textMuted }}>
           We have updated your MatchMaker profile based on what you shared. Your pool is waiting.

@@ -41,6 +41,7 @@ export function MatchMakerConnectionHistoryScreen() {
           kicker="MatchMaker"
           title="My Connection History"
           subtitle="This is private and visible only to you."
+          showBrandIcon
           backLabel="Back to pool"
           onBack={() => router.push('/matchmaker')}
         />

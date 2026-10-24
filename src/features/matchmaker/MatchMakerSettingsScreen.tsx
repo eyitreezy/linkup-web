@@ -141,6 +141,7 @@ export function MatchMakerSettingsScreen() {
           subtitle="Private preferences for your MatchMaker experience."
           backLabel="Back"
           onBack={() => router.back()}
+          showBrandIcon
         />
 
         <FormCard className="mt-6">

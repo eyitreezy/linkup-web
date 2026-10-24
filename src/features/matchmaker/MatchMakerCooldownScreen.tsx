@@ -11,8 +11,8 @@ import { fetchMatchMakerGateState } from '@/services/matchmaker.service';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useQuery } from '@tanstack/react-query';
+import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
 import { useRouter } from 'next/navigation';
-import { IoTimeOutline } from 'react-icons/io5';
 
 function daysUntil(iso?: string): number {
   if (!iso) return 0;
@@ -39,7 +39,7 @@ export function MatchMakerCooldownScreen() {
   return (
     <MatchMakerLayout>
       <MatchMakerPageShell className="py-12 text-center">
-        <IoTimeOutline size={48} className="mx-auto" style={{ color: MATCHMAKER_THEME.textMuted }} />
+        <MatchMakerTabIcon size={48} tone="muted" className="mx-auto" />
         <h1 className="mt-6 font-display text-2xl font-extrabold">MatchMaker is paused for 30 days.</h1>
         <p className="mt-3 text-[15px] font-semibold leading-relaxed" style={{ color: MATCHMAKER_THEME.textMuted }}>
           MatchMaker is built for intentional connections. We want to make sure the pool stays that way.

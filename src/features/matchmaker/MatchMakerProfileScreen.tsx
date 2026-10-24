@@ -461,7 +461,7 @@ export function MatchMakerProfileScreen({ userId }: Props) {
               className="fixed bottom-28 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-2 text-[13px] font-extrabold text-white shadow-lg"
               style={{ background: MATCHMAKER_THEME.accent }}
             >
-              <MatchMakerTabIcon size={16} className="text-white" />
+              <MatchMakerTabIcon size={16} tone="on-primary" />
               {toast}
             </div>
           ) : null}

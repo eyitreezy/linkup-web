@@ -41,7 +41,7 @@ export function MatchMakerReaffirmationOverlay({ onComplete }: Props) {
           className="fixed inset-0 z-50 flex flex-col items-center justify-center px-6 text-center"
           style={{ background: MATCHMAKER_THEME.background }}
         >
-          <MatchMakerTabIcon size={48} className="text-[#9B1B4B]/80" />
+          <MatchMakerTabIcon size={48} tone="accent-strong" />
           <h1 className="mt-6 font-display text-[22px] font-extrabold" style={{ color: MATCHMAKER_THEME.textPrimary }}>
             You are off the pool for now
           </h1>
@@ -68,7 +68,7 @@ export function MatchMakerReaffirmationOverlay({ onComplete }: Props) {
       aria-modal="true"
       aria-labelledby="mm-reaffirm-title"
     >
-      <MatchMakerTabIcon size={48} className="text-[#9B1B4B]/80" />
+      <MatchMakerTabIcon size={48} tone="accent-strong" />
       <h1 id="mm-reaffirm-title" className="mt-6 font-display text-[22px] font-extrabold" style={{ color: MATCHMAKER_THEME.textPrimary }}>
         Still looking?
       </h1>

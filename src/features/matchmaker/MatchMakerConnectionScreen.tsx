@@ -255,6 +255,7 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
             backLabel="Back to MatchMaker"
             onBack={() => router.push('/matchmaker')}
             actions={<MatchMakerConnectionMenu onReport={() => setReportOpen(true)} />}
+            showBrandIcon
           />
 
         {connection.status === 'paused' ? (

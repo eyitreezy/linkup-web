@@ -35,7 +35,19 @@
 
 Route detection uses `isMainNavItemActive` with `pathname === '/matchmaker'` or `pathname.startsWith('/matchmaker/')` so pool, connection, onboarding (`/matchmaker/values`), settings, history, and lifecycle sub-routes all show the active asset.
 
-In-app decorative contexts (gate modals, pool empty states, chat badges) continue to use the inline SVG `MatchMakerTabIcon` without the nav PNGs.
+**In-app icon color guide (`MatchMakerTabIcon` + `src/lib/matchmaker/iconColors.ts`):** Same PNG artwork as nav, luminance-masked with locked fills:
+
+| Tone | Fill | Use |
+|---|---|---|
+| `nav-inactive` | `#6B7280` | Main nav unselected |
+| `nav-active` / `on-primary` | `#FFFFFF` | Nav selected; icons on gradient headers and badges |
+| `accent` | `#9B1B4B` | Page kicker mark, chat MatchMaker entry |
+| `accent-muted` | `#9B1B4B` at 70% opacity | Gate modal, empty states |
+| `accent-soft` | `#9B1B4B` at 50% | Reflection hero |
+| `accent-strong` | `#9B1B4B` at 80% | Re-entry, reaffirmation hero |
+| `muted` | `#6B7280` | Cooldown and de-emphasized marks |
+
+`MatchMakerPageHeader` accepts `showBrandIcon` for the kicker heart-ring (`accent` tone).
 
 
 ---

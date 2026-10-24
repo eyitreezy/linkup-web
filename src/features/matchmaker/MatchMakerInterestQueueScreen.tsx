@@ -1,5 +1,6 @@
 'use client';
 
+import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { MatchMakerInterestQueueCard } from '@/features/matchmaker/MatchMakerInterestQueueCard';
 import { MatchMakerLayout, MatchMakerPageShell } from '@/features/matchmaker/MatchMakerLayout';
@@ -21,7 +22,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { IoHeart } from 'react-icons/io5';
 
 type Segment = 'sent' | 'received';
 
@@ -149,6 +149,7 @@ export function MatchMakerInterestQueueScreen() {
           subtitle="Review who has reached out and respond when you are ready."
           backLabel="Back to pool"
           onBack={() => router.push('/matchmaker')}
+          showBrandIcon
         />
 
         <section className="space-y-3">
@@ -211,7 +212,7 @@ export function MatchMakerInterestQueueScreen() {
 
         {!showLoading && !queueQuery.error && list.length === 0 ? (
           <AppEmptyState
-            icon={<IoHeart size={40} style={{ color: MATCHMAKER_THEME.accent }} />}
+            icon={<MatchMakerTabIcon size={40} tone="accent-muted" />}
             title={segment === 'received' ? 'No one has expressed interest yet' : 'No interests sent yet'}
             description={
               segment === 'received'

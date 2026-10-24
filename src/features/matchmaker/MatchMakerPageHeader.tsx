@@ -1,5 +1,6 @@
 'use client';
 
+import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
 import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
 import { cn } from '@/utils/cn';
 import { useRouter } from 'next/navigation';
@@ -13,6 +14,8 @@ type Props = {
   backLabel?: string;
   onBack?: () => void;
   actions?: ReactNode;
+  /** Spec heart-ring mark beside the kicker (accent tone). */
+  showBrandIcon?: boolean;
   className?: string;
 };
 
@@ -24,6 +27,7 @@ export function MatchMakerPageHeader({
   backLabel = 'Back',
   onBack,
   actions,
+  showBrandIcon = false,
   className,
 }: Props) {
   const router = useRouter();
@@ -57,12 +61,15 @@ export function MatchMakerPageHeader({
           aria-hidden
         />
         <div>
-          <p
-            className="text-[11px] font-extrabold uppercase tracking-wide"
-            style={{ color: MATCHMAKER_THEME.accent }}
-          >
-            {kicker}
-          </p>
+          <div className="flex items-center gap-2">
+            {showBrandIcon ? <MatchMakerTabIcon size={20} tone="accent" className="shrink-0" /> : null}
+            <p
+              className="text-[11px] font-extrabold uppercase tracking-wide"
+              style={{ color: MATCHMAKER_THEME.accent }}
+            >
+              {kicker}
+            </p>
+          </div>
           <h1 className="font-display text-3xl font-extrabold tracking-tight" style={{ color: MATCHMAKER_THEME.textPrimary }}>
             {title}
           </h1>

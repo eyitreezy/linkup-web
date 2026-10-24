@@ -45,7 +45,7 @@ export function MatchMakerReflect() {
   return (
     <MatchMakerLayout>
       <MatchMakerPageShell className="py-12 text-center">
-        <MatchMakerTabIcon size={40} className="mx-auto text-[#9B1B4B]/60" />
+        <MatchMakerTabIcon size={40} tone="accent-soft" className="mx-auto" />
         <h1 className="mt-6 font-display text-2xl font-extrabold">Take a moment.</h1>
         <p className="mt-3 text-[15px] font-semibold leading-relaxed" style={{ color: MATCHMAKER_THEME.textMuted }}>
           Reflect on what you experienced. We will be here when you are ready.

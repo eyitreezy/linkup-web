@@ -201,6 +201,7 @@ export function MatchMakerSharedActivity({ connectionId, weekNumber }: Props) {
             kicker={`Week ${weekNumber}`}
             title="Shared Activity"
             subtitle="Answers are revealed only after you both submit."
+            showBrandIcon
             backLabel="Back to connection"
             onBack={() => router.push(`/matchmaker/connection/${connectionId}`)}
           />

@@ -37,7 +37,7 @@ function MatchMakerSkeleton() {
           kicker="MatchMaker"
           title="Your pool"
           description="One connection at a time. Take your time."
-          icon={<MatchMakerTabIcon size={22} />}
+          icon={<MatchMakerTabIcon size={22} tone="on-primary" />}
         />
         <div className="mt-6 h-80 animate-pulse rounded-3xl bg-[#FBF5F0]" />
       </MatchMakerPageShell>

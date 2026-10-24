@@ -1034,7 +1034,7 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
                       className="inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-extrabold min-[360px]:text-[11px]"
                       style={{ color: '#9B1B4B' }}
                     >
-                      <MatchMakerTabIcon size={14} />
+                      <MatchMakerTabIcon size={14} tone="accent" />
                       MatchMaker
                     </span>
                   ) : null}
@@ -1073,7 +1073,7 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
                     className="rounded-full p-2 text-[#9B1B4B] transition hover:bg-[#FDF8F4]"
                     aria-label="MatchMaker connection"
                   >
-                    <MatchMakerTabIcon size={22} />
+                    <MatchMakerTabIcon size={22} tone="accent" />
                   </Link>
                 ) : null}
                 <button
