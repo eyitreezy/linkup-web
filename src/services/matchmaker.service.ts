@@ -318,6 +318,17 @@ export async function fetchMatchMakerConnection(
   return { data: data as MatchMakerConnectionRow | null, error: null };
 }
 
+export async function tryResumeMatchMakerConnection(
+  client: SupabaseClient,
+  connectionId: string
+): Promise<{ resumed: boolean; error: string | null }> {
+  const { data, error } = await client.rpc('matchmaker_try_resume_connection', {
+    p_connection_id: connectionId,
+  });
+  if (error) return { resumed: false, error: error.message };
+  return { resumed: !!data, error: null };
+}
+
 export async function endMatchMakerConnection(
   client: SupabaseClient,
   connectionId: string,

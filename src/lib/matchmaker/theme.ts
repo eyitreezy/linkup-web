@@ -10,6 +10,8 @@ export const MATCHMAKER_THEME = {
   textMuted: '#7B6E65',
   disabled: '#C8BDB8',
   ctaGradient: 'linear-gradient(135deg, #6C63FF 0%, #8B84FF 50%, #9B1B4B 100%)',
+  /** Page header accent bar and kicker icon — accent to primary, top to bottom. */
+  headerAccentGradient: 'linear-gradient(180deg, #9B1B4B 0%, #6C63FF 100%)',
   slideInMs: 320,
   slideOutMs: 280,
   slideEasing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',

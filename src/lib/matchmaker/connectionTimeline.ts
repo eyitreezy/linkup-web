@@ -30,14 +30,6 @@ function formatShortDate(iso: string | null | undefined): string | undefined {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-export function planWindowUnlockDayFromFirstMessage(firstMessageAt: string | null, now = Date.now()): number | null {
-  if (!firstMessageAt) return null;
-  const start = new Date(firstMessageAt).getTime();
-  if (Number.isNaN(start)) return null;
-  const day = Math.floor((now - start) / (24 * 60 * 60 * 1000)) + 1;
-  return Math.max(1, 21 - day + 1);
-}
-
 export function lockedFeatureUnlockDay(
   feature: 'shared_activity' | 'ready_to_meet' | 'plan_window',
   connection: MatchMakerConnectionRow,
@@ -51,14 +43,40 @@ export function lockedFeatureUnlockDay(
     const day = connectionDayNumber(connection.connected_at, now);
     return day >= 10 ? null : 10;
   }
-  if (!connection.first_message_at) return 21;
-  const unlockDay = planWindowUnlockDayFromFirstMessage(connection.first_message_at, now);
-  if (unlockDay == null) return 21;
-  if (isPlanWindowOpen(connection, now)) return null;
+  return null;
+}
+
+/** User-facing copy for locked connection actions (spec §3.4–§3.7). */
+export function lockedFeatureUnlockMessage(
+  feature: 'shared_activity' | 'ready_to_meet' | 'plan_window',
+  connection: MatchMakerConnectionRow,
+  now = Date.now()
+): string {
+  if (feature === 'shared_activity') {
+    const day = lockedFeatureUnlockDay('shared_activity', connection, now);
+    return day ? `This unlocks on Day ${day}.` : 'Shared Activity is available.';
+  }
+  if (feature === 'ready_to_meet') {
+    const day = lockedFeatureUnlockDay('ready_to_meet', connection, now);
+    return day ? `This unlocks on Day ${day}.` : 'Ready to meet is available.';
+  }
+  if (!connection.first_message_at) {
+    return 'Send a first message to start your 21-day plan window.';
+  }
+  if (isPlanWindowOpen(connection, now)) {
+    return 'Your plan window is open.';
+  }
   const daysLeft = planWindowDaysRemaining(connection.plan_unlock_at, now);
-  if (daysLeft == null) return 21;
-  const msgDay = connectionDayNumber(connection.first_message_at, now);
-  return msgDay + daysLeft;
+  if (daysLeft == null) {
+    return 'Your plan window opens 21 days after your first message.';
+  }
+  if (daysLeft <= 0) {
+    return 'Your plan window is opening soon.';
+  }
+  if (daysLeft === 1) {
+    return 'Your plan window opens in 1 day.';
+  }
+  return `Your plan window opens in ${daysLeft} days.`;
 }
 
 export function buildConnectionMilestones(

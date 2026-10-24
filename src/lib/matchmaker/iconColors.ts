@@ -13,6 +13,7 @@ import { MATCHMAKER_THEME } from '@/lib/matchmaker/theme';
  * | accent-strong   | #9B1B4B @80%| active    | Re-entry, reaffirmation hero         |
  * | muted           | #6B7280     | inactive  | De-emphasized MatchMaker marks       |
  * | on-primary      | #FFFFFF     | active    | Badges on accent / gradient buttons  |
+ * | brand-gradient  | accent→primary | active | Kicker icon beside page header bar   |
  */
 export const MATCHMAKER_ICON_NAV_INACTIVE = '#6B7280';
 
@@ -24,15 +25,18 @@ export type MatchMakerIconTone =
   | 'accent-soft'
   | 'accent-strong'
   | 'muted'
-  | 'on-primary';
+  | 'on-primary'
+  | 'brand-gradient';
 
 export function matchMakerIconArtwork(tone: MatchMakerIconTone): 'active' | 'inactive' {
   if (tone === 'nav-inactive' || tone === 'muted') return 'inactive';
   return 'active';
 }
 
-export function matchMakerIconFill(tone: MatchMakerIconTone): string {
+export function matchMakerIconFill(tone: MatchMakerIconTone): string | undefined {
   switch (tone) {
+    case 'brand-gradient':
+      return undefined;
     case 'nav-active':
     case 'on-primary':
       return '#FFFFFF';
@@ -47,6 +51,11 @@ export function matchMakerIconFill(tone: MatchMakerIconTone): string {
     default:
       return MATCHMAKER_THEME.accent;
   }
+}
+
+export function matchMakerIconBackground(tone: MatchMakerIconTone): string {
+  if (tone === 'brand-gradient') return MATCHMAKER_THEME.headerAccentGradient;
+  return matchMakerIconFill(tone) ?? MATCHMAKER_THEME.accent;
 }
 
 export function matchMakerIconOpacityClass(tone: MatchMakerIconTone): string | undefined {

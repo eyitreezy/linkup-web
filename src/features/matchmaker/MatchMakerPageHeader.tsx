@@ -57,12 +57,14 @@ export function MatchMakerPageHeader({
       <header className="flex gap-4">
         <div
           className="mt-2 h-14 w-1 shrink-0 rounded-full"
-          style={{ background: `linear-gradient(180deg, ${MATCHMAKER_THEME.accent} 0%, ${MATCHMAKER_THEME.primary} 100%)` }}
+          style={{ background: MATCHMAKER_THEME.headerAccentGradient }}
           aria-hidden
         />
         <div>
           <div className="flex items-center gap-2">
-            {showBrandIcon ? <MatchMakerTabIcon size={20} tone="accent" className="shrink-0" /> : null}
+            {showBrandIcon ? (
+              <MatchMakerTabIcon size={20} tone="brand-gradient" className="shrink-0" />
+            ) : null}
             <p
               className="text-[11px] font-extrabold uppercase tracking-wide"
               style={{ color: MATCHMAKER_THEME.accent }}

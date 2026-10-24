@@ -2,7 +2,7 @@
 
 import {
   matchMakerIconArtwork,
-  matchMakerIconFill,
+  matchMakerIconBackground,
   matchMakerIconOpacityClass,
   matchMakerIconToneFromNavActive,
   type MatchMakerIconTone,
@@ -39,7 +39,7 @@ function MatchMakerBrandIconImage({
   const maskStyle = {
     width: size,
     height: size,
-    backgroundColor: matchMakerIconFill(tone),
+    background: matchMakerIconBackground(tone),
     WebkitMaskImage: `url("${src}")`,
     maskImage: `url("${src}")`,
     WebkitMaskSize: 'contain',

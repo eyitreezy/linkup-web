@@ -28,7 +28,8 @@ import {
   partnerUserId,
   planWindowDaysRemaining,
 } from '@/lib/matchmaker/connection';
-import { buildConnectionMilestones, lockedFeatureUnlockDay } from '@/lib/matchmaker/connectionTimeline';
+import { buildConnectionMilestones, lockedFeatureUnlockMessage } from '@/lib/matchmaker/connectionTimeline';
+import { hasMatchMakerGoldAccess } from '@/lib/matchmaker/goldAccess';
 import {
   isDay10CheckinDismissed,
   shouldRenderDay10CheckinCard,
@@ -45,9 +46,11 @@ import {
   hasReadySignal,
   sendReadyToMeetSignal,
   shouldShowPostMeetupPrompt,
+  tryResumeMatchMakerConnection,
 } from '@/services/matchmaker.service';
 import { fetchUserProfileBundle } from '@/services/profile.service';
 import { createClient } from '@/lib/supabase/client';
+import { useSubscriptionContext } from '@/lib/subscription/SubscriptionContext';
 import { useAuthStore } from '@/stores/auth-store';
 import { useQuery } from '@tanstack/react-query';
 import { defaultActivityWeekToOpen } from '@/lib/matchmaker/sharedActivityWeek';
@@ -69,7 +72,12 @@ function ageFromBirthDate(birthDate: string | null | undefined): number | null {
 export function MatchMakerConnectionScreen({ connectionId }: { connectionId: string }) {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
-  const { connection, isLoading, error } = useMatchMakerConnection(connectionId, user?.id);
+  const { subscriptionState, refreshSubscription } = useSubscriptionContext();
+  const viewerHasGold = hasMatchMakerGoldAccess(subscriptionState);
+  const { connection, isLoading, error, refetch: refetchConnection } = useMatchMakerConnection(
+    connectionId,
+    user?.id
+  );
   const [readySent, setReadySent] = useState(false);
   const [readyConfirmOpen, setReadyConfirmOpen] = useState(false);
   const [readyBusy, setReadyBusy] = useState(false);
@@ -153,11 +161,22 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
     }
   }, [connection?.status, router]);
 
+  useEffect(() => {
+    void refreshSubscription();
+  }, [refreshSubscription]);
+
+  useEffect(() => {
+    if (!connectionId || connection?.status !== 'paused' || !viewerHasGold) return;
+    const client = createClient();
+    void tryResumeMatchMakerConnection(client, connectionId).then(({ resumed }) => {
+      if (resumed) void refetchConnection();
+    });
+  }, [connection?.status, connectionId, viewerHasGold, refetchConnection]);
+
   function showUnlockToast(feature: 'shared_activity' | 'ready_to_meet' | 'plan_window') {
     if (!connection) return;
-    const day = lockedFeatureUnlockDay(feature, connection);
-    setActionToast(day ? `This unlocks on Day ${day}.` : 'Not available yet.');
-    window.setTimeout(() => setActionToast(null), 2200);
+    setActionToast(lockedFeatureUnlockMessage(feature, connection));
+    window.setTimeout(() => setActionToast(null), 3200);
   }
 
   async function openChat() {
@@ -258,7 +277,7 @@ export function MatchMakerConnectionScreen({ connectionId }: { connectionId: str
             showBrandIcon
           />
 
-        {connection.status === 'paused' ? (
+        {connection.status === 'paused' && !viewerHasGold ? (
           <div
             className="mb-4 rounded-2xl border px-4 py-3 text-[13px] font-semibold"
             style={{ borderColor: '#F59E0B', background: '#FFFBEB', color: '#92400E' }}
