@@ -823,6 +823,55 @@ No MatchMaker-specific restrictions inside the chat beyond the existing contact-
 
 ---
 
+### 3.3.1 Quick-Pick conversation starters (MatchMaker chat)
+
+**Purpose:** Help matched users open or revive a conversation without auto-sending messages. Starters insert into the existing composer only; Send uses the normal messaging path.
+
+**Eligibility:**
+- Shown in the standard Messages chat thread when `peer.matchmakerConnectionId` is set (1:1 only, not group chats).
+- Available while the connection status is `active`. If the connection ends or leaves `active` while the picker is open, the sheet closes without sending.
+- Uses existing chat authorization and RLS; no separate API or message type.
+
+**Entry points:**
+- Composer area control: **Quick picks** (sparkle icon), above the plan smart-suggestion chips.
+- Empty thread helper (no user messages yet, composer empty): *"Not sure what to say first? Pick a conversation starter."*
+- Control remains available after the first message; it must not block Send, attachments, or reply UI.
+
+**Picker (sheet on mobile web, centered sheet on desktop):**
+- Title: **Start a conversation**
+- Subcopy: user may edit before sending.
+- Category chips in this order:
+  1. Easy Icebreakers
+  2. Based on Shared Interests
+  3. Playful and Flirty
+  4. Get to Know You
+  5. Everyday Fun
+  6. Dating Intentions and Compatibility
+  7. First Date Ideas
+  8. Thoughtful and Meaningful
+- Up to five suggestion rows per view; **Show more** rotates alternatives and avoids repeats within the browsing session where possible.
+- **Cancel** or backdrop tap or Escape dismisses without changing the composer.
+- Source: curated local library (`src/lib/matchmaker/conversationStarters.ts`), not an external AI service.
+
+**Shared interests personalization:**
+- Category 2 may reference a **public profile interest** both users share (`profiles.preferences.interests` overlap only).
+- If no overlap exists, show generic category-2 lines (no invented common ground).
+- Never surface private values, dealbreakers, faith preferences, onboarding answers, or compatibility questionnaire text.
+
+**Selection and drafts:**
+- Tap a starter → text is inserted into the existing message composer; picker closes.
+- **No automatic send.** Only explicit Send submits via `sendTextMessage` / existing mutations.
+- If the composer already has unsent text, show **Replace your draft?** with Keep draft / Replace. Cancel keeps the original draft.
+- Switching categories or dismissing the picker without selecting must not clear an existing draft.
+
+**Acceptance criteria:**
+- Recipient receives a normal text message in the same conversation.
+- Realtime, ordering, read receipts, and unread behaviour unchanged.
+- Responsive: categories scroll horizontally; long lines wrap; no horizontal page overflow.
+- Day 10 check-in card starters remain a separate nudge surface; Quick picks are always available in chat for active connections.
+
+---
+
 ### 3.4 Day 7 — Shared Interest Activity
 
 **Entry point:** [Shared Activity] button becomes active on Day 7. Tapping it slides in the activity screen.

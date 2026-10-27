@@ -290,7 +290,7 @@ The §4 matrix uses **representative rows** for each Part/section. Cosmetic mobi
 | Feature modules | **40** files under `src/features/matchmaker/*` + admin misalignment panel |
 | Supabase migrations | **17** matchmaker-related SQL migrations (schema through misalignment reports) |
 | RPC surface | **30+** `matchmaker_*` calls in `matchmaker.service.ts` (gates, pool, interest, connection, activity, lifecycle, settings) |
-| `npm test` (Vitest) | **27 passed**, 7 files (nav, pace preference, shared activity, end reason, misalignment, tab store) |
+| `npm test` (Vitest) | **38 passed**, 10 files (incl. conversation starters, nav, pace preference) |
 | Staging two-user E2E | **Not executed** in this session |
 
 ### 12.2 Product changes since 2026-10-11
@@ -300,6 +300,7 @@ The §4 matrix uses **representative rows** for each Part/section. Cosmetic mobi
 | Nav PNG active/inactive icons | `public/navigation/*.png`, `MatchMakerTabIcon.tsx`, `navActive.ts` | **MM-NAV-003** → PNG + mask fill `#6B7280` inactive (PASS code) |
 | Pace Preference Step 3 (week-based copy + DB keys) | `pacePreference.ts`, `MatchMakerValuesScreen.tsx` | Gate 4 aligned with spec; legacy month values compatibility layer |
 | Vitest config | `vitest.config.mjs` | `npm test` runnable on CI/dev |
+| Quick-Pick conversation starters in MatchMaker chat | `conversationStarters.ts`, `MatchMakerQuickPickSheet.tsx`, `ChatThread.tsx` | Spec §3.3.1; QA **MM-QA-037–044** |
 
 ### 12.3 Spec document drift (action: doc only)
 

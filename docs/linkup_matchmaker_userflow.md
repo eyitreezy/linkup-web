@@ -446,6 +446,43 @@ Neither can start a new MatchMaker connection until this one ends.
 └─────────────────────────────────────┘
 ```
 
+### 3.2.1 MatchMaker chat — Quick-Pick conversation starters
+
+```
+User opens active connection → Open Chat (or Messages thread with MatchMaker badge)
+         │
+         ▼
+Existing LinkUp chat thread (same conversation id, same send pipeline)
+         │
+         ├── If no user messages yet AND composer empty:
+         │     helper: "Not sure what to say first? Pick a conversation starter."
+         │
+         └── [Quick picks] near composer (always for active MatchMaker 1:1 chats)
+                   │
+                   ▼
+         Sheet: "Start a conversation"
+         • Category chips (8 categories, fixed order — see interaction spec §3.3.1)
+         • List of starters; Show more for alternates
+                   │
+         User selects a starter
+                   │
+                   ├── Composer empty → insert text, focus composer, close sheet
+                   │
+                   └── Composer has draft → confirm Replace draft? 
+                         ├── Keep draft → no change to text; sheet closed
+                         └── Replace → draft replaced; user may edit
+                   │
+                   ▼
+         User taps Send (required) → normal message API → peer sees ordinary text message
+
+Alternate flows:
+• User closes sheet without picking → composer unchanged
+• User switches category while browsing → composer unchanged until a starter is chosen
+• Shared Interests category with no public overlap → generic lines, no fake hobby names
+• Connection status leaves `active` while sheet open → sheet closes, nothing sent
+• Ended/paused connection → Quick picks hidden; existing chat restrictions still apply on send
+```
+
 ### 3.3 21-Day Clock Logic
 
 ```

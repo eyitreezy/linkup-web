@@ -105,6 +105,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
+import { MatchMakerQuickPickSheet } from '@/features/matchmaker/MatchMakerQuickPickSheet';
+import { useMatchMakerConnection } from '@/hooks/useMatchMakerConnection';
 import {
   IoCheckmarkCircle,
   IoChevronBack,
@@ -189,8 +191,12 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
   const [serverSearchIds, setServerSearchIds] = useState<string[]>([]);
   const [searchBusy, setSearchBusy] = useState(false);
   const [groupMembers, setGroupMembers] = useState<GroupChatMemberRow[]>([]);
+  const [quickPickOpen, setQuickPickOpen] = useState(false);
+  const [pendingQuickPickText, setPendingQuickPickText] = useState<string | null>(null);
 
   const isGroupChat = !!peer.isGroupChat;
+  const matchmakerConnectionId = peer.matchmakerConnectionId ?? undefined;
+  const { connection: matchmakerConnection } = useMatchMakerConnection(matchmakerConnectionId, user?.id);
   const { subscriptionState } = useSubscriptionContext();
   const viewerTier = subscriptionState.effectiveTier;
   const { allowed: hasReadReceipts } = usePermission('messaging.read_receipts');
@@ -462,6 +468,41 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
   const visibleMessages = useMemo(
     () => filterMessagesHiddenForUser(messages ?? [], hiddenForMeIds),
     [messages, hiddenForMeIds]
+  );
+
+  const countableMessages = useMemo(
+    () => visibleMessages.filter((m) => m.sender_id !== null),
+    [visibleMessages]
+  );
+
+  const matchmakerChatActive =
+    !!matchmakerConnectionId &&
+    !isGroupChat &&
+    (matchmakerConnection == null || matchmakerConnection.status === 'active');
+
+  useEffect(() => {
+    if (!quickPickOpen) return;
+    if (matchmakerConnection && matchmakerConnection.status !== 'active') {
+      setQuickPickOpen(false);
+    }
+  }, [quickPickOpen, matchmakerConnection]);
+
+  const applyQuickPickStarter = useCallback((starter: string) => {
+    setText(starter);
+    setQuickPickOpen(false);
+    composeInputRef.current?.focus();
+  }, []);
+
+  const handleQuickPickSelect = useCallback(
+    (starter: string) => {
+      if (text.trim()) {
+        setPendingQuickPickText(starter);
+        setQuickPickOpen(false);
+        return;
+      }
+      applyQuickPickStarter(starter);
+    },
+    [text, applyQuickPickStarter]
   );
 
   const planForSuggestions = useMemo((): ChatSuggestionPlan | null => {
@@ -1227,6 +1268,23 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
             reportedUserId={nudgeReportedUserId}
           />
         ) : null}
+        {matchmakerChatActive && user?.id ? (
+          <div className="border-b border-border/60 px-2.5 py-2 min-[360px]:px-3">
+            {countableMessages.length === 0 && !text.trim() ? (
+              <p className="mb-2 text-center text-[12px] font-semibold text-muted min-[360px]:text-[13px]">
+                Not sure what to say first? Pick a conversation starter.
+              </p>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setQuickPickOpen(true)}
+              className="mx-auto flex w-full max-w-md items-center justify-center gap-1.5 rounded-full border border-border bg-white px-3 py-2 text-[12px] font-extrabold text-muted transition hover:border-primary/30 hover:text-foreground min-[360px]:text-[13px]"
+            >
+              <IoSparkles className="shrink-0 text-primary" size={16} aria-hidden />
+              Quick picks
+            </button>
+          </div>
+        ) : null}
         <SmartSuggestionsBar
           suggestions={smartSuggestions}
           onSelect={(suggestion) => {
@@ -1309,6 +1367,29 @@ export function ChatThread({ conversationId, peer, onBack, suggestionPlan }: Pro
           setEditError(null);
         }}
         onSave={() => void saveEditedMessage()}
+      />
+
+      <ConfirmDialog
+        open={!!pendingQuickPickText}
+        title="Replace your draft?"
+        message="You already have text in the message box. Replace it with this conversation starter?"
+        cancelLabel="Keep draft"
+        confirmLabel="Replace"
+        onClose={() => setPendingQuickPickText(null)}
+        onConfirm={() => {
+          if (pendingQuickPickText) {
+            applyQuickPickStarter(pendingQuickPickText);
+            setPendingQuickPickText(null);
+          }
+        }}
+      />
+
+      <MatchMakerQuickPickSheet
+        open={quickPickOpen}
+        onClose={() => setQuickPickOpen(false)}
+        onSelect={handleQuickPickSelect}
+        viewerPreferences={viewerProfile?.preferences}
+        peerPreferences={peerProfile?.preferences}
       />
 
       <ConfirmDialog
